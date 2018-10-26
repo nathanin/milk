@@ -7,7 +7,7 @@ import glob
 
 config=tf.ConfigProto()
 config.gpu_options.allow_growth = True
-tfe.enable_eager_execution(config=config)
+tf.enable_eager_execution(config=config)
 
 import seaborn as sns
 from matplotlib import pyplot as plt
@@ -17,13 +17,13 @@ sys.path.insert(0, '.')
 from segmentation_model import EagerSegmentation
 from train import get_nested_variables
 
-DATA = '../dataset/tiles/pruned_no_white/*.npy'
+DATA = '../../dataset/tiles/pruned_no_white/*.npy'
 data_list = glob.glob(DATA)
 print(len(data_list))
 
 ENCODER_SNAPSHOT = './trained/eager_segmentation-13001'
 
-X_SIDE = 96
+X_SIDE = 128
 
 sample_data = np.load(data_list[0])
 

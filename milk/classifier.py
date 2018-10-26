@@ -12,16 +12,18 @@ class Classifier(tf.keras.Model):
 
         # For pretraining these options need to match the 
         # eventual target -- use a dummy file to hold the default arguments
-        self.densenet = make_encoder()
+        self.encoder = make_encoder()
 
         # This can be anything
-        self.squish = tf.layers.AveragePooling2D(pool_size=(6,6), strides=(1,1))
         self.dropout = tf.layers.Dropout(0.5)
         self.classifier = tf.layers.Dense(n_classes)
 
-    def call(self, x_in, return_embedding=False, verbose=False, training=True):
-        output = self.densenet(x_in, training=training, verbose=verbose)
-        output = tf.squeeze(self.squish(output))
+    def call(self, 
+             x_in, 
+             return_embedding=False, 
+             verbose=False, 
+             training=True):
+        output = self.encoder(x_in, training=training, verbose=verbose)
         if return_embedding:
             return output
         output = self.dropout(output, training=training)

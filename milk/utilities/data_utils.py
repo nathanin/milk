@@ -3,8 +3,11 @@ To replace 'MultiNucleusData' class
 
 https://stackoverflow.com/questions/47086599/parallelising-tf-data-dataset-from-generator
 
-Inside run script:
+All written in numpy (and OpenCV)
 
+To use:
+
+```
 import data_utils
 transform_fn = data_utils.make_transform_fn(...)
 train_list, test_list = data_utils.list_data(path, test_pct=0.2)
@@ -22,18 +25,16 @@ def pyfunc_wrapper(path):
         func = load_bag,
         inp  = [path],
         Tout = [tf.float32, tf.float32])
+```
 
 """
 from __future__ import print_function
 import numpy as np
 import cv2
-import os, sys, glob
+import os
+import glob
 import re
 import time
-
-from ..dataset CASE_LABEL_DICT
-
-from normalize import reinhard
 
 CASE_PATT = r'SP_\d+-\d+'
 
@@ -138,7 +139,8 @@ def load(data_path,
          min_bag=3, 
          max_bag=None, 
          const_bag=None,
-         use_mmap=True):
+         use_mmap=True,
+         case_label_fn=None):
     """ Read a bag of examples from npy file 
 
     Assume the image-like examples for one data point are stored as a (bag, h, w, c) tensor.
@@ -146,7 +148,7 @@ def load(data_path,
     then return a random sample from the bag.
 
     Args:
-        data_path:
+        data_path: (str) Required. path to .npy for reading.
         transform_fn: (function) Default None
             A preprocessing function, returned by `make_transform_fn`
         min_bag: (int) Default 3
@@ -155,19 +157,25 @@ def load(data_path,
         use_mmap: (bool) Default True
             Whether or not to use numpy's mmap_mode argument for reading large arrays.
             see: https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.load.html
+        case_label_fn: (function) Default None
+
 
     Returns:
         numpy tensor: 
     """
         
-    case = re.findall(CASE_PATT, data_path)[0]
-    y_ = CASE_LABEL_DICT[case]
+    if case_label_fn is not None:
+        y_ = case_label_fn(data_path)
+    else:
+        raise Exception('Must supply `case_label_fn')
+
+    # case = re.findall(CASE_PATT, data_path)[0]
+    # y_ = CASE_LABEL_DICT[case]
 
     if use_mmap:
         batch_x = np.load(data_path, mmap_mode='r')
     else: 
         batch_x = np.load(data_path)
-
 
     bag_limit = batch_x.shape[0]
     if max_bag is None:

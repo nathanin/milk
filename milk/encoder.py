@@ -7,9 +7,9 @@ DENSENET_ARGS = {
 def make_encoder(**kwargs):
 
     encoder = DenseNet(
-        depth_of_model=15,
+        depth_of_model=20,
         growth_rate=32,
-        num_of_blocks=3,
+        num_of_blocks=4,
         output_classes=2,
         num_layers_in_each_block=5,
         data_format='channels_last',

@@ -11,9 +11,17 @@ class ClassificationDataset(object):
     Test if prefetch_to_device in graph mode is significantly faster.
     Prefetch buffer doesn't seem to work
     """
-    def __init__(self, record_path, crop_size = 512, downsample = 0.25, n_classes = 5,
-        n_threads = 6, batch = 16, prefetch_buffer=1024, shuffle_buffer=512):
-        # Get a preprocessing function that uses tensorflow ops
+    def __init__(self, 
+                 record_path, 
+                 crop_size = 512, 
+                 downsample = 0.25, 
+                 n_classes = 5, 
+                 n_threads = 6, 
+                 batch = 16, 
+                 prefetch_buffer = 1024, 
+                 shuffle_buffer = 512):
+
+        # Get a preprocessing function that uses tensorflow ops only
         preprocessing = self._build_preprocessing(crop_size, downsample, n_classes)
 
         # Build the dataset object

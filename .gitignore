@@ -19,6 +19,7 @@ events*
 snapshot*
 checkpoint*
 *.svs
+*.tfrecord
 
 dataset/CASE_GRADE_DICT.py
 dataset/CASE_LABEL_DICT.py

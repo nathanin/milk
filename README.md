@@ -2,6 +2,8 @@ Code for "Deep Multiple Instance Learning identifies histological features of ag
 
 In progress.
 
+#### Multiple Instance Learning Kit (MILK)
+
 Structure
 ```
 dataset/

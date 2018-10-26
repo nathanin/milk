@@ -13,6 +13,7 @@
 *.png
 *.jpg
 *.tar.gz
+ __pycache__
 
 events*
 snapshot*

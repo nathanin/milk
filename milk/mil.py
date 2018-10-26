@@ -3,20 +3,16 @@ MI-Net with convolutions
 """
 from __future__ import print_function
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
-import numpy as np
-import time, datetime
-import sys, os
 
 # from .densenet import DenseNet
-from .encoder import make_encoder
-from ..utilities.model_utils import lr_mult
+from milk.encoder import make_encoder
+from milk.utilities.model_utils import lr_mult
 
 BATCH_SIZE = 10
 class Milk(tf.keras.Model):
-    def __init__(self, z_dim=512):
+    def __init__(self, z_dim=512, encoder=None):
         super(Milk, self).__init__()
-        self.densenet = make_encoder()
+        self.encoder = make_encoder()
         # self.densenet = DenseNet(
         #     depth_of_model=15,
         #     growth_rate=32,
@@ -71,6 +67,7 @@ class Milk(tf.keras.Model):
         if verbose:
             print(x_in.get_shape())
 
+        ## BUG sets of 1 should be handled
         n_x = x_in.get_shape().as_list()[0]
         if n_x == 1:
             x_in = tf.squeeze(x_in, 0)
@@ -84,7 +81,7 @@ class Milk(tf.keras.Model):
         x_split = tf.split(x_in, batches, axis=0)
 
         if verbose:
-            print('Bayesian Densenet Call:')
+            print('Encoder Call:')
             print('n_x: ', n_x)
             print('n_batches', n_batches)
             print('batches', batches)
@@ -93,8 +90,10 @@ class Milk(tf.keras.Model):
         zs = []
         for x_batch in x_split:
             # divide the learning rate since gradient accumulates
-            z = lr_mult(0.5)(self.densenet(x_batch, training=training))
-            z = tf.squeeze(z, [1,2])
+            z = lr_mult(0.5)(self.encoder(x_batch, training=training))
+            if verbose:
+                print('\t z: ', z.shape)
+            # z = tf.squeeze(z, [1,2])
             z = self.drop2(z, training=training)
             z = self.dense2(z)
             z = self.drop3(z, training=training)

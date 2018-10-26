@@ -249,11 +249,12 @@ class DenseNet(tf.keras.Model):
 
     # last pooling and fc layer
     if self.include_top:
-      self.last_pool = tf.layers.AveragePooling2D(pool_size=(6,6), strides=(6,6))
-      # self.last_pool = tf.keras.layers.GlobalAveragePooling2D(
-      #     data_format=self.data_format)
+      # self.last_pool = tf.layers.AveragePooling2D(pool_size=(6,6), strides=(6,6))
+      self.last_pool = tf.keras.layers.GlobalAveragePooling2D(
+          data_format=self.data_format)
       # self.last_pool = tf.layers.Flatten()
-      self.classifier = tf.layers.Dense(self.output_classes)
+      ## Remove classifier; we always use hidden layer
+      # self.classifier = tf.layers.Dense(self.output_classes) 
 
     # calculating the number of filters after each block
     num_filters_after_each_block = [self.num_filters]
@@ -322,7 +323,6 @@ class DenseNet(tf.keras.Model):
 
     if self.include_top:
       output = self.last_pool(output)
-      # print('DenseNet include_top:', output.get_shape())
       # output = self.classifier(output)
       if verbose:
         print('DenseNet top:')

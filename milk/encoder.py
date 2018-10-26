@@ -1,5 +1,5 @@
 from __future__ import print_function
-from densenet import DenseNet
+from milk.densenet import DenseNet
 
 DENSENET_ARGS = {
 ## TODO
@@ -15,7 +15,7 @@ def make_encoder(**kwargs):
         data_format='channels_last',
         dropout_rate=0.3,
         pool_initial=True,
-        include_top=False
+        include_top=True
     )
 
     return encoder

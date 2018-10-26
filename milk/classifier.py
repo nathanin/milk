@@ -4,7 +4,7 @@ import tensorflow as tf
 import tensorflow.contrib.eager as tfe
 import sys
 
-from encoder import make_encoder
+from milk.encoder import make_encoder
 
 class Classifier(tf.keras.Model):
     def __init__(self, n_classes = 5):

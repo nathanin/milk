@@ -2,8 +2,59 @@ from __future__ import print_function
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
 import numpy as np
+import os
+import cv2
+import time
+import datetime
 
-from model_utils import loss_function, accuracy_function
+from .model_utils import loss_function, accuracy_function
+from .drawing_utils import create_output_image
+
+def setup_outputs(basepath='./'):
+    exptime = datetime.datetime.now()
+    exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
+    logdir = os.path.join( basepath, 'log',  exptime_str)
+    savedir = os.path.join(basepath, 'save', exptime_str)
+    imgdir = os.path.join( basepath, 'img',  exptime_str)
+    os.makedirs(logdir)
+    os.makedirs(savedir)
+    os.makedirs(imgdir)
+    summary_writer = tf.contrib.summary.create_file_writer(logdir=logdir)
+
+    save_prefix = os.path.join(savedir, 'snapshot')
+
+    return logdir, savedir, imgdir, save_prefix
+
+def logging(model, 
+            val_dataset, 
+            loss_function, 
+            grads,
+            last_N_train_losses,
+            N = 10):
+    """ Print to console and save to tensorboard summary some metrics
+
+    average training loss, and val loss over N previous iterations
+    (fixed network for val dataset, moving network for training losses)
+
+    TODO make tensorboard logging stable. sometimes grads are None
+
+    """
+    last_N_val_losses = []
+    for _ in range(N):
+        val_loss = loss_function(model, val_dataset)
+        last_N_val_losses.append(val_loss.numpy())
+
+    print('TRAIN_LOSS = [{}] VAL_LOSS = [{}]'.format( 
+        np.mean(last_N_train_losses), np.mean(last_N_val_losses)
+        ))
+
+    # tf.contrib.summary.scalar('train_loss', )
+    # tf.contrib.summary.scalar('val_loss', val_loss)
+
+    # grad_summary = grads(model, train_dataset)
+    # for gr in grad_summary:
+    #     tf.contrib.summary.histogram('grad_{}'.format(gr[1].name), gr[0])
+    #     tf.contrib.summary.histogram('var_{}'.format(gr[1].name), gr[1])
 
 def get_nested_variables(model):
     """ Recurse through model and get all the variables
@@ -73,13 +124,16 @@ def mil_train_loop(EPOCHS=100,
     accuracy_tol = 0.05
     best_val_loss = np.log(2)
 
-    all_vars, densenet_vars = get_nested_variables(model)
+    # all_vars, densenet_vars = get_nested_variables(model)
+    all_vars = model.variables
+    encoder_vars = model.encoder.variables 
 
     print('Creating saver ({})'.format(save_prefix))
-    densenet_saver = tfe.Saver(densenet_vars)
+    encoder_saver = tfe.Saver(encoder_vars)
     saver = tfe.Saver(all_vars)
     if pretrain_snapshot is not None:
-        densenet_saver.restore(pretrain_snapshot)
+        print('Restoring from {}'.format(pretrain_snapshot))
+        encoder_saver.restore(pretrain_snapshot)
 
     saver.save(save_prefix, global_step=0)
     best_snapshot = 0
@@ -102,26 +156,30 @@ def mil_train_loop(EPOCHS=100,
     print(imgout_name, imgout.shape)
 
     print('Performing initial log', end='...')
-    logging(model, train_dataset, val_dataset, loss_function, grads)
+    logging(model, val_dataset, loss_function, grads, [1.])
     print('Done')
 
     print('Entering training loop:')
     print('Starting training at global step: {}'.format(global_step.numpy()))
     global_index = 0
+    last_N_losses = []
     for IT in range(1, EPOCHS):
         batch_times = []
         for _ in range(EPOCH_ITERS):
             tf.assign(global_step, global_step+1)
             tstart = time.time()
             with tf.device('/gpu:0'):
-                optimizer.apply_gradients(grads(model, train_dataset))
+                loss_val, grads_and_vars = grads(model, train_dataset)
+                optimizer.apply_gradients(grads_and_vars)
 
+            last_N_losses.append(loss_val.numpy())
             batch_times.append(time.time()-tstart)
 
             global_index += 1
             if global_index % LOG_EVERY_N == 0:
                 print('EPOCH [{:04d}] STEP [{:05d}] '.format(IT, global_index), end = ' ')
-                logging(model, train_dataset, val_dataset, loss_function, grads)
+                logging(model, val_dataset, loss_function, grads, last_N_losses)
+                last_N_losses = []
 
         # imgout = create_output_image(model, x=x_print, y=y_print)
         for img_n in range(2):
@@ -131,8 +189,15 @@ def mil_train_loop(EPOCHS=100,
             cv2.imwrite(imgout_name, imgout[:,:,::-1])
 
         mean_batch_time = np.mean(batch_times)
-        train_loss, val_loss, train_acc, val_acc = test_step(model, loss_function,
-            grads, train_dataset, val_dataset, global_step, mean_batch_time, accuracy_function)
+        train_loss, val_loss, train_acc, val_acc = mil_test_step(model, 
+            grads=grads, 
+            train_dataset=train_dataset, 
+            val_dataset=val_dataset, 
+            global_step=global_step, 
+            mean_batch=mean_batch_time, 
+            N=50,
+            loss_function=loss_function, 
+            accuracy_function=accuracy_function)
 
         ## Check whether to save
         if val_acc > best_val_acc:
@@ -165,22 +230,6 @@ def mil_train_loop(EPOCHS=100,
 
     return saver, best_snapshot
 
-def logging(model, 
-            train_dataset, 
-            val_dataset, 
-            loss_function, 
-            grads):
-    train_loss = loss_function(model, train_dataset)
-    val_loss = loss_function(model, val_dataset)
-    print('TRAIN_LOSS = [{}] VAL_LOSS = [{}]'.format( 
-        train_loss.numpy(), val_loss.numpy()))
-    tf.contrib.summary.scalar('train_loss', train_loss)
-    tf.contrib.summary.scalar('val_loss', val_loss)
-
-    # grad_summary = grads(model, train_dataset)
-    # for gr in grad_summary:
-    #     tf.contrib.summary.histogram('grad_{}'.format(gr[1].name), gr[0])
-    #     tf.contrib.summary.histogram('var_{}'.format(gr[1].name), gr[1])
 
 def mil_test_step(model, 
               grads, 
@@ -219,8 +268,8 @@ def mil_test_step(model,
     return train_loss, val_loss, train_acc, val_acc
 
 def classifier_train_step(model, dataset, optimizer, grad_fn, global_step=None):
-    with tf.device('/gpu:0'):
-        optimizer.apply_gradients(grad_fn(model, dataset))
+    # with tf.device('/gpu:0'):
+    optimizer.apply_gradients(grad_fn(model, dataset))
 
     if global_step is not None:
         tf.assign(global_step, global_step+1)

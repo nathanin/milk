@@ -18,8 +18,9 @@ class ClassificationDataset(object):
                  n_classes = 5, 
                  n_threads = 6, 
                  batch = 16, 
-                 prefetch_buffer = 1024, 
-                 shuffle_buffer = 512):
+                 prefetch_buffer = 4096, 
+                 shuffle_buffer = 2048,
+                 eager = True):
 
         # Get a preprocessing function that uses tensorflow ops only
         preprocessing = self._build_preprocessing(crop_size, downsample, n_classes)
@@ -31,10 +32,15 @@ class ClassificationDataset(object):
                         .map(preprocessing, 
                             num_parallel_calls=n_threads)
                         .prefetch(buffer_size=prefetch_buffer)
-                        .batch(batch))
+                        .batch(batch)
+        )
         
-        # Eager iterator
-        self.iterator = tfe.Iterator(self.dataset)
+        if eager:
+            # Eager iterator
+            self.iterator = tfe.Iterator(self.dataset)
+        else:
+            self.iterator = self.dataset.make_initializable_iterator()
+            self.x_op, self.y_op = self.iterator.get_next()
 
     def _decode(self, example):
         features = {'height': tf.FixedLenFeature((), tf.int64, default_value=0),

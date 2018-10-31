@@ -1,3 +1,6 @@
+"""
+
+"""
 from __future__ import print_function
 import numpy as np
 import tensorflow as tf
@@ -13,7 +16,7 @@ from milk.classifier import Classifier
 from milk.utilities import model_utils
 from milk.utilities import training_utils
 
-def main(args):
+def main(args, sess):
     print(args) 
     # Get crop size from input_dim and downsample
     crop_size = int(args.input_dim / args.downsample)
@@ -27,44 +30,46 @@ def main(args):
         batch = args.batch_size,
         prefetch_buffer=args.prefetch_buffer,
         shuffle_buffer=args.shuffle_buffer,
+        eager = False
     )
+    sess.run(dataset.iterator.initializer)
 
     # Test batch:
-    x, y = dataset.iterator.next()
-    print('Test batch:')
-    print('x: ', x.get_shape())
-    print('y: ', y.get_shape())
-
     with tf.device('/gpu:0'):
         model = Classifier(n_classes=args.n_classes)
         optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-        grad_fn = tfe.implicit_gradients(model_utils.classifier_loss_fn)
 
-        # Process once to print network sizes and initialize the variables:
-        yhat = model(x, verbose=True)
-        print('yhat: ', yhat.get_shape())
+        x = tf.placeholder_with_default(dataset.x_op, 
+            shape=[args.batch_size, args.input_dim, args.input_dim, args.image_channels], 
+            name='x_in')
+        ytrue = tf.placeholder_with_default(dataset.y_op,
+            shape=[args.batch_size, args.n_classes],
+            name='ytrue')
+        yhat = model(x)
+        all_variables = model.variables ## dont need get_nested_variables if TF > 1.10
+        loss_op = tf.nn.softmax_cross_entropy_with_logits_v2(labels=ytrue, logits=yhat)
+        train_op = optimizer.minimize(loss_op)
 
-    all_variables = model.variables ## dont need get_nested_variables if TF > 1.10
+    model.summary()
 
-    global_step = tf.train.get_or_create_global_step()
+    sess.run(tf.global_variables_initializer())
+
     if os.path.exists(args.save_dir): shutil.rmtree(args.save_dir)
     os.makedirs(args.save_dir)
     save_prefix = os.path.join(args.save_dir, args.snapshot_prefix)
-    saver = tfe.Saver(all_variables)
-    saver.save(save_prefix, global_step)
+    saver = tf.train.Saver(all_variables)
+    saver.save(sess, save_prefix, 0)
 
     print('\nStart training...')
     for k in range(args.iterations):
-        training_utils.classifier_train_step(model, dataset, optimizer, grad_fn, 
-                              global_step=global_step)
-
+        _, loss_ = sess.run([train_op, loss_op])
         if k % args.save_every == 0:
-            print('Saving step ', global_step)
-            saver.save(save_prefix, global_step.numpy())
+            print('Saving step ', k)
+            saver.save(sess, save_prefix, k)
 
         if k % args.print_every == 0:
-            loss_ = model_utils.classifier_loss_fn(model, dataset)
-            print('STEP [{:07d}] LOSS = [{:3.4f}]'.format(k, loss_))
+            # print(k, loss_)
+            print('STEP [{:07d}] LOSS = [{:3.4f}]'.format(k, np.mean(loss_)))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -72,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_dir', default='./trained')
     parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.75pct.tfrecord')
     parser.add_argument('--n_classes', default=5, type=int)
-    parser.add_argument('--batch_size', default=128, type=int)
+    parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--input_dim', default=96, type=int)
     parser.add_argument('--image_channels', default=3, type=int)
     parser.add_argument('--downsample', default=0.25, type=float)
@@ -88,6 +93,12 @@ if __name__ == '__main__':
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-    tfe.enable_eager_execution(config=config)
+    sess = tf.Session(config=config)
 
-    main(args)
+    try:
+        main(args, sess)
+    except KeyboardInterrupt:
+        print('Stopping early.')
+    finally:
+        print('Done.')
+        sess.close()

@@ -72,7 +72,7 @@ def classifier_loss_fn(model, dataset):
     x, ytrue = dataset.iterator.next()
 
     with tf.device('/gpu:0'):
-        yhat = model(x.gpu())
+        yhat = model(x)
         loss = tf.nn.softmax_cross_entropy_with_logits_v2(
             labels=ytrue, logits=yhat)
         loss = tf.reduce_mean(loss)

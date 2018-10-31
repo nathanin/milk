@@ -36,7 +36,6 @@ import glob
 import re
 import time
 
-CASE_PATT = r'SP_\d+-\d+'
 
 def as_one_hot(y):
     onehot = np.zeros((len(y), 2), dtype=np.float32)
@@ -75,13 +74,11 @@ def split_train_test(data_list, test_pct=0.2):
         len(train_list), len(test_list)))
     return train_list, test_list
 
-
 def split_train_test_balanced(data_list, test_pct=0.2):
     """ Split list into two preserving the class composition
 
     """
     pass
-
 
 def split_train_val_test(data_list, val_pct=0.2, test_pct=0.2):
     total_cases = len(data_list)
@@ -164,6 +161,7 @@ def load(data_path,
         numpy tensor: 
     """
         
+    data_path = data_path.decode('utf-8') ## New after update to py3.6 & TF 1.11
     if case_label_fn is not None:
         y_ = case_label_fn(data_path)
     else:
@@ -248,7 +246,7 @@ def make_transform_fn(height, width, crop_size, normalize=False, scale=1.0):
         return rotated_x
 
     def _rotate_90(x_):
-        theta = np.random.choice([0., 90.])
+        theta = np.random.choice([0., 90., 180.])
         M = cv2.getRotationMatrix2D((crop_size/2,crop_size/2),theta,1)
         rotated_x = cv2.warpAffine(x_, M,(crop_size, crop_size))
         return rotated_x
@@ -259,8 +257,6 @@ def make_transform_fn(height, width, crop_size, normalize=False, scale=1.0):
 
     def _chained_fns(x_):
         # if normalize:
-        #     x_ = reinhard(x_)
-        # x_ = _center_crop(x_)
         x_ = _random_crop(x_)
         # x_ = _rotate_fn(x_)
         x_ = _rotate_90(x_)

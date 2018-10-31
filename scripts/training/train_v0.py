@@ -2,15 +2,22 @@ from __future__ import print_function
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
 import numpy as np
-import time, datetime
-import cPickle as pickle
-import sys, os, glob
 import argparse
+import datetime
+import glob
+import time
+import sys 
+import os 
+import re
 
-fpath = os.path.dirname(os.path.realpath(__file__))
-# from dataset import DatasetFactory
-import data_utils
-import utilities
+sys.path.insert(0, '../..')
+from milk.utilities import data_utils
+from milk.utilities import model_utils
+from milk.utilities import training_utils
+from milk import Milk
+
+sys.path.insert(0, '..')
+from dataset import CASE_LABEL_DICT
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -23,26 +30,46 @@ TEST_PCT = 0.1
 VAL_PCT = 0.2
 BATCH_SIZE = 1
 LEARNING_RATE = 1e-5
-SHUFFLE_BUFFER = 128
-PREFETCH_BUFFER = 128
+SHUFFLE_BUFFER = 64
+PREFETCH_BUFFER = 64
 
 X_SIZE = 128
 Y_SIZE = 128
 CROP_SIZE = 96
 SCALE = 1.0
 MIN_BAG = 100
-MAX_BAG = 300
+MAX_BAG = 200
 CONST_BAG = 200
 
-def main(train_list, val_list, test_list, Model, loss_function, logdir_base, fold_num):
+def main(train_list, val_list, test_list):
+    """ 
+    1. Create generator datasets from the provided lists
+    2. train and validate Milk
+
+    v0 - create datasets within this script
+    v1 - factor monolithic training_utils.mil_train_loop !!
+    v2 - use a new dataset class @ milk/utilities/mil_dataset.py
+
+    """
     transform_fn = data_utils.make_transform_fn(X_SIZE, Y_SIZE, CROP_SIZE, SCALE)
     train_generator = lambda: data_utils.generator(train_list)
     val_generator = lambda: data_utils.generator(val_list)
     test_generator = lambda: data_utils.generator(test_list)
 
+
+    CASE_PATT = r'SP_\d+-\d+'
+    def case_label_fn(data_path):
+        case = re.findall(CASE_PATT, data_path)[0]
+        y_ = CASE_LABEL_DICT[case]
+        print(data_path, y_)
+        return y_
+
     def wrapped_fn(data_path):
-        x, y = data_utils.load(data_path.numpy(), transform_fn=transform_fn, min_bag=MIN_BAG, max_bag=MAX_BAG)
-        # x, y = data_utils.load(data_path.numpy(), transform_fn=transform_fn, const_bag=CONST_BAG)
+        x, y = data_utils.load(data_path.numpy(), 
+                               transform_fn=transform_fn, 
+                               min_bag=MIN_BAG, 
+                               max_bag=MAX_BAG,
+                               case_label_fn=case_label_fn)
 
         return x, y
 
@@ -73,35 +100,24 @@ def main(train_list, val_list, test_list, Model, loss_function, logdir_base, fol
     print('Placing model, optimizer, and gradient ops on GPU')
     with tf.device('/gpu:0'):
         print('Model initializing')
-        model = Model()
+        model = Milk()
 
         print('Optimizer initializing')
         optimizer = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE)
-        # optimizer = tf.train.GradientDescentOptimizer(learning_rate=LEARNING_RATE)
 
         print('Finding implicit gradients')
-        grads = tfe.implicit_gradients(loss_function)
+        grads = tfe.implicit_value_and_gradients(model_utils.loss_function)
 
     """ Run forward once to initialize the variables """
+    t0 = time.time()
     _ = model(x.gpu(), verbose=True)
+    print('Model forward step: {}s'.format(time.time() - t0))
 
     """ Set up training variables, directories, etc. """
     global_step = tf.train.get_or_create_global_step()
 
-    exptime = datetime.datetime.now()
-    logdir = '{}/bigbatch_log/{}'.format(logdir_base, 
-        exptime.strftime('fold_{}_%Y_%m_%d_%H_%M_%S'.format(fold_num)))
-    os.makedirs(logdir)
+    logdir, savedir, imgdir, save_prefix = training_utils.setup_outputs()
     summary_writer = tf.contrib.summary.create_file_writer(logdir=logdir)
-
-    save_dir = '{}/bigbatch_snapshot/{}'.format(logdir_base, 
-        exptime.strftime('fold_{}_%Y_%m_%d_%H_%M_%S'.format(fold_num)))
-    os.makedirs(save_dir)
-    save_prefix = os.path.join(save_dir, 'snapshot')
-
-    img_debug_dir = '{}/bigbatch_output/{}'.format(logdir_base, 
-        exptime.strftime('fold_{}_%Y_%m_%d_%H_%M_%S'.format(fold_num)))
-    os.makedirs(img_debug_dir)
 
     training_args = {
         'EPOCHS': EPOCHS,
@@ -112,42 +128,44 @@ def main(train_list, val_list, test_list, Model, loss_function, logdir_base, fol
         'grads': grads,
         # 'saver': saver,
         'save_prefix': save_prefix,
-        'loss_function': loss_function,
-        'accuracy_function': accuracy_function,
+        'loss_function': model_utils.loss_function,
+        'accuracy_function': model_utils.accuracy_function,
         'train_dataset': train_dataset,
         'val_dataset': val_dataset,
-        'img_debug_dir': img_debug_dir
+        'img_debug_dir': imgdir,
+        'pretrain_snapshot': '../pretraining/trained_128/classifier-19500'
     }
 
     with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
-        saver, best_snapshot = utilities.train_loop(**training_args)
+        saver, best_snapshot = training_utils.mil_train_loop(**training_args)
 
-    print('Running TEST')
+    print('Running TEST SET')
     val_dataset = [] # Clear validation -- we're done with it
     test_dataset = tf.data.Dataset.from_generator(test_generator, (tf.string), output_shapes = None)
     test_dataset = test_dataset.map(pyfunc_wrapper, num_parallel_calls=1)
-    # test_dataset = test_dataset.prefetch(PREFETCH_BUFFER)
     test_dataset = tfe.Iterator(test_dataset)
 
     best_snapshot = save_prefix+'-{}'.format(best_snapshot)
     print('Reverting model to snapshot {}'.format(best_snapshot))
     saver.restore(best_snapshot)
     print('\n\n------------------------- TEST -----------------------------')
-    train_loss, test_loss, train_acc, test_acc = utilities.test_step(model, loss_function,
-        grads, train_dataset, test_dataset,
-        global_step, 0, accuracy_function)
+    train_loss, test_loss, train_acc, test_acc = training_utils.mil_test_step(model, 
+        grads=grads, 
+        train_dataset=train_dataset, 
+        val_dataset=test_dataset,
+        global_step=global_step, 
+        mean_batch=0, 
+        N=100, 
+        loss_function=loss_function,
+        accuracy_function=accuracy_function)
 
     ## Write the test line
-    print('Writing summary to')
-    result_file = '{}/bigbatch_result_{}.txt'.format(logdir_base, 
-        exptime.strftime('fold_{}_%Y_%m_%d_%H_%M_%S'.format(fold_num)))
+    print('Training Result Summary')
     test_str = 'train loss=[{:3.3f}] '.format(train_loss)
     test_str += 'TEST loss=[{:3.3f}] '.format(test_loss)
     test_str += 'train acc=[{:3.3f}] '.format(train_acc)
     test_str += 'TEST acc=[{:3.3f}] '.format(test_acc)
-    print(result_file, test_str)
-    with open(result_file, 'w+') as f:
-        f.write(test_str)
+    print(test_str)
 
     print('Cleaning datasets')
     train_dataset = None
@@ -158,39 +176,12 @@ def main(train_list, val_list, test_list, Model, loss_function, logdir_base, fol
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('arch_dir')
     parser.add_argument('--fold', default=None, type=int)
 
     args = parser.parse_args()
-    arch_dir = args.arch_dir
-    if args.fold is None:
-        fold_num = np.random.randint(10)
-        print('Random fold: {}'.format(fold_num))
-    else:
-        fold_num = args.fold
+   
+    data_patt = '../dataset/tiles_pruned_no_white/*npy'
 
-    # arch_dir = sys.argv[1]
-    # fold_num = sys.argv[2]
-    # arch_dirs = ['arch1', 'arch2', 'arch3', 'arch3b']
-    data_patt = 'dataset/tiles/pruned_no_white/*npy'
+    train_list, val_list, test_list = data_utils.list_data(data_patt, val_pct=0.1)
 
-    sys.path.insert(0, os.path.join(fpath, arch_dir))
-    # from model import Model, loss_function, accuracy_function, debug_fn
-    from bayesian_densenet import Model, loss_function, accuracy_function, debug_fn
-
-    data_list = glob.glob(data_patt)
-    # kf = KFold(n_splits=10, shuffle=True, random_state=1337)
-    # for train_idx, test_idx in kf.split(data_list):
-    fold_splits = pickle.load(open('folds_10.pkl', 'r'))
-    fold_info = fold_splits[int(fold_num)]
-
-    train_list = np.asarray(data_list)[fold_info[0]]
-    test_list = np.asarray(data_list)[fold_info[1]]
-
-    # print(train_list)
-    # print(test_list)
-    ## Split off val from train
-    train_list, val_list = data_utils.split_train_test(train_list, test_pct=0.2)
-
-    main(train_list, val_list, test_list, Model, loss_function, arch_dir, fold_num)
-    tf.reset_default_graph()
+    main(train_list, val_list, test_list)

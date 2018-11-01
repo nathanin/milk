@@ -96,13 +96,15 @@ class ClassificationDataset(object):
             target_w = tf.cast(crop_size*downsample, tf.int32)
             img = tf.image.resize_images(img, [target_h, target_w])
             ## method 1 = nearest neighbor
-            mask = tf.image.resize_images(mask, [target_h, target_w], method=1) 
+            ## Classification don't bother to resize the mask
+            # mask = tf.image.resize_images(mask, [target_h, target_w], method=1) 
 
             # move to [0,1]
-            img = tf.multiply(img,  1/255.)
+            img = tf.multiply(img, 1/255.)
 
             # change mask to a class
-            uniques, _ , counts = tf.unique_with_counts(tf.squeeze(tf.reshape(mask, (1, -1))))
+            uniques, _ , counts = tf.unique_with_counts(
+                tf.squeeze(tf.reshape(mask, (1, -1))))
             majority = uniques[tf.argmax(counts)]
 
             # onehot mask

@@ -10,7 +10,6 @@ import sys
 import os 
 import re
 
-sys.path.insert(0, '../..')
 from milk.utilities import data_utils
 from milk.utilities import model_utils
 from milk.utilities import training_utils
@@ -31,15 +30,28 @@ VAL_PCT = 0.2
 BATCH_SIZE = 1
 LEARNING_RATE = 1e-5
 SHUFFLE_BUFFER = 64
-PREFETCH_BUFFER = 64
+PREFETCH_BUFFER = 128
 
 X_SIZE = 128
 Y_SIZE = 128
 CROP_SIZE = 96
 SCALE = 1.0
-MIN_BAG = 100
-MAX_BAG = 200
+MIN_BAG = 150
+MAX_BAG = 350
 CONST_BAG = 200
+
+
+def filter_list_by_label(lst):
+    lst_out = []
+    for l in lst:
+        l_base = os.path.basename(l)
+        l_base = os.path.splitext(l_base)[0]
+        if CASE_LABEL_DICT[l_base] != 2:
+            lst_out.append(l)
+    print("Got list length {}; returning list length {}".format(
+        len(lst), len(lst_out)
+    ))
+    return lst_out
 
 def main(train_list, val_list, test_list):
     """ 
@@ -61,15 +73,15 @@ def main(train_list, val_list, test_list):
     def case_label_fn(data_path):
         case = re.findall(CASE_PATT, data_path)[0]
         y_ = CASE_LABEL_DICT[case]
-        print(data_path, y_)
+        # print(data_path, y_)
         return y_
 
     def wrapped_fn(data_path):
         x, y = data_utils.load(data_path.numpy(), 
-                               transform_fn=transform_fn, 
-                               min_bag=MIN_BAG, 
-                               max_bag=MAX_BAG,
-                               case_label_fn=case_label_fn)
+                            transform_fn=transform_fn, 
+                            min_bag=MIN_BAG, 
+                            max_bag=MAX_BAG,
+                            case_label_fn=case_label_fn)
 
         return x, y
 
@@ -133,7 +145,7 @@ def main(train_list, val_list, test_list):
         'train_dataset': train_dataset,
         'val_dataset': val_dataset,
         'img_debug_dir': imgdir,
-        'pretrain_snapshot': '../pretraining/trained_128/classifier-19500'
+        'pretrain_snapshot': '../pretraining/trained/classifier-19999'
     }
 
     with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
@@ -180,8 +192,13 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
    
-    data_patt = '../dataset/tiles_pruned_no_white/*npy'
+    data_patt = '../dataset/tiles/*npy'
 
     train_list, val_list, test_list = data_utils.list_data(data_patt, val_pct=0.1)
+
+    ## Filter out unwanted samples:
+    train_list = filter_list_by_label(train_list)
+    val_list = filter_list_by_label(val_list)
+    test_list = filter_list_by_label(test_list)
 
     main(train_list, val_list, test_list)

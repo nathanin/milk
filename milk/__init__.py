@@ -1,2 +1,3 @@
-from milk.mil import Milk
-from milk.classifier import Classifier
+from .mil import Milk
+from .classifier import Classifier
+from .utilities import *

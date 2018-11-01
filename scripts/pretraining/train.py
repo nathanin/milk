@@ -7,7 +7,6 @@ import sys
 import shutil
 import argparse
 
-sys.path.insert(0, '../..')
 from milk.utilities import ClassificationDataset
 from milk.classifier import Classifier
 from milk.utilities import model_utils

@@ -1,4 +1,10 @@
 """
+Train a classifier in graph mode
+
+The classifier will be reused as initialization for the MIL encoder
+so it must have at least a subset with the same architecture.
+Currently, it's basically required that the entier encoding architecture
+is kept constant.
 
 """
 from __future__ import print_function
@@ -10,7 +16,6 @@ import sys
 import shutil
 import argparse
 
-sys.path.insert(0, '../..')
 from milk.utilities import ClassificationDataset
 from milk.classifier import Classifier
 from milk.utilities import model_utils
@@ -26,6 +31,7 @@ def main(args, sess):
         record_path = args.dataset,
         crop_size = crop_size,
         downsample = args.downsample,
+        n_classes = args.n_classes,
         n_threads = args.n_threads,
         batch = args.batch_size,
         prefetch_buffer=args.prefetch_buffer,
@@ -61,15 +67,23 @@ def main(args, sess):
     saver.save(sess, save_prefix, 0)
 
     print('\nStart training...')
-    for k in range(args.iterations):
-        _, loss_ = sess.run([train_op, loss_op])
-        if k % args.save_every == 0:
-            print('Saving step ', k)
-            saver.save(sess, save_prefix, k)
+    try:
+        for k in range(args.iterations):
+            _, loss_ = sess.run([train_op, loss_op])
+            if k % args.save_every == 0:
+                print('Saving step ', k)
+                saver.save(sess, save_prefix, k)
 
-        if k % args.print_every == 0:
-            # print(k, loss_)
-            print('STEP [{:07d}] LOSS = [{:3.4f}]'.format(k, np.mean(loss_)))
+            if k % args.print_every == 0:
+                # print(k, loss_)
+                print('STEP [{:07d}] LOSS = [{:3.4f}]'.format(
+                    k, np.mean(loss_)
+                ))
+    except KeyboardInterrupt:
+        print('Stop signal')
+    finally:
+        print('Saving one last time')
+        saver.save(sess, save_prefix, k)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -77,7 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_dir', default='./trained')
     parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.75pct.tfrecord')
     parser.add_argument('--n_classes', default=5, type=int)
-    parser.add_argument('--batch_size', default=32, type=int)
+    parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--input_dim', default=96, type=int)
     parser.add_argument('--image_channels', default=3, type=int)
     parser.add_argument('--downsample', default=0.25, type=float)

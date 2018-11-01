@@ -38,7 +38,7 @@ Y_SIZE = 128
 CROP_SIZE = 96
 SCALE = 1.0
 MIN_BAG = 100
-MAX_BAG = 200
+MAX_BAG = 350
 CONST_BAG = 200
 
 def main(train_list, val_list, test_list):
@@ -56,12 +56,11 @@ def main(train_list, val_list, test_list):
     val_generator = lambda: data_utils.generator(val_list)
     test_generator = lambda: data_utils.generator(test_list)
 
-
     CASE_PATT = r'SP_\d+-\d+'
     def case_label_fn(data_path):
         case = re.findall(CASE_PATT, data_path)[0]
         y_ = CASE_LABEL_DICT[case]
-        print(data_path, y_)
+        # print(data_path, y_)
         return y_
 
     def wrapped_fn(data_path):
@@ -156,8 +155,8 @@ def main(train_list, val_list, test_list):
         global_step=global_step, 
         mean_batch=0, 
         N=100, 
-        loss_function=loss_function,
-        accuracy_function=accuracy_function)
+        loss_function=model_utils.loss_function,
+        accuracy_function=model_utils.accuracy_function)
 
     ## Write the test line
     print('Training Result Summary')

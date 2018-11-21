@@ -28,9 +28,9 @@ class Classifier(tf.keras.Model):
         if return_embedding and not return_embedding_and_predict:
             return embedding
 
-        drop = self.dropout(output, training=training)
+        drop = self.dropout(embedding, training=training)
         prediction = self.classifier(drop)
         if return_embedding_and_predict:
-            return output, prediction
+            return embedding, prediction
 
-        return output
+        return prediction

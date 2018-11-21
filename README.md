@@ -36,5 +36,8 @@ scripts/
 
 ```
 
+#### Requirements
+Please refer to `requirements.txt`
+
 Date: October 25, 2018
 Contact: Nathan.Ing@cshs.org , ing.nathany@gmail.com

@@ -118,9 +118,12 @@ def list_data(data_patt, val_pct=0.2, test_pct=0.2):
     data_list = glob.glob(data_patt)
     return split_train_val_test(data_list, val_pct=val_pct, test_pct=test_pct)
 
+"""
+generator enforces supports batch_size = 1 even if batch_size is set
+"""
 def generator(data_list, batch_size=1):
     while True:
-        yield np.random.choice(data_list, batch_size)[0]
+        yield np.random.choice(data_list, batch_size, replace=False)[0]
 
 def exhaustable_generator(data_list):
     for data in data_list:
@@ -160,8 +163,8 @@ def load(data_path,
     Returns:
         numpy tensor: 
     """
-        
-    data_path = data_path.decode('utf-8') ## New after update to py3.6 & TF 1.11
+    if not isinstance(data_path, str):
+        data_path = data_path.decode('utf-8') ## New after update to py3.6 & TF 1.11
     if case_label_fn is not None:
         y_ = case_label_fn(data_path)
     else:

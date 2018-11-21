@@ -10,7 +10,7 @@ import datetime
 from .model_utils import loss_function, accuracy_function
 from .drawing_utils import create_output_image
 
-def setup_outputs(basepath='./'):
+def setup_outputs(basepath='./', return_datestr=False):
     exptime = datetime.datetime.now()
     exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
     logdir = os.path.join( basepath, 'log',  exptime_str)
@@ -23,7 +23,10 @@ def setup_outputs(basepath='./'):
 
     save_prefix = os.path.join(savedir, 'snapshot')
 
-    return logdir, savedir, imgdir, save_prefix
+    if return_datestr:
+        return logdir, savedir, imgdir, save_prefix, exptime_str
+    else:
+        return logdir, savedir, imgdir, save_prefix
 
 def logging(model, 
             val_dataset, 

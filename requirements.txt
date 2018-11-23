@@ -1,0 +1,33 @@
+absl-py==0.5.0
+astor==0.7.1
+certifi==2018.10.15
+cycler==0.10.0
+gast==0.2.0
+grpcio==1.12.1
+h5py==2.8.0
+Keras-Applications==1.0.6
+Keras-Preprocessing==1.0.5
+kiwisolver==1.0.1
+Markdown==3.0.1
+matplotlib==3.0.2
+-e git+https://github.com/nathanin/milk.git@c8b924e27f8476c2db9109081dd77d349e3971d1#egg=milk
+mkl-fft==1.0.6
+mkl-random==1.0.1
+numpy==1.15.3
+openslide-python==1.1.1
+pandas==0.23.4
+Pillow==5.3.0
+protobuf==3.6.0
+pyparsing==2.3.0
+python-dateutil==2.7.5
+pytz==2018.7
+scikit-learn==0.20.0
+scipy==1.1.0
+seaborn==0.9.0
+six==1.11.0
+-e git+/home/nathan/Dropbox/Git/svs-reader.git/@c7abb377abb0a22ee5a740d88beb0869cfe92e90#egg=svs_reader
+tensorboard==1.11.0
+tensorflow-gpu==1.11.0
+tensorflow-hub==0.1.1
+termcolor==1.1.0
+Werkzeug==0.14.1

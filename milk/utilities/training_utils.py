@@ -10,7 +10,7 @@ import datetime
 from .model_utils import loss_function, accuracy_function
 from .drawing_utils import create_output_image
 
-def setup_outputs(basepath='./'):
+def setup_outputs(basepath='./', return_datestr=False):
     exptime = datetime.datetime.now()
     exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
     logdir = os.path.join( basepath, 'log',  exptime_str)
@@ -23,28 +23,10 @@ def setup_outputs(basepath='./'):
 
     save_prefix = os.path.join(savedir, 'snapshot')
 
-    return logdir, savedir, imgdir, save_prefix, exptime_str
-
-def write_train_val_test_lists(exptime_str, train_list, val_list, test_list):
-    writeto = os.path.join('./lists', exptime_str)
-    if not os.path.exists(writeto):
-        os.makedirs(writeto)
-    
-    def do_write(fpath, data):
-        with open(fpath, 'w+') as f:
-            for i in data:
-                i = os.path.basename(i)
-                i = os.path.splitext(i)[0]
-                f.write('{}\n'.format(i))
-
-    train_f = os.path.join(writeto, 'train.txt')
-    do_write(train_f, train_list)
-
-    val_f = os.path.join(writeto, 'val.txt')
-    do_write(val_f, val_list)
-
-    test_f = os.path.join(writeto, 'test.txt')
-    do_write(test_f, test_list)
+    if return_datestr:
+        return logdir, savedir, imgdir, save_prefix, exptime_str
+    else:
+        return logdir, savedir, imgdir, save_prefix
 
 def logging(model, 
             val_dataset, 

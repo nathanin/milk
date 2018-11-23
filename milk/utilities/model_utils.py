@@ -21,13 +21,6 @@ def loss_function(model, dataset, batch_size=BATCH_SIZE, training=True, T=10):
         x, y = dataset.next()
         x = tf.squeeze(x, axis=0)
 
-    ## Model-associated uncertainty during training
-    # yhat_ = tf.expand_dims(model(x.gpu(), T=T, training=training), axis=0)
-    # for _ in xrange(T):
-    #     yhat_t = tf.expand_dims(model(x.gpu(), T=T, training=training), axis=0)
-    #     yhat_ = tf.concat([yhat_, yhat_t], axis=0)
-    # yhat = tf.reduce_mean(yhat_, axis=0)
-
     ## Just dropout
     # print('Running model forward, x:', x.get_shape(), end='...')
     yhat = model(x, batch_size = batch_size, T=T, training=training)

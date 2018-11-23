@@ -1,3 +1,9 @@
+"""
+Script to run the MIL workflow on numpy saved tile caches
+
+V1 of the script adds external tracking of val and test lists
+for use with test_*.py
+"""
 from __future__ import print_function
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
@@ -20,7 +26,7 @@ from dataset import CASE_LABEL_DICT
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
-tf.enable_eager_execution(config=config)
+tfe.enable_eager_execution(config=config)
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -40,7 +46,6 @@ MIN_BAG = 150
 MAX_BAG = 350
 CONST_BAG = 200
 
-
 def filter_list_by_label(lst):
     lst_out = []
     for l in lst:
@@ -53,7 +58,7 @@ def filter_list_by_label(lst):
     ))
     return lst_out
 
-def main(train_list, val_list, test_list, args):
+def main(train_list, val_list, test_list):
     """ 
     1. Create generator datasets from the provided lists
     2. train and validate Milk
@@ -66,7 +71,6 @@ def main(train_list, val_list, test_list, args):
     transform_fn = data_utils.make_transform_fn(X_SIZE, Y_SIZE, CROP_SIZE, SCALE)
     train_generator = lambda: data_utils.generator(train_list)
     val_generator = lambda: data_utils.generator(val_list)
-    test_generator = lambda: data_utils.generator(test_list)
 
     CASE_PATT = r'SP_\d+-\d+'
     def case_label_fn(data_path):
@@ -127,16 +131,27 @@ def main(train_list, val_list, test_list, args):
     """ Set up training variables, directories, etc. """
     global_step = tf.train.get_or_create_global_step()
 
-    logdir, savedir, imgdir, save_prefix, exptime_str = training_utils.setup_outputs()
-    training_utils.write_train_val_test_lists(exptime_str, 
-        train_list,
-        val_list, 
-        test_list)
+    output_strings = training_utils.setup_outputs(return_datestr=True)
+    logdir = output_strings[0]
+    savedir = output_strings[1]
+    imgdir = output_strings[2]
+    save_prefix = output_strings[3]
+    exptime_str = output_strings[4]
     summary_writer = tf.contrib.summary.create_file_writer(logdir=logdir)
+
+    val_list_file = os.path.join('./val_lists', '{}.txt'.format(exptime_str))
+    with open(val_list_file, 'w+') as f:
+        for v in val_list:
+            f.write('{}\n'.format(v))
+
+    test_list_file = os.path.join('./test_lists', '{}.txt'.format(exptime_str))
+    with open(test_list_file, 'w+') as f:
+        for v in test_list:
+            f.write('{}\n'.format(v))
 
     training_args = {
         'EPOCHS': EPOCHS,
-        'EPOCH_ITERS': len(train_list)*5,
+        'EPOCH_ITERS': len(train_list)*4,
         'global_step': global_step,
         'model': model,
         'optimizer': optimizer,
@@ -148,39 +163,11 @@ def main(train_list, val_list, test_list, args):
         'train_dataset': train_dataset,
         'val_dataset': val_dataset,
         'img_debug_dir': imgdir,
-        'pretrain_snapshot': args.pretraining
+        'pretrain_snapshot': '../pretraining/trained/classifier-19999'
     }
 
     with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
         saver, best_snapshot = training_utils.mil_train_loop(**training_args)
-
-    print('Running TEST SET')
-    val_dataset = [] # Clear validation -- we're done with it
-    test_dataset = tf.data.Dataset.from_generator(test_generator, (tf.string), output_shapes = None)
-    test_dataset = test_dataset.map(pyfunc_wrapper, num_parallel_calls=1)
-    test_dataset = tfe.Iterator(test_dataset)
-
-    best_snapshot = save_prefix+'-{}'.format(best_snapshot)
-    print('Reverting model to snapshot {}'.format(best_snapshot))
-    saver.restore(best_snapshot)
-    print('\n\n------------------------- TEST -----------------------------')
-    train_loss, test_loss, train_acc, test_acc = training_utils.mil_test_step(model, 
-        grads=grads, 
-        train_dataset=train_dataset, 
-        val_dataset=test_dataset,
-        global_step=global_step, 
-        mean_batch=0, 
-        N=100, 
-        loss_function=model_utils.loss_function,
-        accuracy_function=model_utils.accuracy_function)
-
-    ## Write the test line
-    print('Training Result Summary')
-    test_str = 'train loss=[{:3.3f}] '.format(train_loss)
-    test_str += 'TEST loss=[{:3.3f}] '.format(test_loss)
-    test_str += 'train acc=[{:3.3f}] '.format(train_acc)
-    test_str += 'TEST acc=[{:3.3f}] '.format(test_acc)
-    print(test_str)
 
     print('Cleaning datasets')
     train_dataset = None
@@ -188,21 +175,23 @@ def main(train_list, val_list, test_list, args):
     val_dataset = None
     print('\n\n')
 
+    print('Training done. Find val and test datasets at')
+    print(val_list_file)
+    print(test_list_file)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--fold', default=None, type=int)
-    parser.add_argument('--pretraining', default=None, type=str)
-
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--fold', default=None, type=int)
+    # args = parser.parse_args()
    
     data_patt = '../dataset/tiles/*npy'
 
-    train_list, val_list, test_list = data_utils.list_data(data_patt, val_pct=0.1)
+    train_list, val_list, test_list = data_utils.list_data(data_patt, 
+        val_pct=0.1, test_pct=0.3)
 
     ## Filter out unwanted samples:
     train_list = filter_list_by_label(train_list)
     val_list = filter_list_by_label(val_list)
     test_list = filter_list_by_label(test_list)
 
-    main(train_list, val_list, test_list, args)
+    main(train_list, val_list, test_list)

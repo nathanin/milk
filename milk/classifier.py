@@ -21,12 +21,16 @@ class Classifier(tf.keras.Model):
     def call(self, 
              x_in, 
              return_embedding=False, 
+             return_embedding_and_predict=False, 
              verbose=False, 
              training=True):
-        output = self.encoder(x_in, training=training, verbose=verbose)
-        if return_embedding:
-            return output
-        output = self.dropout(output, training=training)
-        output = self.classifier(output)
+        embedding = self.encoder(x_in, training=training, verbose=verbose)
+        if return_embedding and not return_embedding_and_predict:
+            return embedding
 
-        return output
+        drop = self.dropout(embedding, training=training)
+        prediction = self.classifier(drop)
+        if return_embedding_and_predict:
+            return embedding, prediction
+
+        return prediction

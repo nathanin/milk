@@ -20,20 +20,30 @@ class ClassificationDataset(object):
                  batch = 16, 
                  prefetch_buffer = 4096, 
                  shuffle_buffer = 2048,
-                 eager = True):
+                 eager = True, 
+                 test = False,
+                 repeats = 1):
 
         # Get a preprocessing function that uses tensorflow ops only
         preprocessing = self._build_preprocessing(crop_size, downsample, n_classes)
 
         # Build the dataset object
-        self.dataset = (tf.data.TFRecordDataset(record_path)
-                        .repeat()
-                        .shuffle(buffer_size=shuffle_buffer)
-                        .map(preprocessing, 
-                            num_parallel_calls=n_threads)
-                        .prefetch(buffer_size=prefetch_buffer)
-                        .batch(batch)
-        )
+        if test:
+            self.dataset = (tf.data.TFRecordDataset(record_path)
+                            .repeat(repeats)
+                            .map(preprocessing, 
+                                num_parallel_calls=n_threads)
+                            .prefetch(buffer_size=prefetch_buffer)
+                            .batch(batch))
+
+        else:
+            self.dataset = (tf.data.TFRecordDataset(record_path)
+                            .repeat()
+                            .shuffle(buffer_size=shuffle_buffer)
+                            .map(preprocessing, 
+                                num_parallel_calls=n_threads)
+                            .prefetch(buffer_size=prefetch_buffer)
+                            .batch(batch))
         
         if eager:
             # Eager iterator

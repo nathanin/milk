@@ -80,7 +80,6 @@ def dump_dir(args):
     for slide in slide_list:
         dump_slide(slide, args)
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('svs_dir', default='.')

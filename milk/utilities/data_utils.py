@@ -118,9 +118,12 @@ def list_data(data_patt, val_pct=0.2, test_pct=0.2):
     data_list = glob.glob(data_patt)
     return split_train_val_test(data_list, val_pct=val_pct, test_pct=test_pct)
 
+"""
+generator enforces supports batch_size = 1 even if batch_size is set
+"""
 def generator(data_list, batch_size=1):
     while True:
-        yield np.random.choice(data_list, batch_size)[0]
+        yield np.random.choice(data_list, batch_size, replace=False)[0]
 
 def exhaustable_generator(data_list):
     for data in data_list:
@@ -160,8 +163,8 @@ def load(data_path,
     Returns:
         numpy tensor: 
     """
-        
-    data_path = data_path.decode('utf-8') ## New after update to py3.6 & TF 1.11
+    if not isinstance(data_path, str):
+        data_path = data_path.decode('utf-8') ## New after update to py3.6 & TF 1.11
     if case_label_fn is not None:
         y_ = case_label_fn(data_path)
     else:
@@ -210,7 +213,7 @@ def load(data_path,
     y_ = np.expand_dims(y_, 0)
     return batch_x, as_one_hot(y_)
 
-def make_transform_fn(height, width, crop_size, normalize=False, scale=1.0):
+def make_transform_fn(height, width, crop_size, scale=1.0, normalize=False):
     """ Return a series of chained numpy and open-cv functions
     
     """
@@ -256,12 +259,12 @@ def make_transform_fn(height, width, crop_size, normalize=False, scale=1.0):
         # return (x_ * (2/255.) - 1).astype(np.float32)
 
     def _chained_fns(x_):
-        # if normalize:
         x_ = _random_crop(x_)
-        # x_ = _rotate_fn(x_)
         x_ = _rotate_90(x_)
         x_ = _resize_fn(x_)
         x_ = _flip_fn(x_)
+        if normalize:
+            x_ = reinhard(x_)
         x_ = _zero_center(x_)
         return x_
 

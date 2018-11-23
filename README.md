@@ -6,33 +6,38 @@ In progress.
 
 Structure
 ```
-dataset/
+milk/
+|____utilities/
+      |____ __init__.py
+      |____ drawing_utils.py
+      |____ data_utils.py
+      |____ model_utils.py
+      |____ training_utils.py
 |____ __init__.py
-|____ data/
-|____ [data related tables and scripts]
-
-mil/
-|____ __init__.py
+|____ classifier.py
 |____ densenet.py
+|____ encoder.py
 |____ ops.py
+|____ mil.py
 
 scripts/
+|_____dataset/
+      |____ __init__.py
+      |____ data/
+      |____ remove_white_tiles.py
+      |____ slide_to_npy.py
+      |____ slide_to_tfrecord.py
+|____ debugging/
+|____ deploy/
+|____ evaluate/
 |____ pretraining/
 |____ training/
-|____ deploy/
-|____ figures/
-|____ notebooks/
+|____ usable_area/
 
-utilities/
-|____ __init__.py
-|____ drawing_utils.py
-|____ data_utils.py
-|____ model_utils.py
-|____ training_utils.py
-
-assets/
-|____ [misc images]
 ```
+
+#### Requirements
+Please refer to `requirements.txt`
 
 Date: October 25, 2018
 Contact: Nathan.Ing@cshs.org , ing.nathany@gmail.com

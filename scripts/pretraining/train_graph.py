@@ -18,8 +18,8 @@ import argparse
 
 from milk.utilities import ClassificationDataset
 from milk.classifier import Classifier
-from milk.utilities import model_utils
-from milk.utilities import training_utils
+# from milk.utilities import model_utils
+# from milk.utilities import training_utils
 
 def main(args, sess):
     print(args) 

@@ -23,7 +23,28 @@ def setup_outputs(basepath='./'):
 
     save_prefix = os.path.join(savedir, 'snapshot')
 
-    return logdir, savedir, imgdir, save_prefix
+    return logdir, savedir, imgdir, save_prefix, exptime_str
+
+def write_train_val_test_lists(exptime_str, train_list, val_list, test_list):
+    writeto = os.path.join('./lists', exptime_str)
+    if not os.path.exists(writeto):
+        os.makedirs(writeto)
+    
+    def do_write(fpath, data):
+        with open(fpath, 'w+') as f:
+            for i in data:
+                i = os.path.basename(i)
+                i = os.path.splitext(i)[0]
+                f.write('{}\n'.format(i))
+
+    train_f = os.path.join(writeto, 'train.txt')
+    do_write(train_f, train_list)
+
+    val_f = os.path.join(writeto, 'val.txt')
+    do_write(val_f, val_list)
+
+    test_f = os.path.join(writeto, 'test.txt')
+    do_write(test_f, test_list)
 
 def logging(model, 
             val_dataset, 
@@ -44,7 +65,7 @@ def logging(model,
         val_loss = loss_function(model, val_dataset)
         last_N_val_losses.append(val_loss.numpy())
 
-    print('TRAIN_LOSS = [{}] VAL_LOSS = [{}]'.format( 
+    print('TRAIN_LOSS = [{:3.5f}] VAL_LOSS = [{:3.5f}]'.format( 
         np.mean(last_N_train_losses), np.mean(last_N_val_losses)
         ))
 
@@ -114,6 +135,7 @@ def mil_train_loop(EPOCHS=100,
                    accuracy_function=None,
                    save_prefix=None, 
                    img_debug_dir=None,
+                   waiting_time=5,
                    pretrain_snapshot=None):
     ## Reset global step
     if global_step.numpy() > 0:
@@ -163,7 +185,7 @@ def mil_train_loop(EPOCHS=100,
     print('Starting training at global step: {}'.format(global_step.numpy()))
     global_index = 0
     last_N_losses = []
-    for IT in range(1, EPOCHS):
+    for epoch in range(1, EPOCHS):
         batch_times = []
         for _ in range(EPOCH_ITERS):
             tf.assign(global_step, global_step+1)
@@ -177,7 +199,7 @@ def mil_train_loop(EPOCHS=100,
 
             global_index += 1
             if global_index % LOG_EVERY_N == 0:
-                print('EPOCH [{:04d}] STEP [{:05d}] '.format(IT, global_index), end = ' ')
+                print('EPOCH [{:04d}] STEP [{:05d}] '.format(epoch, global_index), end = ' ')
                 logging(model, val_dataset, loss_function, grads, last_N_losses)
                 last_N_losses = []
 
@@ -195,9 +217,13 @@ def mil_train_loop(EPOCHS=100,
             val_dataset=val_dataset, 
             global_step=global_step, 
             mean_batch=mean_batch_time, 
-            N=50,
+            N=100,
             loss_function=loss_function, 
             accuracy_function=accuracy_function)
+
+        if epoch < waiting_time: 
+            print('Epoch < waiting time ({})'.format(waiting_time))
+            continue
 
         ## Check whether to save
         if val_acc > best_val_acc:

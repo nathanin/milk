@@ -20,7 +20,7 @@ from dataset import CASE_LABEL_DICT
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
-tfe.enable_eager_execution(config=config)
+tf.enable_eager_execution(config=config)
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -53,7 +53,7 @@ def filter_list_by_label(lst):
     ))
     return lst_out
 
-def main(train_list, val_list, test_list):
+def main(train_list, val_list, test_list, args):
     """ 
     1. Create generator datasets from the provided lists
     2. train and validate Milk
@@ -127,12 +127,16 @@ def main(train_list, val_list, test_list):
     """ Set up training variables, directories, etc. """
     global_step = tf.train.get_or_create_global_step()
 
-    logdir, savedir, imgdir, save_prefix = training_utils.setup_outputs()
+    logdir, savedir, imgdir, save_prefix, exptime_str = training_utils.setup_outputs()
+    training_utils.write_train_val_test_lists(exptime_str, 
+        train_list,
+        val_list, 
+        test_list)
     summary_writer = tf.contrib.summary.create_file_writer(logdir=logdir)
 
     training_args = {
         'EPOCHS': EPOCHS,
-        'EPOCH_ITERS': len(train_list)*4,
+        'EPOCH_ITERS': len(train_list)*5,
         'global_step': global_step,
         'model': model,
         'optimizer': optimizer,
@@ -144,7 +148,7 @@ def main(train_list, val_list, test_list):
         'train_dataset': train_dataset,
         'val_dataset': val_dataset,
         'img_debug_dir': imgdir,
-        'pretrain_snapshot': '../pretraining/trained/classifier-19999'
+        'pretrain_snapshot': args.pretraining
     }
 
     with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
@@ -188,6 +192,7 @@ def main(train_list, val_list, test_list):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--fold', default=None, type=int)
+    parser.add_argument('--pretraining', default=None, type=str)
 
     args = parser.parse_args()
    
@@ -200,4 +205,4 @@ if __name__ == '__main__':
     val_list = filter_list_by_label(val_list)
     test_list = filter_list_by_label(test_list)
 
-    main(train_list, val_list, test_list)
+    main(train_list, val_list, test_list, args)

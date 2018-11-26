@@ -60,41 +60,71 @@ def auc_curve(ytrue, yhat, savepath=None):
     plt.plot(fpr, tpr, 
         label='M1 AUC={:3.3f}'.format(auc_c))
         
-    plt.legend(frameon=True)
+    plt.legend(loc='lower right', frameon=True)
     plt.ylabel('Sensitivity')
     plt.xlabel('1 - specificity')
 
     if savepath is None:
         plt.show()
-    
     else:
         plt.savefig(savepath, bbox_inches='tight')
 
-transform_fn = data_utils.make_transform_fn(X_SIZE, Y_SIZE, CROP_SIZE, SCALE)
 
+def run_sample(case_x, model, mcdropout=None):
+    case_x = tf.constant(case_x)
+    if mcdropout is not None:
+        yhats = []
+        for _ in range(mcdropout):
+            yhats.append(  model(case_x, training=True) )
+        
+        yhats = np.stack(yhats, axis=0)
+        yhat = np.mean(yhats, axis=0)
+
+    else:
+        yhat = model(case_x, training=False)
+
+    yhat = tf.nn.softmax(yhat)
+    print('Returning: {}'.format(yhat))
+
+    return yhat
+
+transform_fn = data_utils.make_transform_fn(X_SIZE, Y_SIZE, CROP_SIZE, SCALE)
 def main(args):
     model = Milk()
     x_dummy = tf.zeros(shape=[MIN_BAG, CROP_SIZE, CROP_SIZE, 3], 
                         dtype=tf.float32)
     yhat_dummy = model(x_dummy, verbose=True)
     saver = tfe.Saver(model.variables)
-    saver.restore(args.snapshot)
 
+    if args.snapshot is None:
+        print('Pulling most recent snapshot from {}'.format(args.snapshot_dir))
+        snapshot = tf.train.latest_checkpoint(args.snapshot_dir)
+    elif args.snapshot:
+        snapshot = args.snapshot
+    else:
+        print('Must supply either --snapshot or --snapshot_dir')
+
+    print('Restoring snapshot {}'.format(snapshot))
+    saver.restore(snapshot)
     model.summary()
 
     test_list = read_test_list(args.test_list)
 
     ytrues = []
     yhats = []
+    print('MC Dropout: {}'.format(args.mcdropout))
     for _ in range(args.n_repeat):
         for test_case in test_list:
             case_x, case_y = data_utils.load(
                 data_path = test_case,
                 transform_fn=transform_fn,
+                all_tiles=True,
+                # const_bag=200,
                 min_bag=MIN_BAG,
                 max_bag=MAX_BAG,
                 case_label_fn=case_label_fn)
-            yhat = model(tf.constant(case_x))
+
+            yhat = run_sample(case_x, model, mcdropout=args.mcdropout)
             ytrues.append(case_y)
             yhats.append(yhat)
             print(test_case, case_y, case_x.shape, yhat.numpy())
@@ -107,13 +137,16 @@ def main(args):
     accuracy = (ytrue_max == yhat_max).mean()
     print('Accuracy: {:3.3f}'.format(accuracy))
 
-    auc_curve(ytrue, yhat)
+    auc_curve(ytrue, yhat, savepath=args.savepath)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--snapshot', type=str)
+    parser.add_argument('--snapshot', default=None, type=str)
+    parser.add_argument('--snapshot_dir', default=None, type=str)
     parser.add_argument('--test_list', type=str)
-    parser.add_argument('--n_repeat', default=5, type=int)
+    parser.add_argument('--n_repeat', default=1, type=int)
+    parser.add_argument('--mcdropout', default=None, type=int)
+    parser.add_argument('--savepath', default=None, type=str)
 
     args = parser.parse_args()
     with tf.device('/gpu:0'):

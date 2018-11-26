@@ -59,14 +59,13 @@ def main(args, sess):
         batch           = args.batch,
         prefetch_buffer = args.prefetch_buffer,
         eager           = False,
-        test            = True,
         repeats         = args.repeats)
     sess.run(dataset.iterator.initializer)
 
     model = Classifier(n_classes = args.n_classes)
     x = dataset.x_op
     ytrue = dataset.y_op
-    yhat = model(x)
+    yhat = tf.nn.softmax(model(x, training=False), axis=-1)
 
     model.summary()
     sess.run(tf.global_variables_initializer())
@@ -104,22 +103,21 @@ def main(args, sess):
 
     print(classification_report(y_true=ytrue_max, y_pred=yhat_max))
 
-    auc_curves(ytrue_vector, yhat_vector, savepath=args.savefig)
+    auc_curves(ytrue_vector, yhat_vector, savepath=args.save)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test_data', 
         default='../dataset/gleason_grade_val_ext.tfrecord', type=str)
-        # default='../dataset/gleason_grade_val.tfrecord', type=str)
     parser.add_argument('--snapshot', 
-        default='./trained/classifier-19999', type=str)
+        default='./trained_ext/classifier-19999', type=str)
     parser.add_argument('--n_classes', default=5, type=int)
     parser.add_argument('--input_dim', default=96, type=int)
     parser.add_argument('--downsample', default=0.25, type=float)
     parser.add_argument('--batch', default=64, type=int)
     parser.add_argument('--repeats', default=3, type=int)
     parser.add_argument('--prefetch_buffer', default=2048, type=int)
-    parser.add_argument('--savefig', default=None, type=str)
+    parser.add_argument('--save', default=None, type=str)
 
     args = parser.parse_args()
 

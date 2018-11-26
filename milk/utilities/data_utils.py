@@ -139,6 +139,7 @@ def load(data_path,
          min_bag=3, 
          max_bag=None, 
          const_bag=None,
+         all_tiles=False,
          use_mmap=True,
          case_label_fn=None):
     """ Read a bag of examples from npy file 
@@ -158,7 +159,6 @@ def load(data_path,
             Whether or not to use numpy's mmap_mode argument for reading large arrays.
             see: https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.load.html
         case_label_fn: (function) Default None
-
 
     Returns:
         numpy tensor: 
@@ -184,20 +184,15 @@ def load(data_path,
 
     # First check the upper limit is less than the number of examples
     if max_bag > bag_limit:
-        # print('data_utils.load Warning. MAX_BAG ({}) > data size ({})'.format(max_bag, bag_limit), end='\t')
-        # print('Setting MAX_BAG = data size/2 ({})'.format(data_path))
         max_bag = int(bag_limit/2)
 
     # Then make sure the lower limit is somewhere less than max. 
     if min_bag >= max_bag:
-        # print('data_utils.load Warning. MIN_BAG ({}) >= MAX_BAG ({})'.format(min_bag, max_bag), end='\t')
-        # print('Setting MIN_BAG = MAX_BAG/2 ({})'.format(data_path))
         min_bag = int(max_bag / 2)
 
     if const_bag is not None:
         if const_bag > bag_limit:
-            # print('Warning. CONST_BAG > BAG_LIMIT')
-            const_bag = bag_limit
+            n_sub = bag_limit
         else:
             n_sub = const_bag
     else:
@@ -206,7 +201,9 @@ def load(data_path,
     sub_indices = np.random.choice(range(bag_limit), n_sub, replace=False)
 
     # If using mmap_mode, here data is actually read from disk
-    batch_x = batch_x[sub_indices, ...]
+    if not all_tiles:
+        batch_x = batch_x[sub_indices, ...]
+
     batch_x = apply_transform(transform_fn, batch_x)
     ## Add batch dimension:
     batch_x = np.expand_dims(batch_x, 0)

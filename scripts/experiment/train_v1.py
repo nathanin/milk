@@ -42,8 +42,8 @@ X_SIZE = 128
 Y_SIZE = 128
 CROP_SIZE = 96
 SCALE = 1.0
-MIN_BAG = 150
-MAX_BAG = 350
+MIN_BAG = 50
+MAX_BAG = 150
 CONST_BAG = 200
 
 def filter_list_by_label(lst):
@@ -151,7 +151,7 @@ def main(train_list, val_list, test_list):
 
     training_args = {
         'EPOCHS': EPOCHS,
-        'EPOCH_ITERS': len(train_list)*4,
+        'EPOCH_ITERS': len(train_list)*2,
         'global_step': global_step,
         'model': model,
         'optimizer': optimizer,

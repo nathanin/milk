@@ -46,10 +46,14 @@ class Milk(tf.keras.Model):
             activation=None, 
             use_bias=False, 
             name='attention_layer')
-        self.classifier_nonlinearity = tf.layers.Dense(units=256,
+        self.classifier_nonlinearity_1 = tf.layers.Dense(units=512,
             activation=tf.nn.relu, 
             use_bias=False,
-            name='classifier_nonlin')
+            name='classifier_nonlin_1')
+        self.classifier_nonlinearity_2 = tf.layers.Dense(units=256,
+            activation=tf.nn.relu, 
+            use_bias=False,
+            name='classifier_nonlin_2')
         self.classifier = tf.layers.Dense(units=2, 
             activation=None, 
             use_bias=False, 
@@ -63,6 +67,16 @@ class Milk(tf.keras.Model):
              verbose=False,
              return_embedding=False,
              return_attention=False):
+        """
+        `training` controls the use of dropout and batch norm, if defined
+        `return_embedding`
+            prediction
+            attention
+            raw embedding (batch=num instances)
+            embedding after attention (batch=1)
+            classifier hidden layer (batch=1)
+
+        """
         ## Like a manual tf.map()
         if verbose:
             print(x_in.get_shape())
@@ -90,7 +104,8 @@ class Milk(tf.keras.Model):
         zs = []
         for x_batch in x_split:
             # divide the learning rate since gradient accumulates
-            z = lr_mult(0.5)(self.encoder(x_batch, training=training))
+            # z = lr_mult(0.5)(self.encoder(x_batch, training=training))
+            z = self.encoder(x_batch, training=training)
             if verbose:
                 print('\t z: ', z.shape)
             # z = tf.squeeze(z, [1,2])
@@ -125,24 +140,11 @@ class Milk(tf.keras.Model):
             print('z:', z.get_shape())
 
         ## Classifier 
-        # yhat = lr_mult(0.01)(self.classifier(z))
-        net = self.classifier_nonlinearity(z)
+        net = self.classifier_nonlinearity_1(z)
+        net = self.classifier_nonlinearity_2(net)
         yhat = self.classifier(net)
         if verbose:
             print('yhat:', yhat.get_shape())
-
-        ## Data uncertainty -- adjust the whole bag
-        # batchsize, nclass = yhat.get_shape().as_list()
-        # sigma = self.uncertainty(net)
-        # sigma = tf.reduce_mean(sigma, axis=0, keepdims=True)
-        # batchsize, zdim = yhat.get_shape().as_list()
-        # dist = tf.distributions.Normal(loc=0., scale=tf.square(tf.squeeze(sigma)))
-        # yhat_ = tf.expand_dims(yhat, axis=0)
-        # for _ in range(T):
-        #     sig = dist.sample([zdim])
-        #     yhat_i = tf.expand_dims(yhat + tf.transpose(sig), axis=0)
-        #     yhat_ = tf.concat([yhat_, yhat_i], axis=0)
-        # yhat = tf.reduce_mean(yhat_, axis=0, keepdims=True)
 
         if return_embedding:
             return yhat, att, z_concat, z, net

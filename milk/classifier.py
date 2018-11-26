@@ -25,11 +25,12 @@ class Classifier(tf.keras.Model):
              verbose=False, 
              training=True):
         embedding = self.encoder(x_in, training=training, verbose=verbose)
+        drop = self.dropout(embedding, training=training)
+        prediction = self.classifier(drop)
+
         if return_embedding and not return_embedding_and_predict:
             return embedding
 
-        drop = self.dropout(embedding, training=training)
-        prediction = self.classifier(drop)
         if return_embedding_and_predict:
             return embedding, prediction
 

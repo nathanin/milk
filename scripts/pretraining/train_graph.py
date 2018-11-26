@@ -89,7 +89,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--iterations', default=20000, type=int)
     parser.add_argument('--save_dir', default='./trained')
-    parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.75pct.tfrecord')
+    parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.tfrecord')
     parser.add_argument('--n_classes', default=5, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--input_dim', default=96, type=int)

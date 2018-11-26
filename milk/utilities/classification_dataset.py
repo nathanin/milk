@@ -21,22 +21,22 @@ class ClassificationDataset(object):
                  prefetch_buffer = 4096, 
                  shuffle_buffer = 2048,
                  eager = True, 
-                 test = False,
-                 repeats = 1):
+                 repeats = None):
 
         # Get a preprocessing function that uses tensorflow ops only
         preprocessing = self._build_preprocessing(crop_size, downsample, n_classes)
 
         # Build the dataset object
-        if test:
+        if repeats:
+            print('Setting up dataset with {} repeats'.format(repeats))
             self.dataset = (tf.data.TFRecordDataset(record_path)
                             .repeat(repeats)
                             .map(preprocessing, 
                                 num_parallel_calls=n_threads)
                             .prefetch(buffer_size=prefetch_buffer)
                             .batch(batch))
-
         else:
+            print('Setting up dataset with infinite repeats')
             self.dataset = (tf.data.TFRecordDataset(record_path)
                             .repeat()
                             .shuffle(buffer_size=shuffle_buffer)

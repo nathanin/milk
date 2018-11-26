@@ -71,7 +71,7 @@ def draw_projection(z, yclassif, ytrue, savepath=None):
         proj_c = proj[yclassif_max == c, :]
         ax.scatter(proj_c[:,0], proj_c[:,1], 
             s = 3,
-            alpha = 0.25,
+            # alpha = 0.25,
             label='{}'.format(class_mnemonics[c]))
     ax.legend(frameon=True)
 
@@ -81,7 +81,7 @@ def draw_projection(z, yclassif, ytrue, savepath=None):
         proj_c = proj[ytrue_max == c, :]
         ax.scatter(proj_c[:,0], proj_c[:,1], 
             s = 3,
-            alpha = 0.25,
+            # alpha = 0.25,
             label='M{}'.format(c))
     
     ax.legend(frameon=True)
@@ -122,7 +122,7 @@ def main(args):
 
     transform_fn = data_utils.make_transform_fn(
         args.img_x, args.img_x, args.input_dim, args.scale,
-        normalize=True)
+        normalize=False)
     
     features = []
     yclassif = []
@@ -137,6 +137,7 @@ def main(args):
         case_x = np.squeeze(case_x, axis=0)
 
         case_z, case_yclassif = model(case_x,
+                                      training=False,
                                       return_embedding_and_predict=True)
 
         features.append(case_z)
@@ -147,20 +148,23 @@ def main(args):
     features = np.concatenate(features, axis=0)
     yclassif = np.concatenate(yclassif, axis=0)
     ytrue = np.concatenate(ytrue, axis=0)
-    draw_projection(features, yclassif, ytrue, savepath=args.savefig)
+    print('Drawing projections from:')
+    print('features: {}'.format(features.shape))
+    print('yclassif: {}'.format(yclassif.shape))
+    print('ytrue: {}'.format(ytrue.shape))
+    draw_projection(features, yclassif, ytrue, savepath=args.save)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test_data', 
         default='../dataset/tiles/*.npy', type=str)
-        # default='../dataset/gleason_grade_val.tfrecord', type=str)
     parser.add_argument('--snapshot', 
-        default='./trained/classifier-19999', type=str)
+        default='./trained_ext/classifier-19999', type=str)
 
     ## Number of data caches to use
-    parser.add_argument('--n_cases', default=100, type=int)
+    parser.add_argument('--n_cases', default=250, type=int)
     ## Number of images per cache
-    parser.add_argument('--n_imgs', default=16, type=int)
+    parser.add_argument('--n_imgs', default=32, type=int)
     ## Resolution in the image cache
     parser.add_argument('--img_x', default=128, type=int)  
     parser.add_argument('--replace', default=False, action='store_true')  
@@ -168,7 +172,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--n_classes', default=5, type=int)
     parser.add_argument('--input_dim', default=96, type=int)
-    parser.add_argument('--savefig', default=None, type=str)
+    parser.add_argument('--save', default=None, type=str)
 
     args = parser.parse_args()
 

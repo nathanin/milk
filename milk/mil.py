@@ -104,8 +104,8 @@ class Milk(tf.keras.Model):
         zs = []
         for x_batch in x_split:
             # divide the learning rate since gradient accumulates
-            # z = lr_mult(0.5)(self.encoder(x_batch, training=training))
-            z = self.encoder(x_batch, training=training)
+            z = lr_mult(0.5)(self.encoder(x_batch, training=training))
+            # z = self.encoder(x_batch, training=training)
             if verbose:
                 print('\t z: ', z.shape)
             # z = tf.squeeze(z, [1,2])
@@ -135,7 +135,7 @@ class Milk(tf.keras.Model):
             print('attention:', att.get_shape())
 
         # Scale learning proportionally to bag size
-        z = lr_mult(n_x/4.)(tf.matmul(att, z_concat))
+        z = lr_mult(n_x/2.)(tf.matmul(att, z_concat))
         if verbose:
             print('z:', z.get_shape())
 

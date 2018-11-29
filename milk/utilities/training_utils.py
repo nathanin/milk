@@ -230,7 +230,7 @@ def mil_train_loop(EPOCHS=100,
                 best_train_acc = train_acc
                 best_snapshot = global_step.numpy()
 
-        if since_last_snapshot > 25 and global_step > PATIENTCE:
+        if since_last_snapshot > 15 and global_step > PATIENTCE:
             print('25 Epochs have passed since the last snapshot. Exiting.')
             break
         else:

@@ -34,7 +34,7 @@ EPOCHS = 50
 TEST_PCT = 0.1
 VAL_PCT = 0.2
 BATCH_SIZE = 1
-LEARNING_RATE = 1e-5
+LEARNING_RATE = 1e-4
 SHUFFLE_BUFFER = 64
 PREFETCH_BUFFER = 128
 
@@ -43,7 +43,7 @@ Y_SIZE = 128
 CROP_SIZE = 96
 SCALE = 1.0
 MIN_BAG = 50
-MAX_BAG = 150
+MAX_BAG = 200
 CONST_BAG = 200
 
 def filter_list_by_label(lst):
@@ -95,13 +95,17 @@ def main(train_list, val_list, test_list):
             # stateful = False
 
     ## Tensorflow Eager Iterators can't be on GPU yet
-    train_dataset = tf.data.Dataset.from_generator(train_generator, (tf.string), output_shapes = None)
-    train_dataset = train_dataset.map(pyfunc_wrapper, num_parallel_calls=2)
+    train_dataset = tf.data.Dataset.from_generator(train_generator, (tf.string), 
+        output_shapes = None)
+    train_dataset = train_dataset.map(pyfunc_wrapper, 
+        num_parallel_calls=2)
     train_dataset = train_dataset.prefetch(PREFETCH_BUFFER)
     train_dataset = tfe.Iterator(train_dataset)
 
-    val_dataset = tf.data.Dataset.from_generator(val_generator, (tf.string), output_shapes = None)
-    val_dataset = val_dataset.map(pyfunc_wrapper, num_parallel_calls=2)
+    val_dataset = tf.data.Dataset.from_generator(val_generator, (tf.string), 
+        output_shapes = None)
+    val_dataset = val_dataset.map(pyfunc_wrapper, 
+        num_parallel_calls=2)
     val_dataset = val_dataset.prefetch(PREFETCH_BUFFER)
     val_dataset = tfe.Iterator(val_dataset)
 
@@ -151,7 +155,7 @@ def main(train_list, val_list, test_list):
 
     training_args = {
         'EPOCHS': EPOCHS,
-        'EPOCH_ITERS': len(train_list)*2,
+        'EPOCH_ITERS': len(train_list)*6,
         'global_step': global_step,
         'model': model,
         'optimizer': optimizer,

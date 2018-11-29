@@ -143,6 +143,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--snapshot', default=None, type=str)
     parser.add_argument('--snapshot_dir', default=None, type=str)
+    parser.add_argument('--timestamp', default=None, type=str)
     parser.add_argument('--test_list', type=str)
     parser.add_argument('--n_repeat', default=1, type=int)
     parser.add_argument('--mcdropout', default=None, type=int)

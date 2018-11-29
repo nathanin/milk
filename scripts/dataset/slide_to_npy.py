@@ -79,14 +79,31 @@ def dump_dir(args):
 
     for slide in slide_list:
         dump_slide(slide, args)
+    
+def dump_list(args):
+
+    slide_list = []
+    with open(args.svs_list, 'r') as f:
+        for L in f:
+            if os.path.exists(L):
+                slide_list.append(L)
+            else:
+                print('WARNING {} not found'.format(L))
+
+    for slide in slide_list:
+        dump_slide(slide, args)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('svs_dir', default='.')
     parser.add_argument('out_dir', default='.')
+    parser.add_argument('--svs_list', default=None)
     parser.add_argument('--magnification', default=10, type=int)
     parser.add_argument('--size', default=256, type=int)
     parser.add_argument('--oversample', default=1.5, type=float)
 
     args = parser.parse_args()
-    dump_dir(args)
+    if args.svs_list is not None:
+        dump_list(args)
+    else:
+        dump_dir(args)

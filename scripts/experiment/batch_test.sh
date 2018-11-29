@@ -9,5 +9,5 @@ for td in $( ls save ); do
         --test_list test_lists/${td}.txt \
         --n_repeat 1 \
         --savepath figures/auc_mcdrop_${td}.png \
-        --mcdropout 25
+        --mcdropout 10
 done

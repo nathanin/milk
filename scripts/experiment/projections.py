@@ -20,7 +20,6 @@ sns.set(style='whitegrid')
 plt.style.use('seaborn-whitegrid')
 
 import MulticoreTSNE as TSNE
-import umap
 
 from milk.utilities import data_utils
 from milk.utilities import model_utils

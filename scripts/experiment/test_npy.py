@@ -42,6 +42,7 @@ def case_label_fn(data_path):
     # print(data_path, y_)
     return y_
 
+
 def read_test_list(test_file):
     test_list = []
     with open(test_file, 'r') as f:
@@ -49,6 +50,7 @@ def read_test_list(test_file):
             test_list.append(l.replace('\n', ''))
     
     return test_list
+
 
 def auc_curve(ytrue, yhat, savepath=None):
     plt.figure(figsize=(2,2), dpi=300)
@@ -87,6 +89,7 @@ def run_sample(case_x, model, mcdropout=None):
     print('Returning: {}'.format(yhat))
 
     return yhat
+
 
 transform_fn = data_utils.make_transform_fn(X_SIZE, Y_SIZE, CROP_SIZE, SCALE)
 def main(args):
@@ -138,6 +141,7 @@ def main(args):
     print('Accuracy: {:3.3f}'.format(accuracy))
 
     auc_curve(ytrue, yhat, savepath=args.savepath)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

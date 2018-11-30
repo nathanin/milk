@@ -60,21 +60,39 @@ def read_test_list(test_file):
     print('Got {} test cases'.format(len(test_list)))
     return test_list
 
-def get_attention_extremes(attention, case_x, n=5):
-    attention = np.squeeze(attention)
-    att_sorted_idx = np.argsort(attention)
-    top_att = att_sorted_idx[-n:]
-    low_att = att_sorted_idx[:n]
+def get_extremes(vect, case_x, n=5):
+    """
+    Grab the n extremes of values in vect, and the images in case_x
 
-    high_att_idx = np.zeros_like(attention, dtype=np.bool)
-    high_att_idx[top_att] = 1
+    vect ~ a vector length N
+    case_x ~ [N, x, y, d]
+    n ~ an integer, usually n << N
+    """
+    vect = np.squeeze(vect)
+    vect_sorted_idx = np.argsort(vect)
+    top_vect = vect_sorted_idx[-n:]
+    low_vect = vect_sorted_idx[:n]
 
-    low_att_idx = np.zeros_like(attention, dtype=np.bool)
-    low_att_idx[low_att] = 1
+    high_vect_idx = np.zeros_like(vect, dtype=np.bool)
+    high_vect_idx[top_vect] = 1
 
-    high_att_imgs = np.squeeze(case_x, axis=0)[high_att_idx, ...]
-    low_att_imgs = np.squeeze(case_x, axis=0)[low_att_idx, ...]
-    return high_att_idx, high_att_imgs, low_att_idx, low_att_imgs
+    low_vect_idx = np.zeros_like(vect, dtype=np.bool)
+    low_vect_idx[low_vect] = 1
+
+    high_vect_imgs = np.squeeze(case_x, axis=0)[high_vect_idx, ...]
+    low_vect_imgs = np.squeeze(case_x, axis=0)[low_vect_idx, ...]
+    return high_vect_idx, high_vect_imgs, low_vect_idx, low_vect_imgs
+
+def get_random(vect, case_x, n=25):
+    vect = np.squeeze(vect)
+    bigN = len(vect)
+
+    idx = np.random.choice(range(bigN), n)
+    vect_idx = np.zeros_like(vect, dtype=np.bool)
+    vect_idx[idx] = 1
+
+    imgs = np.squeeze(case_x, axis=0)[vect_idx, ...]
+    return vect_idx, imgs
 
 grade_dict = {
     0: 'GG3',
@@ -121,17 +139,24 @@ def inset_images(ax, z, att_index, images, edgecolor='k', rho_delta = 10):
     return ax
 
 def draw_projection_with_images(z, attentions, 
+        ytrue, ypred,
         high_attention,
         high_attention_images,
-        low_attention,
-        low_attention_images,
+        low_attention=None,
+        low_attention_images=None,
+        n_case_rows=1,
         savepath=None):
+
+    if z.shape[-1] > 2:
+        z = clusterfn(z)
 
     ofs_radius = 35
     # 0-Center columns of z
     for k  in range(2):
         z[:,k] = z[:,k] - np.mean(z[:,k])
 
+    z_case = z[-n_case_rows, :]
+    z = z[:-n_case_rows, :]
     # ax = plt.subplot(figsize=(4,4), dpi=300, projection='polar')
     fig = plt.figure(figsize=(5,4), dpi=300)
     ax = fig.add_subplot(111)
@@ -141,23 +166,35 @@ def draw_projection_with_images(z, attentions,
         cmap='hot_r',
         # alpha=0.5,
         linewidths=0.5,
-        edgecolors='k')
+        edgecolors='k',
+        label='Label={} Pred={}'.format(ytrue, ypred))
+    plt.colorbar()
+
+    if len(z_case.shape) == 1:
+        z_case = np.expand_dims(z_case, 0)
+    plt.scatter(z_case[:,0], z_case[:,1], s=35.0, 
+        color='g',
+        linewidths=0.5,
+        edgecolors='k',
+        label='Average')
+
     plt.xticks([])
     plt.yticks([])
     xmin, xmax = plt.xlim()
     plt.xlim([xmin-ofs_radius, xmax+ofs_radius])
     ymin, ymax = plt.ylim()
     plt.ylim([ymin-ofs_radius, ymax+ofs_radius])
-    plt.colorbar()
 
     att_index = np.argwhere(high_attention)
     ax = inset_images(ax, z, att_index, high_attention_images, 
         edgecolor='k', rho_delta=ofs_radius)
         
-    att_index = np.argwhere(low_attention)
-    ax = inset_images(ax, z, att_index, low_attention_images, 
-        edgecolor='k', rho_delta=ofs_radius)
+    if low_attention is not None:
+        att_index = np.argwhere(low_attention)
+        ax = inset_images(ax, z, att_index, low_attention_images, 
+            edgecolor='k', rho_delta=ofs_radius)
 
+    plt.legend(frameon=True)
     if savepath is None:
         plt.show()
     else:
@@ -168,17 +205,30 @@ def draw_projection_with_images(z, attentions,
 """
 Plot the features projected down to 2D
 """
-def draw_projection(features, attentions, savepath=None):
+def draw_projection(features, attentions, ytrue, ypred, 
+                    n_case_rows=1,
+                    savepath=None):
     plt.figure(figsize=(4,4), dpi=300)
-    z = clusterfn(features)
+    zall = clusterfn(features)
+    z_case = zall[-n_case_rows, :]
+    z = zall[:-n_case_rows, :]
 
     plt.scatter(z[:,0], z[:,1], c=attentions, s=15.0, 
         cmap='hot_r',
         linewidths=0.5,
-        edgecolors='k')
+        edgecolors='k',
+        label='Label={} Pred={}'.format(ytrue, ypred))
     plt.colorbar()
+
+    if len(z_case.shape) == 1:
+        z_case = np.expand_dims(z_case, 0)
+    plt.scatter(z_case[:,0], z_case[:,1], c='g', s=35.0, 
+        linewidths=0.5,
+        edgecolors='k',
+        label='Average')
     plt.xticks([])
     plt.yticks([])
+    plt.legend(frameon=True)
 
     if savepath is None:
         plt.show()
@@ -186,7 +236,8 @@ def draw_projection(features, attentions, savepath=None):
         plt.savefig(savepath, bbox_inches='tight')
     plt.close()
 
-    return z 
+    return zall
+
 
 """
 Plot the features, after MIL layer i.e. one vector/case
@@ -233,10 +284,11 @@ def draw_class_projection(features, ytrue, yhat, savepath=None):
 transform_fn = data_utils.make_transform_fn(X_SIZE, Y_SIZE, CROP_SIZE, SCALE, 
     normalize=True)
 def main(args):
+    ## Initialize model and lists
     model = Milk()
     x_dummy = tf.zeros(shape=[MIN_BAG, CROP_SIZE, CROP_SIZE, 3], 
                         dtype=tf.float32)
-    retvals = model(x_dummy, verbose=True, return_embedding=True)
+    retvals = model(x_dummy, verbose=True, return_embedding=True, classify_instances=True)
     for k, retval in enumerate(retvals):
         print('retval {}: {}'.format(k, retval.shape))
 
@@ -254,11 +306,20 @@ def main(args):
 
     yhats, ytrues = [], []
     features_case, features_classifier = [], []
+
+    # Control MC dropout behavior
+    training = False
+    if args.repeats > 1:
+        training = True
+
     for test_case in test_list:
-        _features, _attention = [], []
-        _high_attention ,_high_images = [], []
-        _low_attention, _low_images = [], []
+
+        _embedding, _pvals, _feat_instances = [], [], []
+        _repeat_case = []
+        _high_pvals ,_high_images = [], []
+        _low_pvals, _low_images = [], []
         for _ in range(args.repeats):
+
             case_name = os.path.basename(test_case).replace('.npy', '')
             case_x, case_y = data_utils.load(
                 data_path = test_case,
@@ -266,43 +327,58 @@ def main(args):
                 # const_bag=100,
                 all_tiles=True,
                 case_label_fn=case_label_fn)
-            retvals = model(tf.constant(case_x), training=False, return_embedding=True)
+            retvals = model(tf.constant(case_x), training=training, return_embedding=True,
+                            classify_instances=True)
 
-            yhat, attention, features, feat_case, feat_class = retvals
-            attention = np.squeeze(attention.numpy(), axis=0)
-            high_att_idx, high_att_imgs, low_att_idx, low_att_imgs = get_attention_extremes(
-                attention, case_x, n = 15)
+            yhat, embedding, feat_case, feat_class, feat_instances, yhat_instances = retvals
+            pvals = np.squeeze(yhat_instances[:,1])
+
+            # high_pval_idx, high_pval_imgs, low_pval_idx, low_pval_imgs = get_extremes(pvals, 
+            #     case_x, n = 10)
+
+            vect_idx, imgs = get_random(pvals, case_x, n=5)
 
             yhats.append(yhat.numpy())
             ytrues.append(case_y)
             features_case.append(feat_case.numpy())        
             features_classifier.append(feat_class.numpy())
 
-            _features.append(features.numpy())
-            _attention.append(attention)
-            _high_attention.append(high_att_idx)
-            _high_images.append(high_att_imgs)
-            _low_attention.append(low_att_idx)
-            _low_images.append(low_att_imgs)
+            _embedding.append(embedding.numpy())
+            _repeat_case.append(feat_case.numpy())
+            _feat_instances.append(feat_instances.numpy())
+            _pvals.append(pvals)
+            _high_pvals.append(vect_idx)
+            _high_images.append(imgs)
+            # _low_pvals.append(low_pval_idx)
+            # _low_images.append(low_pval_imgs)
+            ytrue = np.argmax(case_y, axis=-1)
+            ypred = np.argmax(yhat, axis=-1)
             print('Case {}: label={} predicted={}'.format(
-                test_case, np.argmax(case_y,axis=-1), np.argmax(yhat, axis=-1)))
+                test_case, ytrue, ypred))
 
-        features = np.concatenate(_features, axis=0)
-        attention = np.concatenate(_attention, axis=0)
-        high_attention = np.concatenate(_high_attention, axis=0)
-        high_attention_images = np.concatenate(_high_images, axis=0)
-        low_attention = np.concatenate(_low_attention, axis=0)
-        low_attention_images = np.concatenate(_low_images, axis=0)
+        embedding = np.concatenate(_embedding, axis=0)
+        features_instances = np.concatenate(_feat_instances, axis=0)
+        repeat_case_features = np.concatenate(_repeat_case, axis=0)
+        pvals = np.concatenate(_pvals, axis=0)
+        high_pvals = np.concatenate(_high_pvals, axis=0)
+        high_pval_images = np.concatenate(_high_images, axis=0)
+        # low_pvals = np.concatenate(_low_pvals, axis=0)
+        # low_pval_images = np.concatenate(_low_images, axis=0)
+
+        ## Concat instances with the mean
+        features_projection = np.concatenate([embedding, repeat_case_features], axis=0)
+        print('Projecting matrix {} into 2D'.format(features_projection.shape))
 
         savepath = '{}_{}.png'.format(args.savebase, case_name)
         print('Saving figure {}'.format(savepath))
-        z = draw_projection(features, attention, savepath=savepath)
+        z = draw_projection(features_projection, pvals, ytrue, ypred, savepath=savepath)
 
         savepath = '{}_{}_imgs.png'.format(args.savebase, case_name)
         print('Saving figure {}'.format(savepath))
-        draw_projection_with_images(z, attention, 
-            high_attention, high_attention_images, 
-            low_attention, low_attention_images, 
+        draw_projection_with_images(z, pvals, ytrue, ypred,
+            high_pvals, high_pval_images, 
+            # low_pvals, low_pval_images, 
+            n_case_rows=args.repeats,
             savepath=savepath)
 
     yhats = np.concatenate(yhats, axis=0)
@@ -322,8 +398,8 @@ if __name__ == '__main__':
     parser.add_argument('--snapshot_dir', default=None, type=str)
     parser.add_argument('--test_list', type=str)
     parser.add_argument('--repeats', default=1, type=int)
-    parser.add_argument('--feature_base', default='features/milk', type=str)
-    parser.add_argument('--savebase', default='figures/projection', type=str)
+    parser.add_argument('--feature_base', default='no_attention/features/milk', type=str)
+    parser.add_argument('--savebase', default='no_attention/figures/projection', type=str)
 
     args = parser.parse_args()
     with tf.device('/gpu:0'):

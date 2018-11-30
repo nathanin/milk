@@ -81,6 +81,11 @@ def split_train_test_balanced(data_list, test_pct=0.2):
     pass
 
 def split_train_val_test(data_list, val_pct=0.2, test_pct=0.2):
+    """
+    Split training/validation/testing sets from a list
+
+    returns approximately the requested proportions
+    """
     total_cases = len(data_list)
     aim_test = int(total_cases * test_pct)
     print('Aiming for {} train / {} test'.format(

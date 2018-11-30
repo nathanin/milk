@@ -153,11 +153,11 @@ def mil_train_loop(EPOCHS=100,
     # imgout = create_output_image(model, x=x_print, y=y_print)
 
     """ Otherwise draw a new bag for each output image """
-    print('Saving initial attention scaled image:', end='')
-    imgout = create_output_image(model, val_dataset)
-    imgout_name = os.path.join(img_debug_dir, '{:06d}.png'.format(0))
-    cv2.imwrite(imgout_name, imgout[:,:,::-1])
-    print(imgout_name, imgout.shape)
+    # print('Saving initial attention scaled image:', end='')
+    # imgout = create_output_image(model, val_dataset)
+    # imgout_name = os.path.join(img_debug_dir, '{:06d}.png'.format(0))
+    # cv2.imwrite(imgout_name, imgout[:,:,::-1])
+    # print(imgout_name, imgout.shape)
 
     print('Performing initial log', end='...')
     logging(model, val_dataset, loss_function, grads, [1.])
@@ -186,11 +186,11 @@ def mil_train_loop(EPOCHS=100,
                 last_N_losses = []
 
         # imgout = create_output_image(model, x=x_print, y=y_print)
-        for img_n in range(2):
-            imgout = create_output_image(model, val_dataset)
-            imgout_name = os.path.join(img_debug_dir, '{:06d}_{}.png'.format(global_index, img_n))
-            print('Saving attention scaled image:', imgout_name, imgout.shape)
-            cv2.imwrite(imgout_name, imgout[:,:,::-1])
+        # for img_n in range(2):
+        #     imgout = create_output_image(model, val_dataset)
+        #     imgout_name = os.path.join(img_debug_dir, '{:06d}_{}.png'.format(global_index, img_n))
+        #     print('Saving attention scaled image:', imgout_name, imgout.shape)
+        #     cv2.imwrite(imgout_name, imgout[:,:,::-1])
 
         mean_batch_time = np.mean(batch_times)
         train_loss, val_loss, train_acc, val_acc = mil_test_step(model, 

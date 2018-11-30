@@ -34,18 +34,6 @@ class Milk(tf.keras.Model):
         self.drop3 = tf.layers.Dropout(rate=0.5)
         # self.uncertainty = self.track_layer(tf.layers.Dense(units=1, activation=None, use_bias=False)
 
-        self.attention = tf.layers.Dense(units=256, 
-            activation=tf.nn.tanh, 
-            use_bias=False,
-            name='attention')
-        self.attention_gate = tf.layers.Dense(units=256, 
-            activation=tf.nn.sigmoid, 
-            use_bias=False,
-            name='attention_gate')
-        self.attention_layer = tf.layers.Dense(units=1, 
-            activation=None, 
-            use_bias=False, 
-            name='attention_layer')
         self.classifier_nonlinearity_1 = tf.layers.Dense(units=512,
             activation=tf.nn.relu, 
             use_bias=False,
@@ -120,22 +108,9 @@ class Milk(tf.keras.Model):
             print('z_concat: ', z_concat.get_shape())
 
         ## MIL layer
-        # z = tf.reduce_mean(z, axis=0, keepdims=True)
+        ## Note reduce_mean is tf.math.reduce_mean in TF>1.12
+        z = tf.reduce_mean(z_concat, axis=0, keepdims=True)
 
-        # MIL attention
-        att = self.attention(z_concat)
-        att_gate = self.attention_gate(z_concat)
-        att = att * att_gate # tf.multiply()
-
-        att = self.attention_layer(att)
-        att = tf.transpose(att, perm=(1,0)) 
-        att = tf.nn.softmax(att, axis=1)
-
-        if verbose:
-            print('attention:', att.get_shape())
-
-        # Scale learning proportionally to bag size
-        z = lr_mult(n_x/4.)(tf.matmul(att, z_concat))
         if verbose:
             print('z:', z.get_shape())
 

@@ -131,7 +131,7 @@ def main(train_list, val_list, test_list):
     """ Set up training variables, directories, etc. """
     global_step = tf.train.get_or_create_global_step()
 
-    output_strings = training_utils.setup_outputs(return_datestr=True)
+    output_strings = training_utils.setup_outputs(basepath='./no_attention', return_datestr=True)
     logdir = output_strings[0]
     savedir = output_strings[1]
     imgdir = output_strings[2]
@@ -139,12 +139,12 @@ def main(train_list, val_list, test_list):
     exptime_str = output_strings[4]
     summary_writer = tf.contrib.summary.create_file_writer(logdir=logdir)
 
-    val_list_file = os.path.join('./val_lists', '{}.txt'.format(exptime_str))
+    val_list_file = os.path.join('./no_attention/val_lists', '{}.txt'.format(exptime_str))
     with open(val_list_file, 'w+') as f:
         for v in val_list:
             f.write('{}\n'.format(v))
 
-    test_list_file = os.path.join('./test_lists', '{}.txt'.format(exptime_str))
+    test_list_file = os.path.join('./no_attention/test_lists', '{}.txt'.format(exptime_str))
     with open(test_list_file, 'w+') as f:
         for v in test_list:
             f.write('{}\n'.format(v))

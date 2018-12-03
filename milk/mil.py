@@ -54,7 +54,7 @@ class Milk(tf.keras.Model):
              training=True, 
              verbose=False,
              return_embedding=False,
-             return_attention=False):
+             classify_instances=False):
         """
         `training` controls the use of dropout and batch norm, if defined
         `return_embedding`
@@ -107,8 +107,8 @@ class Milk(tf.keras.Model):
         if verbose:
             print('z_concat: ', z_concat.get_shape())
 
-        ## MIL layer
-        ## Note reduce_mean is tf.math.reduce_mean in TF>1.12
+        ## MIL layer -- unweighted attention
+        ## does reduce_mean move to tf.math.reduce_mean in TF>=1.12 ??
         z = tf.reduce_mean(z_concat, axis=0, keepdims=True)
 
         if verbose:
@@ -121,9 +121,16 @@ class Milk(tf.keras.Model):
         if verbose:
             print('yhat:', yhat.get_shape())
 
-        if return_embedding:
-            return yhat, att, z_concat, z, net
-        if return_attention:
-            return yhat, att
-        else:
+        # build return
+        if not return_embedding and not classify_instances:
             return yhat
+        
+        if return_embedding and not classify_instances:
+            return yhat, z_concat, z, net
+
+        if classify_instances:
+            # return everything
+            z_instances = self.classifier_nonlinearity_1(z_concat)
+            z_instances = self.classifier_nonlinearity_2(z_instances)
+            yhat_instances = tf.nn.softmax(self.classifier(z_instances), axis=-1)
+            return yhat, z_concat, z, net, z_instances, yhat_instances

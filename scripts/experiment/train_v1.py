@@ -34,7 +34,7 @@ EPOCHS = 50
 TEST_PCT = 0.1
 VAL_PCT = 0.2
 BATCH_SIZE = 1
-LEARNING_RATE = 1e-5
+LEARNING_RATE = 1e-6
 SHUFFLE_BUFFER = 64
 PREFETCH_BUFFER = 128
 
@@ -42,8 +42,8 @@ X_SIZE = 128
 Y_SIZE = 128
 CROP_SIZE = 96
 SCALE = 1.0
-MIN_BAG = 50
-MAX_BAG = 150
+MIN_BAG = 100
+MAX_BAG = 200
 CONST_BAG = 200
 
 def filter_list_by_label(lst):
@@ -138,6 +138,11 @@ def main(train_list, val_list, test_list):
     save_prefix = output_strings[3]
     exptime_str = output_strings[4]
     summary_writer = tf.contrib.summary.create_file_writer(logdir=logdir)
+
+    train_list_file = os.path.join('./no_attention/train_lists', '{}.txt'.format(exptime_str))
+    with open(train_list_file, 'w+') as f:
+        for v in train_list:
+            f.write('{}\n'.format(v))
 
     val_list_file = os.path.join('./no_attention/val_lists', '{}.txt'.format(exptime_str))
     with open(val_list_file, 'w+') as f:

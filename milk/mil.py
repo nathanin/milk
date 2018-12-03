@@ -10,9 +10,9 @@ from milk.utilities.model_utils import lr_mult
 
 BATCH_SIZE = 10
 class Milk(tf.keras.Model):
-    def __init__(self, z_dim=512, encoder=None):
+    def __init__(self, z_dim=512, encoder=None, encoder_args=None):
         super(Milk, self).__init__()
-        self.encoder = make_encoder()
+        self.encoder = make_encoder(encoder_args)
         # self.densenet = DenseNet(
         #     depth_of_model=15,
         #     growth_rate=32,

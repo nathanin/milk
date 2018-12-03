@@ -7,12 +7,12 @@ import sys
 from milk.encoder import make_encoder
 
 class Classifier(tf.keras.Model):
-    def __init__(self, n_classes = 5):
+    def __init__(self, n_classes=5, encoder_args=None):
         super(Classifier, self).__init__()
 
         # For pretraining these options need to match the 
         # eventual target -- use a dummy file to hold the default arguments
-        self.encoder = make_encoder()
+        self.encoder = make_encoder(encoder_args=encoder_args)
 
         # This can be anything
         self.dropout = tf.layers.Dropout(0.5)

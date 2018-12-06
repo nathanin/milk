@@ -21,14 +21,12 @@ def Milk(input_shape, z_dim=512, dropout_rate=0.3, use_attention=False, encoder_
 
     # input_shape should be 4D, with (batch=1, num_instances, ...)
     . The input layer pads on a batch dimension for us if none is given, which is perfect.
+
+    # We have to have a single input layer on the outer-most Model level for TPU translation.
     """
     image = Input(shape=input_shape) #e.g. (None, 100, 96, 96, 3)
     print('image input:', image.shape)
     # Squeeze off the batch dimension
-    input_shape = input_shape[1:] #e.g. (96, 96, 3)
-    print('shape given to encoder:', input_shape)
-    encoder = make_encoder(input_shape=input_shape, encoder_args=encoder_args)
-
     # Assume the actual batch dimension = 1
     def squeeze_output_shape(input_shape):
         shape = list(input_shape)
@@ -39,15 +37,17 @@ def Milk(input_shape, z_dim=512, dropout_rate=0.3, use_attention=False, encoder_
     image_squeezed = Lambda(lambda x: tf.squeeze(x, axis=0), 
                             output_shape=squeeze_output_shape)(image)
     print('image squeezed', image_squeezed.shape)
-    features = encoder(image_squeezed)
+    features = make_encoder(image=image_squeezed, 
+                            input_shape=input_shape,  ## Unused
+                            encoder_args=encoder_args)
     print('features after encoder', features.shape)
-    features = Dropout(dropout_rate)(features)
 
-    features = Dense(z_dim)(features)
-    features = Dropout(dropout_rate)(features)
-    features = Dense(int(z_dim/2))(features)
-    features = Dropout(dropout_rate)(features)
-    print('features after dropout', features.shape)
+    features = Dropout(dropout_rate, name='mil_drop_1')(features)
+    features = Dense(z_dim, name='mil_dense_1')(features)
+    features = Dropout(dropout_rate, name='mil_drop_2')(features)
+    features = Dense(int(z_dim/2), name='mil_dense_2')(features)
+    features = Dropout(dropout_rate, name='mil_drop_3')(features)
+    print('features after classifier', features.shape)
 
     # Squish the instances
     # features = Average(axis=0)(features)
@@ -59,7 +59,7 @@ def Milk(input_shape, z_dim=512, dropout_rate=0.3, use_attention=False, encoder_
     features = Lambda(lambda x: tf.reduce_mean(x, axis=0, keepdims=True),  
                       output_shape=reduce_mean_output_shape)(features)
     print('features after reduce_mean', features.shape)
-    logits = Dense(2, activation=tf.nn.softmax)(features)
+    logits = Dense(2, activation=tf.nn.softmax, name='mil_classifier')(features)
 
     model = tf.keras.Model(inputs=[image], outputs=[logits])
     return model

@@ -1,7 +1,7 @@
 from __future__ import print_function
 from densenet import DenseNet
 
-def make_encoder(input_shape, encoder_args=None):
+def make_encoder(image, input_shape, encoder_args=None):
     args = {
         'depth_of_model': 32,
         'growth_rate': 32,
@@ -19,6 +19,7 @@ def make_encoder(input_shape, encoder_args=None):
     dropout_rate = args['dropout_rate']
 
     encoder = DenseNet(
+        image = image,
         input_shape=input_shape,
         depth_of_model=depth_of_model,
         growth_rate=growth_rate,

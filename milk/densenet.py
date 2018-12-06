@@ -143,12 +143,11 @@ def DenseBlock(features, num_layers, growth_rate, data_format,
 
   return x
 
-
-def DenseNet(input_shape, depth_of_model, growth_rate, num_of_blocks, 
+def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks, 
              num_layers_in_each_block, data_format, bottleneck=True,
              compression=0.5, weight_decay=1e-4, dropout_rate=0.3,
              pool_initial=True, include_top=True, with_classifier=False,
-             num_classes=2):
+             num_classes=2, return_model=False):
   """Creating the Densenet Architecture.
   All the same as before; except we require a fixed input shape
 
@@ -171,6 +170,9 @@ def DenseNet(input_shape, depth_of_model, growth_rate, num_of_blocks,
                   else, do a 3x3 conv with stride 1.
     include_top: If true, GlobalAveragePooling Layer and Dense layer are
                  included.
+
+    return_model: If true, gather itself and return a tf.keras.Model object.
+                  else, return the final features tensor
   """
   # deciding on number of layers in each block
   if isinstance(num_layers_in_each_block, list) or isinstance(
@@ -206,7 +208,8 @@ def DenseNet(input_shape, depth_of_model, growth_rate, num_of_blocks,
 
 
   # Setup input layer
-  image = Input(shape=input_shape)
+  if image is None:
+    image = Input(shape=input_shape)
 
   # first conv and pool layer
   features = Conv2D(num_filters,
@@ -264,5 +267,7 @@ def DenseNet(input_shape, depth_of_model, growth_rate, num_of_blocks,
   if with_classifier:
     features = Dense(num_classes, activation=tf.nn.softmax)(features)
 
-  model = tf.keras.Model(inputs=[image], outputs=[features])
-  return model
+  if return_model:
+    model = tf.keras.Model(inputs=[image], outputs=[features])
+  else:
+    return features

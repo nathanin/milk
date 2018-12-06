@@ -1,5 +1,5 @@
 from __future__ import print_function
-from milk.densenet import DenseNet
+from .densenet import DenseNet
 
 DENSENET_ARGS = {
 ## TODO

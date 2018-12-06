@@ -5,8 +5,8 @@ from __future__ import print_function
 import tensorflow as tf
 
 # from .densenet import DenseNet
-from milk.encoder import make_encoder
-from milk.utilities.model_utils import lr_mult
+from .encoder import make_encoder
+from .utilities.model_utils import lr_mult
 
 BATCH_SIZE = 10
 class Milk(tf.keras.Model):

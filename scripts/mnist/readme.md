@@ -15,7 +15,7 @@ At training time we give the digits in a batched form with shape `[batch, N, h, 
 
 #### Solution:
 
-Run the script `train_mnist.py` and see how long it takes to converge.
+Run the script `train_mnist.py` and see how long it takes to converge. 
 
 To improve convergence, we might pretrain the `encoder` with a target we think is going to be closely related to the multiple instance target. 
 Straightforwardly, the encoder is trained as an mnist digit classifier.

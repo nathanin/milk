@@ -144,10 +144,11 @@ def DenseBlock(features, num_layers, growth_rate, data_format,
   return x
 
 
-def DenseNet(input_shape, depth_of_model, growth_rate, num_of_blocks, output_classes,
+def DenseNet(input_shape, depth_of_model, growth_rate, num_of_blocks, 
              num_layers_in_each_block, data_format, bottleneck=True,
              compression=0.5, weight_decay=1e-4, dropout_rate=0.3,
-             pool_initial=True, include_top=True):
+             pool_initial=True, include_top=True, with_classifier=False,
+             num_classes=2):
   """Creating the Densenet Architecture.
   All the same as before; except we require a fixed input shape
 
@@ -259,8 +260,9 @@ def DenseNet(input_shape, depth_of_model, growth_rate, num_of_blocks, output_cla
     features = GlobalAveragePooling2D(data_format=data_format)(features)
     print(features.shape)
     # self.last_pool = tf.layers.Flatten()
-    ## Remove classifier; we always use hidden layer
-    # self.classifier = tf.layers.Dense(self.output_classes) 
+
+  if with_classifier:
+    features = Dense(num_classes, activation=tf.nn.softmax)(features)
 
   model = tf.keras.Model(inputs=[image], outputs=[features])
   return model

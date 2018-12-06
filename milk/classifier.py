@@ -10,10 +10,7 @@ def Classifier(input_shape, n_classes = 5, encoder_args=None):
     image = Input(shape=input_shape)
 
     #input_shape needs to make its way into the encoder initialization:
-    args = {'input_shape': input_shape}
-    if encoder_args is not None:
-        args.update(encoder_args)
-    encoder = make_encoder(encoder_args=args)
+    encoder = make_encoder(input_shape=input_shape, encoder_args=encoder_args)
     features = encoder(image)
     features = Dropout(0.5)(features)
     features = Dense(n_classes, activation=tf.nn.softmax)(features)

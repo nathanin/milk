@@ -10,7 +10,7 @@ from encoder import make_encoder
 # from .utilities.model_utils import lr_mult
 
 BATCH_SIZE = 10
-def Milk(input_shape, z_dim=512, dropout_rate=0.3, use_attention=False, encoder_args=None):
+def Milk(input_shape, z_dim=512, n_classes=2, dropout_rate=0.3, use_attention=False, encoder_args=None):
     """
     We have to give batches of (batch, num_instances, h, w, ch)
 
@@ -59,7 +59,7 @@ def Milk(input_shape, z_dim=512, dropout_rate=0.3, use_attention=False, encoder_
     features = Lambda(lambda x: tf.reduce_mean(x, axis=0, keepdims=True),  
                       output_shape=reduce_mean_output_shape)(features)
     print('features after reduce_mean', features.shape)
-    logits = Dense(2, activation=tf.nn.softmax, name='mil_classifier')(features)
+    logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
 
     model = tf.keras.Model(inputs=[image], outputs=[logits])
     return model

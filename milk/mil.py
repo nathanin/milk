@@ -4,151 +4,62 @@ MI-Net with convolutions
 from __future__ import print_function
 import tensorflow as tf
 
-# from .densenet import DenseNet
-from .encoder import make_encoder
-from .utilities.model_utils import lr_mult
+from tensorflow.keras.layers import (Input, Dense, Dropout, Average, Lambda)
+
+from encoder import make_encoder
+# from .utilities.model_utils import lr_mult
 
 BATCH_SIZE = 10
-class Milk(tf.keras.Model):
-    def __init__(self, z_dim=512, encoder=None):
-        super(Milk, self).__init__()
-        self.encoder = make_encoder()
-        # self.densenet = DenseNet(
-        #     depth_of_model=15,
-        #     growth_rate=32,
-        #     num_of_blocks=3,
-        #     output_classes=2,
-        #     num_layers_in_each_block=5,
-        #     data_format='channels_last',
-        #     dropout_rate=0.3,
-        #     pool_initial=True
-        # )
+def Milk(input_shape, z_dim=512, dropout_rate=0.3, use_attention=False, encoder_args=None):
+    """
+    We have to give batches of (batch, num_instances, h, w, ch)
 
-        # self.dense1 = tf.layers.Dense(units=512, activation=tf.nn.relu, use_bias=True, name='dense1')
-        self.drop2 = tf.layers.Dropout(rate=0.5)
+    in the case where batch = 1 we can just squeeze the batch dimension out 
+    and put it back after the multiple instances are combined at the end.
 
-        self.dense2 = tf.layers.Dense(units=z_dim, 
-            activation=tf.nn.relu, 
-            use_bias=False, 
-            name='dense2') 
-        self.drop3 = tf.layers.Dropout(rate=0.5)
-        # self.uncertainty = self.track_layer(tf.layers.Dense(units=1, activation=None, use_bias=False)
+    if batch > 1, then we have to process batches separately, then concat the results
 
-        self.attention = tf.layers.Dense(units=256, 
-            activation=tf.nn.tanh, 
-            use_bias=False,
-            name='attention')
-        self.attention_gate = tf.layers.Dense(units=256, 
-            activation=tf.nn.sigmoid, 
-            use_bias=False,
-            name='attention_gate')
-        self.attention_layer = tf.layers.Dense(units=1, 
-            activation=None, 
-            use_bias=False, 
-            name='attention_layer')
-        self.classifier_nonlinearity_1 = tf.layers.Dense(units=512,
-            activation=tf.nn.relu, 
-            use_bias=False,
-            name='classifier_nonlin_1')
-        self.classifier_nonlinearity_2 = tf.layers.Dense(units=256,
-            activation=tf.nn.relu, 
-            use_bias=False,
-            name='classifier_nonlin_2')
-        self.classifier = tf.layers.Dense(units=2, 
-            activation=None, 
-            use_bias=False, 
-            name='classifier')
+    # input_shape should be 4D, with (batch=1, num_instances, ...)
+    . The input layer pads on a batch dimension for us if none is given, which is perfect.
+    """
+    image = Input(shape=input_shape) #e.g. (None, 100, 96, 96, 3)
+    print('image input:', image.shape)
+    # Squeeze off the batch dimension
+    input_shape = input_shape[1:] #e.g. (96, 96, 3)
+    print('shape given to encoder:', input_shape)
+    encoder = make_encoder(input_shape=input_shape, encoder_args=encoder_args)
 
-    def call(self, 
-             x_in, 
-             T=20, 
-             batch_size = BATCH_SIZE, 
-             training=True, 
-             verbose=False,
-             return_embedding=False,
-             return_attention=False):
-        """
-        `training` controls the use of dropout and batch norm, if defined
-        `return_embedding`
-            prediction
-            attention
-            raw embedding (batch=num instances)
-            embedding after attention (batch=1)
-            classifier hidden layer (batch=1)
+    # Assume the actual batch dimension = 1
+    def squeeze_output_shape(input_shape):
+        shape = list(input_shape)
+        assert shape[0] == 1
+        shape = shape[1:]
+        return tuple(shape)
 
-        """
-        ## Like a manual tf.map()
-        if verbose:
-            print(x_in.get_shape())
+    image_squeezed = Lambda(lambda x: tf.squeeze(x, axis=0), 
+                            output_shape=squeeze_output_shape)(image)
+    print('image squeezed', image_squeezed.shape)
+    features = encoder(image_squeezed)
+    print('features after encoder', features.shape)
+    features = Dropout(dropout_rate)(features)
 
-        ## BUG sets of 1 should be handled
-        n_x = x_in.get_shape().as_list()[0]
-        if n_x == 1:
-            x_in = tf.squeeze(x_in, 0)
-            n_x = x_in.get_shape().as_list()[0]
+    features = Dense(z_dim)(features)
+    features = Dropout(dropout_rate)(features)
+    features = Dense(int(z_dim/2))(features)
+    features = Dropout(dropout_rate)(features)
+    print('features after dropout', features.shape)
 
-        n_batches = int(n_x / batch_size)
-        if n_x % batch_size == 0:
-            batches = [batch_size]*n_batches
-        else:
-            batches = [batch_size]*n_batches+[n_x-(n_batches*batch_size)]
-        x_split = tf.split(x_in, batches, axis=0)
+    # Squish the instances
+    # features = Average(axis=0)(features)
+    def reduce_mean_output_shape(input_shape):
+        shape = list(input_shape)
+        shape[0] = 1
+        return tuple(shape)
+        
+    features = Lambda(lambda x: tf.reduce_mean(x, axis=0, keepdims=True),  
+                      output_shape=reduce_mean_output_shape)(features)
+    print('features after reduce_mean', features.shape)
+    logits = Dense(2, activation=tf.nn.softmax)(features)
 
-        if verbose:
-            print('Encoder Call:')
-            print('n_x: ', n_x)
-            print('n_batches', n_batches)
-            print('batches', batches)
-            print('x_split', len(x_split))
-
-        zs = []
-        for x_batch in x_split:
-            # divide the learning rate since gradient accumulates
-            # z = lr_mult(0.5)(self.encoder(x_batch, training=training))
-            z = self.encoder(x_batch, training=training)
-            if verbose:
-                print('\t z: ', z.shape)
-            # z = tf.squeeze(z, [1,2])
-            z = self.drop2(z, training=training)
-            z = self.dense2(z)
-            z = self.drop3(z, training=training)
-            zs.append(z)
-
-        # Gather
-        z_concat = tf.concat(zs, axis=0)
-        if verbose:
-            print('z_concat: ', z_concat.get_shape())
-
-        ## MIL layer
-        # z = tf.reduce_mean(z, axis=0, keepdims=True)
-
-        # MIL attention
-        att = self.attention(z_concat)
-        att_gate = self.attention_gate(z_concat)
-        att = att * att_gate # tf.multiply()
-
-        att = self.attention_layer(att)
-        att = tf.transpose(att, perm=(1,0)) 
-        att = tf.nn.softmax(att, axis=1)
-
-        if verbose:
-            print('attention:', att.get_shape())
-
-        # Scale learning proportionally to bag size
-        z = lr_mult(n_x/4.)(tf.matmul(att, z_concat))
-        if verbose:
-            print('z:', z.get_shape())
-
-        ## Classifier 
-        net = self.classifier_nonlinearity_1(z)
-        net = self.classifier_nonlinearity_2(net)
-        yhat = self.classifier(net)
-        if verbose:
-            print('yhat:', yhat.get_shape())
-
-        if return_embedding:
-            return yhat, att, z_concat, z, net
-        if return_attention:
-            return yhat, att
-        else:
-            return yhat
+    model = tf.keras.Model(inputs=[image], outputs=[logits])
+    return model

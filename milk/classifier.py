@@ -1,37 +1,23 @@
 from __future__ import print_function
 import numpy as np
+
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
-import sys
+from tensorflow.keras.layers import (Dropout, Dense, Input)
 
-from milk.encoder import make_encoder
+from encoder import make_encoder
 
-class Classifier(tf.keras.Model):
-    def __init__(self, n_classes = 5):
-        super(Classifier, self).__init__()
+def Classifier(input_shape, n_classes = 5, encoder_args=None):
+    image = Input(shape=input_shape)
 
-        # For pretraining these options need to match the 
-        # eventual target -- use a dummy file to hold the default arguments
-        self.encoder = make_encoder()
+    #input_shape needs to make its way into the encoder initialization:
+    args = {'input_shape': input_shape}
+    if encoder_args is not None:
+        args.update(encoder_args)
+    encoder = make_encoder(encoder_args=args)
+    features = encoder(image)
+    features = Dropout(0.5)(features)
+    features = Dense(n_classes, activation=tf.nn.softmax)(features)
 
-        # This can be anything
-        self.dropout = tf.layers.Dropout(0.5)
-        self.classifier = tf.layers.Dense(n_classes)
+    model = tf.keras.Model(inputs=[image], outputs=[features])
 
-    def call(self, 
-             x_in, 
-             return_embedding=False, 
-             return_embedding_and_predict=False, 
-             verbose=False, 
-             training=True):
-        embedding = self.encoder(x_in, training=training, verbose=verbose)
-        drop = self.dropout(embedding, training=training)
-        prediction = self.classifier(drop)
-
-        if return_embedding and not return_embedding_and_predict:
-            return embedding
-
-        if return_embedding_and_predict:
-            return embedding, prediction
-
-        return prediction
+    return model

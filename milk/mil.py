@@ -10,7 +10,8 @@ from encoder import make_encoder
 # from .utilities.model_utils import lr_mult
 
 BATCH_SIZE = 10
-def Milk(input_shape, z_dim=512, n_classes=2, dropout_rate=0.3, use_attention=False, encoder_args=None):
+def Milk(input_shape, encoder=None, z_dim=512, n_classes=2, 
+         dropout_rate=0.3, use_attention=False, encoder_args=None):
     """
     We have to give batches of (batch, num_instances, h, w, ch)
 
@@ -30,16 +31,19 @@ def Milk(input_shape, z_dim=512, n_classes=2, dropout_rate=0.3, use_attention=Fa
     # Assume the actual batch dimension = 1
     def squeeze_output_shape(input_shape):
         shape = list(input_shape)
-        assert shape[0] == 1
         shape = shape[1:]
         return tuple(shape)
 
     image_squeezed = Lambda(lambda x: tf.squeeze(x, axis=0), 
                             output_shape=squeeze_output_shape)(image)
     print('image squeezed', image_squeezed.shape)
-    features = make_encoder(image=image_squeezed, 
-                            input_shape=input_shape,  ## Unused
-                            encoder_args=encoder_args)
+    if encoder is None:
+        features = make_encoder(image=image_squeezed, 
+                                input_shape=input_shape,  ## Unused
+                                encoder_args=encoder_args)
+    else:
+        features = encoder(image_squeezed)
+
     print('features after encoder', features.shape)
 
     features = Dropout(dropout_rate, name='mil_drop_1')(features)

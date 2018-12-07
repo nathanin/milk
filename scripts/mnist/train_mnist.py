@@ -8,10 +8,15 @@ Choose "9".
 Draw a bag of size N. If B contains at least one digit "9", label B positive.
 
 Then, learn a MIL model using this target.
+
+To load up pretrained weights copy them over by name:
+https://github.com/keras-team/keras/issues/1873
+
 """
 from __future__ import print_function
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
+from tensorflow.keras.models import load_model
 from tensorflow.keras.datasets import mnist
 import numpy as np
 
@@ -59,7 +64,7 @@ def generate_positive_bag(x_pos, x_neg, N):
     np.random.shuffle(xbag)
     return xbag
 
-def generate_bagged_mnist(x_pos, x_neg, N):
+def generate_bagged_mnist(x_pos, x_neg, N, batch):
     """
     x ~ (samples, h, w)
     y ~ (samples)
@@ -70,20 +75,26 @@ def generate_bagged_mnist(x_pos, x_neg, N):
     bag_y ~ (1, 2)
     """
     # Coin flip for generating a positive or negative bag:
-    y = np.random.choice([0,1])
-    y_onehot = np.zeros((1,2), dtype=np.float32)
-    y_onehot[0,y] = 1
+    while True:
+      batch_x, batch_y = [], []
+      for _ in range(batch):
+        y = np.random.choice([0,1])
+        y_onehot = np.zeros((1,2), dtype=np.float32)
+        y_onehot[0,y] = 1
 
-    if y == 0:
-        xbag = generate_negative_bag(x_neg, N)
-        xbag = np.expand_dims(xbag, axis=0)
-        xbag = np.expand_dims(xbag, axis=-1)
-        return xbag.astype(np.float32), y_onehot
-    elif y == 1:
-        xbag = generate_positive_bag(x_pos, x_neg, N)
-        xbag = np.expand_dims(xbag, axis=0)
-        xbag = np.expand_dims(xbag, axis=-1)
-        return xbag.astype(np.float32), y_onehot
+        if y == 0:
+            xbag = generate_negative_bag(x_neg, N)
+            xbag = np.expand_dims(xbag, axis=0)
+            xbag = np.expand_dims(xbag, axis=-1)
+        else:
+            xbag = generate_positive_bag(x_pos, x_neg, N)
+            xbag = np.expand_dims(xbag, axis=0)
+            xbag = np.expand_dims(xbag, axis=-1)
+          
+        batch_x.append(xbag.astype(np.float32))
+        batch_y.append(y_onehot)
+        
+      yield np.concatenate(batch_x, axis=0), np.concatenate(batch_y, axis=0)
 
 def main(args):
     if args.mnist is not None:
@@ -108,10 +119,9 @@ def main(args):
     print('\ttest_x_pos:', test_x_pos.shape)
     print('\ttest_x_neg:', test_x_neg.shape)
 
-    print('generating sample bags:')
-    for _ in range(5):
-        xbag, y = generate_bagged_mnist(train_x_pos, train_x_neg, args.N)
-        print('\txbag: ', xbag.shape, 'y:', y)
+    generator = generate_bagged_mnist(train_x_pos, train_x_neg, args.N, 1)
+    batch_x, batch_y = next(generator)
+    print('batch_x:', batch_x.shape, 'batch_y:', batch_y.shape)
 
     encoder_args = {
         'depth_of_model': 16,
@@ -120,48 +130,33 @@ def main(args):
         'output_classes': 2,
         'num_layers_in_each_block': 8,
     }
-    model = Milk(encoder_args=encoder_args)
-    yhat = model(tf.constant(xbag, dtype=tf.float32), verbose=True)
-    if args.tpu:
-        model = tf.contrib.tpu.keras_to_tpu_model(model)
+    model = Milk(input_shape=(args.N, 28, 28, 1), encoder_args=encoder_args)
+    if os.path.exists(args.pretrained_model):
+        print('Pulling weights from pretrained model')
+        print(args.pretrained_model)
+        pretrained = load_model(args.pretrained_model)
+        pretrained_layers = {l.name: l for l in pretrained.layers if 'encoder' in l.name}
+        for l in model.layers:
+            if 'encoder' not in l.name:
+                continue
+            try:
+                w = pretrained_layers[l.name].get_weights()
+                print('setting layer {}'.format(l.name))
+                l.set_weights(w)
+            except:
+                print('error setting layer {}'.format(l.name))
+
+        del pretrained
 
     model.summary()
     optimizer = tf.train.AdamOptimizer(learning_rate=1e-5)
-    saver = tfe.Saver(model.variables)
 
-    # load up initialized encoder, if given
-    if args.initial_weights is not None:
-        encoder_saver = tfe.Saver(model.encoder.variables)
-        encoder_saver.restore(args.initial_weights)
+    model.compile(optimizer=optimizer,
+                  loss = tf.keras.losses.categorical_crossentropy,
+                  metrics = ['categorical_accuracy'])
 
-    best_accuracy = 0
-    for k in range(10000):
-        with tf.GradientTape() as tape:
-            xbag, y = generate_bagged_mnist(train_x_pos, train_x_neg, args.N)
-            yhat = model(tf.constant(xbag, dtype=tf.float32))
-
-            loss = tf.losses.softmax_cross_entropy(onehot_labels=tf.constant(y), logits=yhat)
-            print('{:06d}\t{}\t{}\t{}'.format(
-                k, y, yhat.numpy(), loss.numpy()))
-
-        grads = tape.gradient(loss, model.variables)
-        optimizer.apply_gradients(zip(grads, model.variables))
-
-        if k % 250 == 0:
-            print('Testing... ', end=' ')
-            acc = []
-            for i in range(args.ntest):
-                xbag, y = generate_bagged_mnist(test_x_pos, test_x_neg, args.N)
-                yhat = model(tf.constant(xbag, dtype=tf.float32), training=False)
-                acc.append(np.argmax(y) == np.argmax(yhat))
-
-            acc = np.mean(acc)
-            print('accuracy = {:3.3f}'.format(acc))
-            if acc >= best_accuracy:
-                best_accuracy = acc
-                print('Saving step {}'.format(k))
-                saver.save( file_prefix=args.save_prefix, global_step=k )
-
+    model.fit_generator(generator=generator, steps_per_epoch=1000, epochs=10)
+    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--N', default=25, type=int)
@@ -171,6 +166,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_prefix', default='./positive_bag/model', type=str)
     parser.add_argument('--initial_weights', default=None, type=str)
     parser.add_argument('--max_fraction_positive', default=0.1, type=int)
+    parser.add_argument('--pretrained_model', default='pretrained_model.h5')
 
     args = parser.parse_args()
     tf.enable_eager_execution()

@@ -5,24 +5,32 @@ Classic MNIST classifier
 from __future__ import print_function
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
+from tensorflow.keras.models import load_model
 from tensorflow.keras.datasets import mnist
 import numpy as np
 import argparse
+import os
 
-from milk.classifier import Classifier
+from milk import make_encoder
+from milk import Classifier
 
 def generate_batch(x, y, N):
-    n_x = x.shape[0]
-    idx = np.random.choice(range(n_x), N)
+    while True:
+        n_x = x.shape[0]
+        idx = np.random.choice(range(n_x), N)
 
-    batch_x = x[idx, ...] / 255.
-    batch_y = np.eye(N, 10)[y[idx]]
+        batch_x = x[idx, ...] / 255.
+        batch_y = np.eye(N, 10)[y[idx]]
 
-    return np.expand_dims(batch_x, -1).astype(np.float32), batch_y
+        yield np.expand_dims(batch_x, -1).astype(np.float32), batch_y
 
 
 def main(args):
     (train_x, train_y), (test_x, test_y) = mnist.load_data()
+    generator = generate_batch(train_x, train_y, args.batch)
+    batch_x, batch_y = next(generator)
+    print('batch:', batch_x.shape, batch_y.shape, batch_x.min(), batch_x.max())
+
     encoder_args = {
         'depth_of_model': 16,
         'growth_rate': 32,
@@ -30,44 +38,39 @@ def main(args):
         'output_classes': 2,
         'num_layers_in_each_block': 8,
     }
-    model = Classifier(n_classes=10, encoder_args=encoder_args)
-    batch_x, batch_y = generate_batch(train_x, train_y, args.batch)
-    print('batch:', batch_x.shape, batch_y.shape, batch_x.min(), batch_x.max())
 
-    yhat = model(tf.constant(batch_x), verbose=True)
-    optimizer = tf.train.AdamOptimizer(learning_rate=1e-4)
-    saver = tfe.Saver(model.variables)
+    model = Classifier(input_shape=(28,28,1), n_classes=10, encoder_args=encoder_args)
+    # model.summary()
     
-    for k in range(args.steps):
-        with tf.GradientTape() as tape:
-            batch_x, batch_y = generate_batch(train_x, train_y, args.batch)
-            yhat = model(tf.constant(batch_x))
+    if os.path.exists(args.pretrained_model):
+        print('Pulling weights from pretrained model')
+        print(args.pretrained_model)
+        pretrained = load_model(args.pretrained_model)
+        pretrained_layers = {l.name: l for l in pretrained.layers if 'encoder' in l.name}
+        for l in model.layers:
+            if 'encoder' not in l.name:
+                continue
+            try:
+                w = pretrained_layers[l.name].get_weights()
+                print('setting layer {}'.format(l.name))
+                l.set_weights(w)
+            except:
+                print('error setting layer {}'.format(l.name))
 
-            loss = tf.losses.softmax_cross_entropy(onehot_labels=batch_y, logits=yhat)
-            print('{:06d}\t{}'.format(k, loss))
+    optimizer = tf.train.AdamOptimizer(learning_rate=1e-4)
+    model.compile(optimizer=optimizer,
+        loss=tf.keras.losses.categorical_crossentropy,
+        metrics=['categorical_accuracy'])
 
-        grads = tape.gradient(loss, model.variables)
-        optimizer.apply_gradients(zip(grads, model.variables))
-
-        if k % 500 == 0:
-            print('Testing')
-            batch_x, batch_y = generate_batch(test_x, test_y, args.batch)
-            yhat = model(tf.constant(batch_x))
-            
-            test_loss = tf.losses.softmax_cross_entropy(onehot_labels=batch_y, logits=yhat)
-            accuracy = (np.argmax(batch_y, -1) == np.argmax(yhat, -1)).mean()
-            print('test loss = {} accuracy ~ {}'.format(test_loss, accuracy))
-
-        if k % 1000 == 0:
-            print('Saving step {}'.format(k))
-            saver.save( file_prefix=args.save_prefix, global_step=k )
+    model.fit_generator(generator, steps_per_epoch=1000, epochs=5)
+    model.save(args.save_path)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch', default=32)
-    parser.add_argument('--save_prefix', default='.trained/classifier')
+    parser.add_argument('--save_path', default='pretrained_model.h5')
+    parser.add_argument('--pretrained_model', default='pretrained_model.h5')
     parser.add_argument('--steps', default=int(1e4))
     args = parser.parse_args()
 
-    tf.enable_eager_execution()
     main(args)

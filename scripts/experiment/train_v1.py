@@ -34,7 +34,7 @@ EPOCHS = 50
 TEST_PCT = 0.1
 VAL_PCT = 0.2
 BATCH_SIZE = 1
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-6
 SHUFFLE_BUFFER = 64
 PREFETCH_BUFFER = 128
 
@@ -167,7 +167,7 @@ def main(train_list, val_list, test_list):
         'train_dataset': train_dataset,
         'val_dataset': val_dataset,
         'img_debug_dir': imgdir,
-        'pretrain_snapshot': '../pretraining/trained/classifier-44999'
+        'pretrain_snapshot': '../pretraining/trained/classifier-19999'
     }
 
     with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():

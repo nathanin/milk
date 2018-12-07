@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import (Dropout, Dense, Input)
 
-from encoder import make_encoder
+from .encoder import make_encoder
 
 def Classifier(input_shape, n_classes=5, encoder_args=None):
     image = Input(shape=input_shape)

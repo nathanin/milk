@@ -6,7 +6,7 @@ import tensorflow as tf
 
 from tensorflow.keras.layers import (Input, Dense, Dropout, Average, Lambda)
 
-from encoder import make_encoder
+from .encoder import make_encoder
 # from .utilities.model_utils import lr_mult
 
 BATCH_SIZE = 10

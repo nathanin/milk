@@ -118,12 +118,35 @@ def list_data(data_patt, val_pct=0.2, test_pct=0.2):
     data_list = glob.glob(data_patt)
     return split_train_val_test(data_list, val_pct=val_pct, test_pct=test_pct)
 
+def enforce_minimum_size(data_list, minimum_size=100, verbose=False):
+    dout = []
+    for dpath in data_list:
+        x = np.load(dpath, mmap_mode='r')
+        if x.shape[0] < minimum_size:
+            if verbose:
+                print('excluding {} ({})'.format(dpath, x.shape[0]))
+            continue
+
+        dout.append(dpath)
+
+    return dout
+
 """
 generator enforces supports batch_size = 1 even if batch_size is set
 """
 def generator(data_list, batch_size=1):
     while True:
         yield np.random.choice(data_list, batch_size, replace=False)[0]
+
+def load_generator(data_list, batch_size=1, bag_size=100, 
+                   transform_fn=lambda x: x,
+                   case_label_fn=None):
+    while True:
+        choice_case = np.random.choice(data_list, batch_size, replace=False)[0]
+        yield load(choice_case, 
+                   transform_fn=transform_fn,
+                   const_bag=bag_size, 
+                   case_label_fn=case_label_fn)
 
 def exhaustable_generator(data_list):
     for data in data_list:
@@ -134,8 +157,52 @@ def apply_transform(transform_fn, batch_x):
     batch_x = np.stack(batch_x, axis=0)
     return batch_x
 
+def load_list_to_memory(case_list, case_label_fn):
+    data = {}
+    labels = {}
+    for src in case_list:
+        basename = os.path.splitext(os.path.basename(src))[0]
+        x = np.load(src)
+        y = case_label_fn(src)
+        data[basename] = x
+        labels[basename] = y
+
+    return data, labels
+
+def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda x: x):
+    """ Yield cases from dictionaries
+    batch_x = (batch_size, bag_size, h, w, c)  
+    batch_y = (batch_size, 2)
+    """
+    keys = list(xdict.keys())
+    n_x = len(keys)
+    while True:
+        choices = np.random.choice(keys, batch_size)
+        batch_x = []
+        batch_y = []
+        for k in choices:
+            data = xdict[k] 
+            label = ydict[k]
+            indices = np.random.choice(range(data.shape[0]), bag_size)
+            data = apply_transform(transform_fn, data[indices, ...])
+            batch_x.append(np.expand_dims(data, 0))
+            batch_y.append(np.expand_dims(label, 0))
+
+        batch_x = np.concatenate(batch_x, axis=0)
+        batch_y = np.concatenate(batch_y, axis=0)
+        # Special case for batch = 1
+        if batch_size == 1:
+            if batch_y == 1:
+                y = np.expand_dims(np.array([0, 1]), 0)
+            else:
+                y = np.expand_dims(np.array([1, 0]), 0)
+        else:
+            y = np.eye(batch_size, 2)[batch_y]
+
+        yield batch_x, y
+
 def load(data_path, 
-         transform_fn=None, 
+         transform_fn=lambda x: x, 
          min_bag=3, 
          max_bag=None, 
          const_bag=None,
@@ -257,8 +324,8 @@ def make_transform_fn(height, width, crop_size, scale=1.0, normalize=False):
 
     def _chained_fns(x_):
         x_ = _random_crop(x_)
-        x_ = _rotate_90(x_)
-        x_ = _resize_fn(x_)
+        # x_ = _rotate_90(x_)
+        # x_ = _resize_fn(x_)
         x_ = _flip_fn(x_)
         if normalize:
             x_ = reinhard(x_)

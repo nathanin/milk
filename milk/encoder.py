@@ -1,5 +1,5 @@
 from __future__ import print_function
-from densenet import DenseNet
+from .densenet import DenseNet
 
 def make_encoder(image, input_shape, encoder_args=None):
     args = {

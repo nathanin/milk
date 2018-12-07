@@ -2,6 +2,8 @@
 
 This is a minimum working example for the "bagged MNIST" problem.
 
+See this example run in a Colab notebook [here](https://colab.research.google.com/drive/1eOcZaqQG01fS16ckn9x94ivW-k12fbcg).
+
 #### Problem statement:
 
 Instead of classifying individual digits, we want to find out if a **set** of digits contains a example of a **particular** digit. 

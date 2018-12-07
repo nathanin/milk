@@ -120,6 +120,7 @@ def main(args):
     print('\ttest_x_neg:', test_x_neg.shape)
 
     generator = generate_bagged_mnist(train_x_pos, train_x_neg, args.N, 1)
+    val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.N, 1)
     batch_x, batch_y = next(generator)
     print('batch_x:', batch_x.shape, 'batch_y:', batch_y.shape)
 
@@ -155,11 +156,14 @@ def main(args):
                   loss = tf.keras.losses.categorical_crossentropy,
                   metrics = ['categorical_accuracy'])
 
-    model.fit_generator(generator=generator, steps_per_epoch=1000, epochs=10)
+    model.fit_generator(generator=generator, 
+                        validation_data=val_generator,
+                        validation_steps=100,
+                        steps_per_epoch=1000, epochs=10)
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--N', default=25, type=int)
+    parser.add_argument('--N', default=200, type=int)
     parser.add_argument('--tpu', default=False, action='store_true')
     parser.add_argument('--mnist', default=None)
     parser.add_argument('--ntest', default=25, type=int)
@@ -169,5 +173,5 @@ if __name__ == '__main__':
     parser.add_argument('--pretrained_model', default='pretrained_model.h5')
 
     args = parser.parse_args()
-    tf.enable_eager_execution()
+    # tf.enable_eager_execution()
     main(args)

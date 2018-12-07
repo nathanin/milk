@@ -62,15 +62,17 @@ def main(args):
         loss=tf.keras.losses.categorical_crossentropy,
         metrics=['categorical_accuracy'])
 
-    model.fit_generator(generator, steps_per_epoch=1000, epochs=5)
+    model.fit_generator(generator, steps_per_epoch=args.steps_per_epoch, 
+                        epochs=args.epochs)
     model.save(args.save_path)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch', default=32)
+    parser.add_argument('--batch', default=96)
     parser.add_argument('--save_path', default='pretrained_model.h5')
     parser.add_argument('--pretrained_model', default='pretrained_model.h5')
-    parser.add_argument('--steps', default=int(1e4))
+    parser.add_argument('--steps_per_epoch', default=int(1e3))
+    parser.add_argument('--epochs', default=10)
     args = parser.parse_args()
 
     main(args)

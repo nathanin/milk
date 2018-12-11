@@ -4,26 +4,97 @@ MI-Net with convolutions
 from __future__ import print_function
 import tensorflow as tf
 
-from tensorflow.keras.layers import (Input, Dense, Dropout, Average, Lambda)
+from tensorflow.keras.layers import (Input, Dense, Dropout, Average, Lambda, 
+    Multiply, Permute, Softmax, Dot)
 
 from .encoder import make_encoder
 # from .utilities.model_utils import lr_mult
 
+def squish_mean(features):
+    # Squish the instances using a custom Keras layer wrapping tf.reduce_mean
+    def reduce_mean_output_shape(input_shape):
+        shape = list(input_shape)
+        shape[0] = 1
+        return tuple(shape)
+    features = Lambda(lambda x: tf.reduce_mean(x, axis=0, keepdims=True),  
+                      output_shape=reduce_mean_output_shape)(features)
+    return features
+
+def instance_classifier(features, n_classes):
+    logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
+    logits = squish_mean(logits)
+    print('logits after reduce_mean', logits.shape)
+    return logits
+
+def mil_features(features, n_classes, z_dim, dropout_rate):
+    features = Dropout(dropout_rate, name='mil_drop_1')(features)
+    features = Dense(z_dim, activation=tf.nn.relu, name='mil_dense_1')(features)
+    features = Dropout(dropout_rate, name='mil_drop_2')(features)
+    features = Dense(int(z_dim/2), activation=tf.nn.relu, name='mil_dense_2')(features)
+    features = Dropout(dropout_rate, name='mil_drop_3')(features)
+    features = squish_mean(features)
+    print('features after reduce_mean', features.shape)
+    return features
+
+def average_pooling(features, n_classes, z_dim, dropout_rate):
+    features = mil_features(features, n_classes, z_dim, dropout_rate)
+    logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
+    return logits
+
+def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True):
+    attention = Dense(256, activation=tf.nn.tanh, use_bias=False)(features)
+    if use_gate:
+        gate = Dense(256, activation=tf.nn.sigmoid, use_bias=False)(features)
+        attention = Multiply()([attention, gate])
+    print('Embedded attention:', attention.shape)
+
+    attention = Dense(1, activation=None, use_bias=False)(attention)
+    print('Calculated attention:', attention.shape)
+
+    # def transpose_output_shape(input_shape):
+    #     shape = list(input_shape)
+    #     shape = shape[::-1]
+    #     return tuple(shape)
+    # attention = Lambda(lambda x: tf.transpose(x, perm=(1, 0)),
+    #                    output_shape=transpose_output_shape)(attention)
+    # print('Permuted attention:', attention.shape)
+    attention = Softmax(axis=0)(attention)
+    print('Softmaxed attention:', attention.shape)
+
+    features = Dot(axes=0)([features, attention])
+    print('Scaled features:', features.shape)
+
+    features = mil_features(features, n_classes, z_dim, dropout_rate)
+    logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
+    return logits
+
+
 BATCH_SIZE = 10
-def Milk(input_shape, encoder=None, z_dim=512, n_classes=2, 
-         dropout_rate=0.3, use_attention=False, encoder_args=None):
-    """
-    We have to give batches of (batch, num_instances, h, w, ch)
+def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3, 
+         encoder_args=None, mode="instance", use_gate=True, freeze_encoder=False):
 
-    in the case where batch = 1 we can just squeeze the batch dimension out 
-    and put it back after the multiple instances are combined at the end.
+    """ Build the Multiple Instance Learning model
 
-    if batch > 1, then we have to process batches separately, then concat the results
+    Return a function that accepts batches of (batch, bag_size, h, w, ch)
+
+    # When batch = 1 we can just squeeze the batch dimension out 
+      and pad it back after the bag instances are combined at the end.
+      if batch > 1, then we have to process batches separately, then concat the results.
+
+    # for TPU exectution we force batch=8 so that we shard the batch into (1, bag, ...)
+      to process each bag on its own TPU processor.
 
     # input_shape should be 4D, with (batch=1, num_instances, ...)
-    . The input layer pads on a batch dimension for us if none is given, which is perfect.
+      The input layer pads on a batch dimension for us if none is given, which is perfect.
 
     # We have to have a single input layer on the outer-most Model level for TPU translation.
+      So, during model construction, we need the nested 'models' to return tensors instead
+      of tf.keras.Model instances.
+
+    # `mode` (str) dictates the kind of MIL to use:
+      "instance" -- baseline
+      "average" -- one step up from baseline
+      "attention" -- main method
     """
     image = Input(shape=input_shape) #e.g. (None, 100, 96, 96, 3)
     print('image input:', image.shape)
@@ -46,24 +117,19 @@ def Milk(input_shape, encoder=None, z_dim=512, n_classes=2,
 
     print('features after encoder', features.shape)
 
-    features = Dropout(dropout_rate, name='mil_drop_1')(features)
-    features = Dense(z_dim, name='mil_dense_1')(features)
-    features = Dropout(dropout_rate, name='mil_drop_2')(features)
-    features = Dense(int(z_dim/2), name='mil_dense_2')(features)
-    features = Dropout(dropout_rate, name='mil_drop_3')(features)
-    print('features after classifier', features.shape)
+    if freeze_encoder:
+        print('Stopping gradient from flowing to the encoder.')
+        features = Lambda(lambda x: tf.stop_gradient(x))(features)
 
-    # Squish the instances
-    # features = Average(axis=0)(features)
-    def reduce_mean_output_shape(input_shape):
-        shape = list(input_shape)
-        shape[0] = 1
-        return tuple(shape)
-        
-    features = Lambda(lambda x: tf.reduce_mean(x, axis=0, keepdims=True),  
-                      output_shape=reduce_mean_output_shape)(features)
-    print('features after reduce_mean', features.shape)
-    logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
+    if mode == "instance":
+        logits = instance_classifier(features, n_classes)
+    elif mode == "average":
+        logits = average_pooling(features, n_classes, z_dim, dropout_rate)
+    elif mode == "attention":
+        logits = attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=use_gate)
+    else:
+        print('Multiple-Instance mode {} not recognized'.format(mode))
+        raise NotImplementedError
 
     model = tf.keras.Model(inputs=[image], outputs=[logits])
     return model

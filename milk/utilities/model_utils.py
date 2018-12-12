@@ -61,6 +61,7 @@ def accuracy_function(model, dataset, T=10, N=25, batch_size=BATCH_SIZE, mc_drop
     acc /= N
     return acc
 
+
 def classifier_loss_fn(model, dataset):
     x, ytrue = dataset.iterator.next()
 
@@ -70,3 +71,25 @@ def classifier_loss_fn(model, dataset):
             labels=ytrue, logits=yhat)
         loss = tf.reduce_mean(loss)
     return loss
+
+
+def make_inference_functions(encode_model, predict_model, pretrained_model):
+    pretrained_layers = {l.name: l for l in pretrained_model.layers}
+
+    for lname, l in pretrained_layers.items():
+        w = l.get_weights()
+        if 'encoder' in lname:
+            print('Setting encoder weight for layer {}'.format(lname))
+            try:
+                encode_model.get_layer(lname).set_weights(w)
+            except:
+                print('Encoder no layer {}'.format(lname))
+        
+        if 'encoder' not in lname:
+            print('Setting predict weight for layer {}'.format(lname))
+            try:
+                predict_model.get_layer(lname).set_weights(w)
+            except:
+                print('Predict no layer {}'.format(lname))
+
+    return encode_model, predict_model

@@ -7,7 +7,8 @@ def make_encoder(image, input_shape, encoder_args=None):
         'growth_rate': 32,
         'num_of_blocks': 4,
         'num_layers_in_each_block': 8,
-        'dropout_rate': 0.3
+        'dropout_rate': 0.3,
+        'mcdropout': False
     }
     if encoder_args is not None:
         args.update(encoder_args)
@@ -17,6 +18,7 @@ def make_encoder(image, input_shape, encoder_args=None):
     num_of_blocks = args['num_of_blocks']
     num_layers_in_each_block = args['num_layers_in_each_block']
     dropout_rate = args['dropout_rate']
+    mcdropout = args['mcdropout']
 
     encoder = DenseNet(
         image = image,
@@ -28,7 +30,8 @@ def make_encoder(image, input_shape, encoder_args=None):
         data_format='channels_last',
         dropout_rate=dropout_rate,
         pool_initial=True,
-        include_top=True
+        include_top=True,
+        mcdropout=mcdropout
     )
 
     return encoder

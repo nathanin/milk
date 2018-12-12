@@ -5,38 +5,43 @@
 set -e
 
 # With attention
-for i in `seq 1 5`; 
-do
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
-    --steps_per_epoch 500 \
-    --bag_size 100 \
-    --mil attention \
+        --steps_per_epoch 1000 \
+        --bag_size 100 \
+        --mil attention
 done
 
-# Without attention
-for i in `seq 1 5`; 
-do
+# Without attention (average)
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
-    --steps_per_epoch 500 \
-    --bag_size 100 \
-    --mil average \
+        --steps_per_epoch 1000 \
+        --bag_size 100 \
+        --mil average
 done
 
 # Instance classifier --> average predictions
-for i in `seq 1 5`; 
-do
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
-    --steps_per_epoch 500 \
-    --bag_size 100 \
-    --mil instance \
+        --steps_per_epoch 1000 \
+        --bag_size 100 \
+        --mil instance
 done
 
 # Without pretraining; with attention
-for i in `seq 1 5`; 
-do
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
-    --steps_per_epoch 500 \
-    --bag_size 100 \
-    --mil attention \
-    --dont_use_pretrained
+        --steps_per_epoch 1000 \
+        --bag_size 100 \
+        --mil attention \
+        --dont_use_pretrained
+done
+
+# Freeze encoder; with attention
+for i in `seq 1 5`; do
+    python train_tpu_inmemory.py \
+        --steps_per_epoch 1000 \
+        --bag_size 100 \
+        --mil attention \
+        --freeze_encoder
 done

@@ -220,8 +220,8 @@ if __name__ == '__main__':
     parser.add_argument('--freeze_encoder',   default=False, action='store_true')
 
     parser.add_argument('--data_patt',        default='../dataset/tiles_reduced/*npy', type=str)
-    parser.add_argument('--test_pct',         default=0.2, type=float)
-    parser.add_argument('--val_pct',          default=0.3, type=float)
+    parser.add_argument('--test_pct',         default=0.1, type=float)
+    parser.add_argument('--val_pct',          default=0.2, type=float)
     parser.add_argument('--pretrained_model', default='../pretraining/pretrained.h5', type=str)
     parser.add_argument('--dont_use_pretrained',   default=False, action='store_true')
     parser.add_argument('--tpu',              default=False, action='store_true')

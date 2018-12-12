@@ -42,26 +42,21 @@ def average_pooling(features, n_classes, z_dim, dropout_rate):
     return logits
 
 def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True):
-    attention = Dense(256, activation=tf.nn.tanh, use_bias=False)(features)
+    attention = Dense(256, activation=tf.nn.tanh, use_bias=False,
+                      name='att_0')(features)
     if use_gate:
-        gate = Dense(256, activation=tf.nn.sigmoid, use_bias=False)(features)
-        attention = Multiply()([attention, gate])
+        gate = Dense(256, activation=tf.nn.sigmoid, use_bias=False, 
+                     name='att_gate')(features)
+        attention = Multiply(name='att_1')([attention, gate])
     print('Embedded attention:', attention.shape)
 
-    attention = Dense(1, activation=None, use_bias=False)(attention)
+    attention = Dense(1, activation=None, use_bias=False, name='att_2')(attention)
     print('Calculated attention:', attention.shape)
 
-    # def transpose_output_shape(input_shape):
-    #     shape = list(input_shape)
-    #     shape = shape[::-1]
-    #     return tuple(shape)
-    # attention = Lambda(lambda x: tf.transpose(x, perm=(1, 0)),
-    #                    output_shape=transpose_output_shape)(attention)
-    # print('Permuted attention:', attention.shape)
-    attention = Softmax(axis=0)(attention)
+    attention = Softmax(axis=0, name='att_sm')(attention)
     print('Softmaxed attention:', attention.shape)
 
-    features = Dot(axes=0)([features, attention])
+    features = Dot(axes=0, name='feat_att')([features, attention])
     print('Scaled features:', features.shape)
 
     features = mil_features(features, n_classes, z_dim, dropout_rate)
@@ -69,7 +64,6 @@ def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True):
     return logits
 
 
-BATCH_SIZE = 10
 def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3, 
          encoder_args=None, mode="instance", use_gate=True, freeze_encoder=False):
 
@@ -96,7 +90,7 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3,
       "average" -- one step up from baseline
       "attention" -- main method
     """
-    image = Input(shape=input_shape) #e.g. (None, 100, 96, 96, 3)
+    image = Input(shape=input_shape, name='image') #e.g. (None, 100, 96, 96, 3)
     print('image input:', image.shape)
     # Squeeze off the batch dimension
     # Assume the actual batch dimension = 1
@@ -116,6 +110,8 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3,
         features = encoder(image_squeezed)
 
     print('features after encoder', features.shape)
+    # insert a dummy layer to hook into later:
+    features = Lambda(lambda x: x, name='feature_hook')(features)
 
     if freeze_encoder:
         print('Stopping gradient from flowing to the encoder.')
@@ -133,3 +129,36 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3,
 
     model = tf.keras.Model(inputs=[image], outputs=[logits])
     return model
+
+
+def MilkEncode(input_shape, encoder=None, dropout_rate=0.3, 
+               encoder_args=None):
+    image = Input(shape=input_shape, name='image') #e.g. (None, 100, 96, 96, 3)
+    print('image input:', image.shape)
+    
+    if encoder is None:
+        features = make_encoder(image=image, 
+                                input_shape=input_shape,  ## Unused
+                                encoder_args=encoder_args)
+    else:
+        features = encoder(image)
+
+    return tf.keras.Model(inputs=[image], outputs=[features])
+
+
+def MilkPredict(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3, 
+                mode="instance", use_gate=True):
+    
+    features = Input(shape=input_shape, name='feat_in')
+    if mode == "instance":
+        logits = instance_classifier(features, n_classes)
+    elif mode == "average":
+        logits = average_pooling(features, n_classes, z_dim, dropout_rate)
+    elif mode == "attention":
+        logits = attention_pooling(features, n_classes, z_dim, dropout_rate, 
+                                   use_gate=use_gate)
+    else:
+        print('Multiple-Instance mode {} not recognized'.format(mode))
+        raise NotImplementedError
+
+    return tf.keras.Model(inputs=[features], outputs=[logits])

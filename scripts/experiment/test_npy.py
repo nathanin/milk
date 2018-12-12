@@ -1,5 +1,6 @@
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
+from tensorflow.keras.models import load_model
+import pickle
 import numpy as np
 import argparse
 import datetime
@@ -16,29 +17,14 @@ from sklearn.metrics import roc_auc_score, roc_curve, classification_report
 from milk.utilities import data_utils
 from milk.utilities import model_utils
 from milk.utilities import training_utils
-from milk import Milk
+from milk import Milk, MilkEncode, MilkPredict
 
-sys.path.insert(0, '..')
-from dataset import CASE_LABEL_DICT
+with open('../dataset/cases_md5.pkl', 'rb') as f:
+    case_dict = pickle.load(f)
 
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-tfe.enable_eager_execution(config=config)
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
-X_SIZE = 128
-Y_SIZE = 128
-CROP_SIZE = 96
-SCALE = 1.0
-MIN_BAG = 150
-MAX_BAG = 350
-CONST_BAG = 200
-
-CASE_PATT = r'SP_\d+-\d+'
 def case_label_fn(data_path):
-    case = re.findall(CASE_PATT, data_path)[0]
-    y_ = CASE_LABEL_DICT[case]
+    case = os.path.splitext(os.path.basename(data_path))[0]
+    y_ = case_dict[case]
     # print(data_path, y_)
     return y_
 
@@ -70,45 +56,52 @@ def auc_curve(ytrue, yhat, savepath=None):
         plt.savefig(savepath, bbox_inches='tight')
 
 
-def run_sample(case_x, model, mcdropout=None):
-    case_x = tf.constant(case_x)
-    if mcdropout is not None:
+def run_sample(case_x, encode_model, predict_model, mcdropout=False, 
+               batch_size=64):
+    if mcdropout:
         yhats = []
-        for _ in range(mcdropout):
-            yhats.append(  model(case_x, training=True) )
+        for _ in range(10):
+            zs = encode_model.predict(case_x, batch_size=batch_size)
+            yhat = predict_model.predict_on_batch(zs)
+            yhats.append(yhat)
         
         yhats = np.stack(yhats, axis=0)
         yhat = np.mean(yhats, axis=0)
 
     else:
-        yhat = model(case_x, training=False)
-
-    yhat = tf.nn.softmax(yhat)
-    print('Returning: {}'.format(yhat))
+        zs = encode_model.predict(case_x, batch_size=batch_size)
+        yhat = predict_model.predict_on_batch(zs)
 
     return yhat
 
-transform_fn = data_utils.make_transform_fn(X_SIZE, Y_SIZE, CROP_SIZE, SCALE)
 def main(args):
-    model = Milk()
-    x_dummy = tf.zeros(shape=[MIN_BAG, CROP_SIZE, CROP_SIZE, 3], 
-                        dtype=tf.float32)
-    yhat_dummy = model(x_dummy, verbose=True)
-    saver = tfe.Saver(model.variables)
+    transform_fn = data_utils.make_transform_fn(args.x_size, args.y_size, 
+                                                args.crop_size, args.scale)
 
-    if args.snapshot is None:
-        print('Pulling most recent snapshot from {}'.format(args.snapshot_dir))
-        snapshot = tf.train.latest_checkpoint(args.snapshot_dir)
-    elif args.snapshot:
-        snapshot = args.snapshot
-    else:
-        print('Must supply either --snapshot or --snapshot_dir')
+    snapshot = 'save/{}.h5'.format(args.timestamp)
+    pretrained_model = load_model(snapshot)
+    encoder_args = {
+        'depth_of_model': 32,
+        'growth_rate': 64,
+        'num_of_blocks': 4,
+        'output_classes': 2,
+        'num_layers_in_each_block': 8,
+    }
+    if args.mcdropout:
+        encoder_args['mcdropout'] = True
 
-    print('Restoring snapshot {}'.format(snapshot))
-    saver.restore(snapshot)
-    model.summary()
+    print('Model initializing')
+    encode_model = MilkEncode(input_shape=(args.crop_size, args.crop_size, 3), 
+                 encoder_args=encoder_args)
+    encode_shape = list(encode_model.output.shape)
+    predict_model = MilkPredict(input_shape=[512], mode=args.mil)
 
-    test_list = read_test_list(args.test_list)
+    encode_model, predict_model = model_utils.make_inference_functions(encode_model,
+                                                                       predict_model,
+                                                                       pretrained_model)
+
+    test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
+    test_list = read_test_list(test_list)
 
     ytrues = []
     yhats = []
@@ -118,16 +111,18 @@ def main(args):
             case_x, case_y = data_utils.load(
                 data_path = test_case,
                 transform_fn=transform_fn,
+                case_label_fn=case_label_fn,
                 all_tiles=True,
-                # const_bag=200,
-                min_bag=MIN_BAG,
-                max_bag=MAX_BAG,
-                case_label_fn=case_label_fn)
+                )
+            case_x = np.squeeze(case_x, axis=0)
+            print('Running case x: ', case_x.shape)
 
-            yhat = run_sample(case_x, model, mcdropout=args.mcdropout)
+            yhat = run_sample(case_x, encode_model, predict_model,
+                              mcdropout=args.mcdropout,
+                              batch_size=args.batch_size)
             ytrues.append(case_y)
             yhats.append(yhat)
-            print(test_case, case_y, case_x.shape, yhat.numpy())
+            print(test_case, case_y, case_x.shape, yhat)
 
     ytrue = np.concatenate(ytrues, axis=0)
     yhat = np.concatenate(yhats, axis=0)
@@ -137,18 +132,30 @@ def main(args):
     accuracy = (ytrue_max == yhat_max).mean()
     print('Accuracy: {:3.3f}'.format(accuracy))
 
-    auc_curve(ytrue, yhat, savepath=args.savepath)
+    if args.savepath is not None:
+        savepath = os.path.join(args.savepath, '{}.png'.format(args.timestamp))
+    else:
+        savepath = None
+    auc_curve(ytrue, yhat, savepath=savepath)
 
 if __name__ == '__main__':
+    # n_repeat controls re-sampling from the case
+    # mcdropout is a flag for doing mcdropout to approximate posterior probability
     parser = argparse.ArgumentParser()
-    parser.add_argument('--snapshot', default=None, type=str)
-    parser.add_argument('--snapshot_dir', default=None, type=str)
     parser.add_argument('--timestamp', default=None, type=str)
-    parser.add_argument('--test_list', type=str)
     parser.add_argument('--n_repeat', default=1, type=int)
-    parser.add_argument('--mcdropout', default=None, type=int)
+    parser.add_argument('--mcdropout', default=False, action='store_true')
+    parser.add_argument('--testdir', default='test_lists', type=str)
     parser.add_argument('--savepath', default=None, type=str)
 
+    parser.add_argument('--x_size', default=128, type=int)
+    parser.add_argument('--y_size', default=128, type=int)
+    parser.add_argument('--crop_size', default=96, type=int)
+    parser.add_argument('--scale', default=1.0, type=float)
+    parser.add_argument('--batch_size', default=64, type=int)
+
+    parser.add_argument('--mil', default='attention', type=str)
+
     args = parser.parse_args()
-    with tf.device('/gpu:0'):
-        main(args)
+    assert args.timestamp is not None
+    main(args)

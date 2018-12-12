@@ -36,7 +36,7 @@ from tensorflow.keras.layers import (
 l2 = tf.keras.regularizers.l2
 
 def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
-              dropout_rate=0.3, name_suffix=''):
+              dropout_rate=0.3, name_suffix='', mcdropout=False):
   """Convolutional Block consisting of (batchnorm->relu->conv).
 
   Arguments:
@@ -74,7 +74,10 @@ def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
                     )(features)
 
   # self.batchnorm1 = tf.keras.layers.BatchNormalization(axis=axis)
-  features = tf.layers.Dropout(dropout_rate)(features)
+  if mcdropout:
+    features = Dropout(dropout_rate)(features, training=True)
+  else:
+    features = Dropout(dropout_rate)(features)
 
   return features
 
@@ -115,7 +118,7 @@ def TransitionBlock(features, num_filters, data_format, weight_decay=1e-4,
 
 def DenseBlock(features, num_layers, growth_rate, data_format, 
                bottleneck, weight_decay=1e-4, dropout_rate=0.3,
-               block_num=0):
+               block_num=0, mcdropout=False):
   """Dense Block consisting of ConvBlocks where each block's
   output is concatenated with its input.
 
@@ -137,6 +140,7 @@ def DenseBlock(features, num_layers, growth_rate, data_format,
                 bottleneck,
                 weight_decay,
                 dropout_rate,
+                mcdropout=mcdropout,
                 name_suffix='{}_f'.format(block_num))
   for i in range(int(num_layers)-1):
     x_i = ConvBlock(x, 
@@ -145,6 +149,7 @@ def DenseBlock(features, num_layers, growth_rate, data_format,
                     bottleneck,
                     weight_decay,
                     dropout_rate,
+                    mcdropout=mcdropout,
                     name_suffix='{}_{}'.format(block_num, i))
     x = Concatenate(axis=axis)([x, x_i])
 
@@ -154,7 +159,7 @@ def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks,
              num_layers_in_each_block, data_format, bottleneck=True,
              compression=0.5, weight_decay=1e-4, dropout_rate=0.3,
              pool_initial=True, include_top=True, with_classifier=False,
-             num_classes=2, return_model=False):
+             num_classes=2, return_model=False, mcdropout=False):
   """Creating the Densenet Architecture.
   All the same as before; except we require a fixed input shape
 
@@ -257,6 +262,7 @@ def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks,
                           bottleneck,
                           weight_decay,
                           dropout_rate, 
+                          mcdropout=mcdropout,
                           block_num=i)
     print(features.shape)
 

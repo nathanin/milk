@@ -4,151 +4,180 @@ MI-Net with convolutions
 from __future__ import print_function
 import tensorflow as tf
 
-# from .densenet import DenseNet
-from milk.encoder import make_encoder
-from milk.utilities.model_utils import lr_mult
+from tensorflow.keras.layers import (Input, Dense, Dropout, Average, Lambda, 
+    Multiply, Permute, Softmax, Dot)
 
-BATCH_SIZE = 10
-class Milk(tf.keras.Model):
-    def __init__(self, z_dim=512, encoder=None):
-        super(Milk, self).__init__()
-        self.encoder = make_encoder()
-        # self.densenet = DenseNet(
-        #     depth_of_model=15,
-        #     growth_rate=32,
-        #     num_of_blocks=3,
-        #     output_classes=2,
-        #     num_layers_in_each_block=5,
-        #     data_format='channels_last',
-        #     dropout_rate=0.3,
-        #     pool_initial=True
-        # )
+from .encoder import make_encoder
+# from .utilities.model_utils import lr_mult
 
-        # self.dense1 = tf.layers.Dense(units=512, activation=tf.nn.relu, use_bias=True, name='dense1')
-        self.drop2 = tf.layers.Dropout(rate=0.5)
+def squish_mean(features):
+    # Squish the instances using a custom Keras layer wrapping tf.reduce_mean
+    def reduce_mean_output_shape(input_shape):
+        shape = list(input_shape)
+        shape[0] = 1
+        return tuple(shape)
+    features = Lambda(lambda x: tf.reduce_mean(x, axis=0, keepdims=True),  
+                      output_shape=reduce_mean_output_shape)(features)
+    return features
 
-        self.dense2 = tf.layers.Dense(units=z_dim, 
-            activation=tf.nn.relu, 
-            use_bias=False, 
-            name='dense2') 
-        self.drop3 = tf.layers.Dropout(rate=0.5)
-        # self.uncertainty = self.track_layer(tf.layers.Dense(units=1, activation=None, use_bias=False)
+def instance_classifier(features, n_classes):
+    logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
+    logits = squish_mean(logits)
+    print('logits after reduce_mean', logits.shape)
+    return logits
 
-        self.attention = tf.layers.Dense(units=256, 
-            activation=tf.nn.tanh, 
-            use_bias=False,
-            name='attention')
-        self.attention_gate = tf.layers.Dense(units=256, 
-            activation=tf.nn.sigmoid, 
-            use_bias=False,
-            name='attention_gate')
-        self.attention_layer = tf.layers.Dense(units=1, 
-            activation=None, 
-            use_bias=False, 
-            name='attention_layer')
-        self.classifier_nonlinearity_1 = tf.layers.Dense(units=512,
-            activation=tf.nn.relu, 
-            use_bias=False,
-            name='classifier_nonlin_1')
-        self.classifier_nonlinearity_2 = tf.layers.Dense(units=256,
-            activation=tf.nn.relu, 
-            use_bias=False,
-            name='classifier_nonlin_2')
-        self.classifier = tf.layers.Dense(units=2, 
-            activation=None, 
-            use_bias=False, 
-            name='classifier')
+def mil_features(features, n_classes, z_dim, dropout_rate):
+    features = Dropout(dropout_rate, name='mil_drop_1')(features)
+    features = Dense(z_dim, activation=tf.nn.relu, name='mil_dense_1')(features)
+    features = Dropout(dropout_rate, name='mil_drop_2')(features)
+    features = Dense(int(z_dim/2), activation=tf.nn.relu, name='mil_dense_2')(features)
+    features = Dropout(dropout_rate, name='mil_drop_3')(features)
+    features = squish_mean(features)
+    print('features after reduce_mean', features.shape)
+    return features
 
-    def call(self, 
-             x_in, 
-             T=20, 
-             batch_size = BATCH_SIZE, 
-             training=True, 
-             verbose=False,
-             return_embedding=False,
-             return_attention=False):
-        """
-        `training` controls the use of dropout and batch norm, if defined
-        `return_embedding`
-            prediction
-            attention
-            raw embedding (batch=num instances)
-            embedding after attention (batch=1)
-            classifier hidden layer (batch=1)
+def average_pooling(features, n_classes, z_dim, dropout_rate):
+    features = mil_features(features, n_classes, z_dim, dropout_rate)
+    logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
+    return logits
 
-        """
-        ## Like a manual tf.map()
-        if verbose:
-            print(x_in.get_shape())
+def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True, 
+                      return_attention=False):
+    attention = Dense(256, activation=tf.nn.tanh, use_bias=False,
+                      name='att_0')(features)
+    if use_gate:
+        gate = Dense(256, activation=tf.nn.sigmoid, use_bias=False, 
+                     name='att_gate')(features)
+        print('Gate:', gate.shape)
+        attention = Multiply(name='att_1')([attention, gate])
+        print('Gated attention:', attention.shape)
+    print('Embedded attention:', attention.shape)
 
-        ## BUG sets of 1 should be handled
-        n_x = x_in.get_shape().as_list()[0]
-        if n_x == 1:
-            x_in = tf.squeeze(x_in, 0)
-            n_x = x_in.get_shape().as_list()[0]
+    attention = Dense(1, activation=None, use_bias=False, name='att_2')(attention)
+    print('Calculated attention:', attention.shape)
 
-        n_batches = int(n_x / batch_size)
-        if n_x % batch_size == 0:
-            batches = [batch_size]*n_batches
-        else:
-            batches = [batch_size]*n_batches+[n_x-(n_batches*batch_size)]
-        x_split = tf.split(x_in, batches, axis=0)
+    attention = Lambda(lambda x: tf.transpose(x, perm=(1,0)))(attention)
+    print('Transposed attention:', attention.shape)
 
-        if verbose:
-            print('Encoder Call:')
-            print('n_x: ', n_x)
-            print('n_batches', n_batches)
-            print('batches', batches)
-            print('x_split', len(x_split))
+    attention = Softmax(axis=1, name='att_sm')(attention)
+    print('Softmaxed attention:', attention.shape)
+    if return_attention:
+        return attention
 
-        zs = []
-        for x_batch in x_split:
-            # divide the learning rate since gradient accumulates
-            z = lr_mult(0.5)(self.encoder(x_batch, training=training))
-            # z = self.encoder(x_batch, training=training)
-            if verbose:
-                print('\t z: ', z.shape)
-            # z = tf.squeeze(z, [1,2])
-            z = self.drop2(z, training=training)
-            z = self.dense2(z)
-            z = self.drop3(z, training=training)
-            zs.append(z)
+    features = Lambda(lambda x: tf.matmul(x[0], x[1]))([attention, features])
+    # features = Dot(axes=1, name='feat_att')([attention, features])
+    print('Scaled features:', features.shape)
 
-        # Gather
-        z_concat = tf.concat(zs, axis=0)
-        if verbose:
-            print('z_concat: ', z_concat.get_shape())
+    features = mil_features(features, n_classes, z_dim, dropout_rate)
+    logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
+    return logits
 
-        ## MIL layer
-        # z = tf.reduce_mean(z, axis=0, keepdims=True)
 
-        # MIL attention
-        att = self.attention(z_concat)
-        att_gate = self.attention_gate(z_concat)
-        att = att * att_gate # tf.multiply()
+def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3, 
+         encoder_args=None, mode="instance", use_gate=True, freeze_encoder=False):
 
-        att = self.attention_layer(att)
-        att = tf.transpose(att, perm=(1,0)) 
-        att = tf.nn.softmax(att, axis=1)
+    """ Build the Multiple Instance Learning model
 
-        if verbose:
-            print('attention:', att.get_shape())
+    Return a function that accepts batches of (batch, bag_size, h, w, ch)
 
-        # Scale learning proportionally to bag size
-        z = lr_mult(n_x/2.)(tf.matmul(att, z_concat))
-        if verbose:
-            print('z:', z.get_shape())
+    # When batch = 1 we can just squeeze the batch dimension out 
+      and pad it back after the bag instances are combined at the end.
+      if batch > 1, then we have to process batches separately, then concat the results.
 
-        ## Classifier 
-        net = self.classifier_nonlinearity_1(z)
-        net = self.classifier_nonlinearity_2(net)
-        yhat = self.classifier(net)
-        if verbose:
-            print('yhat:', yhat.get_shape())
+    # for TPU exectution we force batch=8 so that we shard the batch into (1, bag, ...)
+      to process each bag on its own TPU processor.
 
-        if return_embedding:
-            return yhat, att, z_concat, z, net
-        if return_attention:
-            return yhat, att
-        else:
-            return yhat
+    # input_shape should be 4D, with (batch=1, num_instances, ...)
+      The input layer pads on a batch dimension for us if none is given, which is perfect.
+
+    # We have to have a single input layer on the outer-most Model level for TPU translation.
+      So, during model construction, we need the nested 'models' to return tensors instead
+      of tf.keras.Model instances.
+
+    # `mode` (str) dictates the kind of MIL to use:
+      "instance" -- baseline
+      "average" -- one step up from baseline
+      "attention" -- main method
+    """
+    image = Input(shape=input_shape, name='image') #e.g. (None, 100, 96, 96, 3)
+    print('image input:', image.shape)
+    # Squeeze off the batch dimension
+    # Assume the actual batch dimension = 1
+    def squeeze_output_shape(input_shape):
+        shape = list(input_shape)
+        shape = shape[1:]
+        return tuple(shape)
+
+    image_squeezed = Lambda(lambda x: tf.squeeze(x, axis=0), 
+                            output_shape=squeeze_output_shape)(image)
+    print('image squeezed', image_squeezed.shape)
+    if encoder is None:
+        features = make_encoder(image=image_squeezed, 
+                                input_shape=input_shape,  ## Unused
+                                encoder_args=encoder_args)
+    else:
+        features = encoder(image_squeezed)
+
+    print('features after encoder', features.shape)
+    # insert a dummy layer to hook into later:
+    features = Lambda(lambda x: x, name='feature_hook')(features)
+
+    if freeze_encoder:
+        print('Stopping gradient from flowing to the encoder.')
+        features = Lambda(lambda x: tf.stop_gradient(x))(features)
+
+    if mode == "instance":
+        logits = instance_classifier(features, n_classes)
+    elif mode == "average":
+        logits = average_pooling(features, n_classes, z_dim, dropout_rate)
+    elif mode == "attention":
+        logits = attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=use_gate)
+    else:
+        print('Multiple-Instance mode {} not recognized'.format(mode))
+        raise NotImplementedError
+
+    model = tf.keras.Model(inputs=[image], outputs=[logits])
+    return model
+
+
+def MilkEncode(input_shape, encoder=None, dropout_rate=0.3, 
+               encoder_args=None):
+    image = Input(shape=input_shape, name='image') #e.g. (None, 100, 96, 96, 3)
+    print('image input:', image.shape)
+    
+    if encoder is None:
+        features = make_encoder(image=image, 
+                                input_shape=input_shape,  ## Unused
+                                encoder_args=encoder_args)
+    else:
+        features = encoder(image)
+
+    return tf.keras.Model(inputs=[image], outputs=[features])
+
+
+def MilkPredict(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3, 
+                mode="instance", use_gate=True):
+    
+    features = Input(shape=input_shape, name='feat_in')
+    if mode == "instance":
+        logits = instance_classifier(features, n_classes)
+    elif mode == "average":
+        logits = average_pooling(features, n_classes, z_dim, dropout_rate)
+    elif mode == "attention":
+        logits = attention_pooling(features, n_classes, z_dim, dropout_rate, 
+                                   use_gate=use_gate)
+    else:
+        print('Multiple-Instance mode {} not recognized'.format(mode))
+        raise NotImplementedError
+
+    return tf.keras.Model(inputs=[features], outputs=[logits])
+
+
+def MilkAttention(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3, 
+                  use_gate=True):
+    
+    features = Input(shape=input_shape, name='feat_in')
+    attention = attention_pooling(features, n_classes, z_dim, dropout_rate, 
+                                use_gate=use_gate, return_attention=True)
+
+    return tf.keras.Model(inputs=[features], outputs=[attention])

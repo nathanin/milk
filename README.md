@@ -31,13 +31,21 @@ scripts/
 |____ deploy/
 |____ evaluate/
 |____ pretraining/
-|____ training/
+|____ experiment/
+      |____ batch_train.sh
+      |____ batch_test.sh
+      |____ train_tpu.py
+      |____ test_npy.py
 |____ usable_area/
 
 ```
 
 #### Requirements
 Please refer to `requirements.txt`
+
+#### Goal
+- **Make the whole thing run on TPU.** 
+  - Progress: see branch `functional-api` for a version compatible with TPU execution. See it run on [Google Colab](https://colab.research.google.com/drive/1eOcZaqQG01fS16ckn9x94ivW-k12fbcg). The next thing to do is update the main experiment.
 
 Date: October 25, 2018
 Contact: Nathan.Ing@cshs.org , ing.nathany@gmail.com

@@ -3,11 +3,11 @@
 set -e
 
 for td in $( ls save ); do
-    echo $td
+    timestamp=${td%.*}
+    echo $timestamp
     python ./test_npy.py \
-        --snapshot_dir save/$td \
-        --test_list test_lists/${td}.txt \
-        --n_repeat 1 \
-        --savepath figures/auc_mcdrop_${td}.png \
-        --mcdropout 25
+        --timestamp $timestamp \
+        --mcdropout \
+        --savepath test_result_mcdropout \
+        --testdir test_lists
 done

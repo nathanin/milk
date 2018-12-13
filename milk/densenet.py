@@ -20,6 +20,8 @@ Densely Connected Convolutional Networks](https://arxiv.org/abs/1608.06993)
 https://github.com/tensorflow/tensorflow/blob/master/ ...
 tensorflow/contrib/eager/python/examples/densenet/densenet.py
 
+Rewritten into Keras' functional API
+
 """
 
 from __future__ import absolute_import
@@ -27,63 +29,61 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
+from tensorflow.keras.layers import (
+  Conv2D, Dense, Dropout, AveragePooling2D, 
+  MaxPooling2D, GlobalAveragePooling2D, Flatten, 
+  BatchNormalization, Input, Concatenate)
 l2 = tf.keras.regularizers.l2
 
-class ConvBlock(tf.keras.Model):
+def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
+              dropout_rate=0.3, name_suffix='', mcdropout=False):
   """Convolutional Block consisting of (batchnorm->relu->conv).
 
   Arguments:
+    features: tensor input
     num_filters: number of filters passed to a convolutional layer.
     data_format: "channels_first" or "channels_last"
     bottleneck: if True, then a 1x1 Conv is performed followed by 3x3 Conv.
     weight_decay: weight decay
     dropout_rate: dropout rate.
   """
-
-  def __init__(self, num_filters, data_format, bottleneck, weight_decay=1e-4,
-               dropout_rate=0):
-    super(ConvBlock, self).__init__()
-    self.bottleneck = bottleneck
-
-    axis = -1 if data_format == "channels_last" else 1
+  if bottleneck:
     inter_filter = num_filters * 4
-    # don't forget to set use_bias=False when using batchnorm
-    self.conv2 = tf.layers.Conv2D(num_filters,
-                                  (3, 3),
-                                  padding="same",
-                                  use_bias=False,
-                                  data_format=data_format,
-                                  # kernel_initializer="he_normal",
-                                  kernel_regularizer=l2(weight_decay)
-                                  )
-    # self.batchnorm1 = tf.keras.layers.BatchNormalization(axis=axis)
-    self.dropout = tf.layers.Dropout(dropout_rate)
+    features = Conv2D(inter_filter,
+                      (1, 1),
+                      activation=tf.nn.relu,
+                      padding="same",
+                      use_bias=False,
+                      data_format=data_format,
+                      # kernel_initializer="he_normal",
+                      kernel_regularizer=l2(weight_decay),
+                      name='encoder_bottle{}'.format(name_suffix)
+                      )(features)
 
-    if self.bottleneck:
-      self.conv1 = tf.layers.Conv2D(inter_filter,
-                                    (1, 1),
-                                    padding="same",
-                                    use_bias=False,
-                                    data_format=data_format,
-                                    # kernel_initializer="he_normal",
-                                    kernel_regularizer=l2(weight_decay),
-                                    )
-      # self.batchnorm2 = tf.keras.layers.BatchNormalization(axis=axis)
+  axis = -1 if data_format == "channels_last" else 1
+  # don't forget to set use_bias=False when using batchnorm
+  features = Conv2D(num_filters,
+                    (3, 3),
+                    activation=tf.nn.relu,
+                    padding="same",
+                    use_bias=False,
+                    data_format=data_format,
+                    # kernel_initializer="he_normal",
+                    kernel_regularizer=l2(weight_decay),
+                    name='encoder{}'.format(name_suffix)
+                    )(features)
 
-  def call(self, x, training=True):
-    # output = self.batchnorm1(x, training=training)
+  # self.batchnorm1 = tf.keras.layers.BatchNormalization(axis=axis)
+  if mcdropout:
+    features = Dropout(dropout_rate)(features, training=True)
+  else:
+    features = Dropout(dropout_rate)(features)
 
-    if self.bottleneck:
-      output = self.conv1(tf.nn.relu(x))
-      # output = self.batchnorm2(output, training=training)
-
-    output = self.conv2(tf.nn.relu(output))
-    output = self.dropout(output, training=training)
-
-    return output
+  return features
 
 
-class TransitionBlock(tf.keras.Model):
+def TransitionBlock(features, num_filters, data_format, weight_decay=1e-4,
+                    dropout_rate=0.3, block_num=0):
   """Transition Block to reduce the number of features.
 
   Arguments:
@@ -93,33 +93,32 @@ class TransitionBlock(tf.keras.Model):
     dropout_rate: dropout rate.
   """
 
-  def __init__(self, num_filters, data_format,
-               weight_decay=1e-4, dropout_rate=0):
-    super(TransitionBlock, self).__init__()
-    axis = -1 if data_format == "channels_last" else 1
+  axis = -1 if data_format == "channels_last" else 1
 
-    # self.batchnorm = tf.keras.layers.BatchNormalization(axis=axis)
-    self.conv = tf.layers.Conv2D(num_filters,
-                                 (1, 1),
-                                 padding="same",
-                                 use_bias=False,
-                                 data_format=data_format,
-                               #  kernel_initializer="he_normal",
-                                kernel_regularizer=l2(weight_decay),
-                                 )
-    self.avg_pool = tf.layers.AveragePooling2D(
-                                       pool_size=(2,2),
-                                       strides=(2,2),
-                                       data_format=data_format)
+  # self.batchnorm = tf.keras.layers.BatchNormalization(axis=axis)
+  features = Conv2D(num_filters,
+                    (1, 1),
+                    activation=tf.nn.relu,
+                    padding="same",
+                    use_bias=False,
+                    data_format=data_format,
+                    #  kernel_initializer="he_normal",
+                    kernel_regularizer=l2(weight_decay),
+                    name='encoder_trans{}'.format(block_num)
+                    )(features)
 
-  def call(self, x, training=True):
-    # output = self.batchnorm(x, training=training)
-    output = self.conv(tf.nn.relu(x))
-    output = self.avg_pool(output)
-    return output
+  features = AveragePooling2D(pool_size=(2,2),
+                              strides=(2,2),
+                              data_format=data_format,
+                              name='encoder_trans_pool{}'.format(block_num)
+                              )(features)
+
+  return features
 
 
-class DenseBlock(tf.keras.Model):
+def DenseBlock(features, num_layers, growth_rate, data_format, 
+               bottleneck, weight_decay=1e-4, dropout_rate=0.3,
+               block_num=0, mcdropout=False):
   """Dense Block consisting of ConvBlocks where each block's
   output is concatenated with its input.
 
@@ -131,31 +130,38 @@ class DenseBlock(tf.keras.Model):
     weight_decay: weight decay
     dropout_rate: dropout rate.
   """
+  axis = -1 if data_format == "channels_last" else 1
 
-  def __init__(self, num_layers, growth_rate, data_format, bottleneck,
-               weight_decay=1e-4, dropout_rate=0):
-    super(DenseBlock, self).__init__()
-    self.num_layers = num_layers
-    self.axis = -1 if data_format == "channels_last" else 1
+  blocks = []
+  # First convolution
+  x = ConvBlock(features, 
+                growth_rate,
+                data_format,
+                bottleneck,
+                weight_decay,
+                dropout_rate,
+                mcdropout=mcdropout,
+                name_suffix='{}_f'.format(block_num))
+  for i in range(int(num_layers)-1):
+    x_i = ConvBlock(x, 
+                    growth_rate,
+                    data_format,
+                    bottleneck,
+                    weight_decay,
+                    dropout_rate,
+                    mcdropout=mcdropout,
+                    name_suffix='{}_{}'.format(block_num, i))
+    x = Concatenate(axis=axis)([x, x_i])
 
-    self.blocks = []
-    for _ in range(int(self.num_layers)):
-      self.blocks.append(ConvBlock(growth_rate,
-                                   data_format,
-                                   bottleneck,
-                                   weight_decay,
-                                   dropout_rate))
+  return x
 
-  def call(self, x, training=True):
-    for i in range(int(self.num_layers)):
-      output = self.blocks[i](x, training=training)
-      x = tf.concat([x, output], axis=self.axis)
-
-    return x
-
-
-class DenseNet(tf.keras.Model):
+def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks, 
+             num_layers_in_each_block, data_format, bottleneck=True,
+             compression=0.5, weight_decay=1e-4, dropout_rate=0.3,
+             pool_initial=True, include_top=True, with_classifier=False,
+             num_classes=2, return_model=False, mcdropout=False):
   """Creating the Densenet Architecture.
+  All the same as before; except we require a fixed input shape
 
   Arguments:
     depth_of_model: number of layers in the model.
@@ -176,156 +182,111 @@ class DenseNet(tf.keras.Model):
                   else, do a 3x3 conv with stride 1.
     include_top: If true, GlobalAveragePooling Layer and Dense layer are
                  included.
+
+    return_model: If true, gather itself and return a tf.keras.Model object.
+                  else, return the final features tensor
   """
-
-  def __init__(self, depth_of_model, growth_rate, num_of_blocks,
-               output_classes, num_layers_in_each_block, data_format,
-               bottleneck=True, compression=0.5, weight_decay=1e-4,
-               dropout_rate=0, pool_initial=False, include_top=True):
-    super(DenseNet, self).__init__()
-    self.depth_of_model = depth_of_model
-    self.growth_rate = growth_rate
-    self.num_of_blocks = num_of_blocks
-    self.output_classes = output_classes
-    self.num_layers_in_each_block = num_layers_in_each_block
-    self.data_format = data_format
-    self.bottleneck = bottleneck
-    self.compression = compression
-    self.weight_decay = weight_decay
-    self.dropout_rate = dropout_rate
-    self.pool_initial = pool_initial
-    self.include_top = include_top
-
-    # deciding on number of layers in each block
-    if isinstance(self.num_layers_in_each_block, list) or isinstance(
-        self.num_layers_in_each_block, tuple):
-      self.num_layers_in_each_block = list(self.num_layers_in_each_block)
-    else:
-      if self.num_layers_in_each_block == -1:
-        if self.num_of_blocks != 3:
-          raise ValueError(
-              "Number of blocks must be 3 if num_layers_in_each_block is -1")
-        if (self.depth_of_model - 4) % 3 == 0:
-          num_layers = (self.depth_of_model - 4) / 3
-          if self.bottleneck:
-            num_layers //= 2
-          self.num_layers_in_each_block = [num_layers] * self.num_of_blocks
-        else:
-          raise ValueError("Depth must be 3N+4 if num_layer_in_each_block=-1")
+  # deciding on number of layers in each block
+  if isinstance(num_layers_in_each_block, list) or isinstance(
+      num_layers_in_each_block, tuple):
+    num_layers_in_each_block = list(num_layers_in_each_block)
+  else:
+    if num_layers_in_each_block == -1:
+      if num_of_blocks != 3:
+        raise ValueError(
+            "Number of blocks must be 3 if num_layers_in_each_block is -1")
+      if (depth_of_model - 4) % 3 == 0:
+        num_layers = (depth_of_model - 4) / 3
+        if bottleneck:
+          num_layers //= 2
+        num_layers_in_each_block = [num_layers] * num_of_blocks
       else:
-        self.num_layers_in_each_block = [
-            self.num_layers_in_each_block] * self.num_of_blocks
-
-    axis = -1 if self.data_format == "channels_last" else 1
-
-    # setting the filters and stride of the initial covn layer.
-    if self.pool_initial:
-      init_filters = (7, 7)
-      stride = (2, 2)
+        raise ValueError("Depth must be 3N+4 if num_layer_in_each_block=-1")
     else:
-      init_filters = (3, 3)
-      stride = (1, 1)
+      num_layers_in_each_block = [
+          num_layers_in_each_block] * num_of_blocks
 
-    self.num_filters = 2 * self.growth_rate
+  axis = -1 if data_format == "channels_last" else 1
 
-    # first conv and pool layer
-    self.conv1 = tf.layers.Conv2D(self.num_filters,
-                                  init_filters,
-                                  strides=stride,
-                                  padding="same",
-                                  use_bias=False,
-                                  data_format=self.data_format,
-                                  # kernel_initializer="he_normal",
-                                  kernel_regularizer=l2(self.weight_decay),
-                                  )
-    if self.pool_initial:
-      self.pool1 = tf.layers.MaxPooling2D(pool_size=(3, 3),
-                                          strides=(2, 2),
-                                          padding="same",
-                                          data_format=self.data_format)
-    #   self.batchnorm1 = tf.keras.layers.BatchNormalization(axis=axis)
+  # setting the filters and stride of the initial covn layer.
+  if pool_initial:
+    init_filters = (7, 7)
+    stride = (2, 2)
+  else:
+    init_filters = (3, 3)
+    stride = (1, 1)
 
-    # self.batchnorm2 = tf.keras.layers.BatchNormalization(axis=axis)
-
-    # last pooling and fc layer
-    if self.include_top:
-      # self.last_pool = tf.layers.AveragePooling2D(pool_size=(6,6), strides=(6,6))
-      self.last_pool = tf.keras.layers.GlobalAveragePooling2D(
-          data_format=self.data_format)
-      # self.last_pool = tf.layers.Flatten()
-      ## Remove classifier; we always use hidden layer
-      # self.classifier = tf.layers.Dense(self.output_classes) 
-
-    # calculating the number of filters after each block
-    num_filters_after_each_block = [self.num_filters]
-    for i in range(1, self.num_of_blocks):
-      temp_num_filters = num_filters_after_each_block[i-1] + (
-          self.growth_rate * self.num_layers_in_each_block[i-1])
-      # using compression to reduce the number of inputs to the
-      # transition block
-      temp_num_filters = int(temp_num_filters * compression)
-      num_filters_after_each_block.append(temp_num_filters)
-
-    # dense block initialization
-    self.dense_blocks = []
-    self.transition_blocks = []
-    for i in range(self.num_of_blocks):
-      self.dense_blocks.append(DenseBlock(self.num_layers_in_each_block[i],
-                                          self.growth_rate,
-                                          self.data_format,
-                                          self.bottleneck,
-                                          self.weight_decay,
-                                          self.dropout_rate))
-      if i+1 < self.num_of_blocks:
-        self.transition_blocks.append(
-            TransitionBlock(num_filters_after_each_block[i+1],
-                            self.data_format,
-                            self.weight_decay,
-                            self.dropout_rate))
+  num_filters = 2 * growth_rate
 
 
-  def call(self, x, verbose=False, training=True):
-    if verbose:
-      print('DenseNet Input:')
-      print('\tx:', x.get_shape())
-    output = self.conv1(x)
-    # print('DenseNet conv1:', output.get_shape())
-    if verbose:
-      print('DenseNet conv1:')
-      print('\toutput:', output.get_shape())
+  # Setup input layer
+  if image is None:
+    image = Input(shape=input_shape, name='encoder_input')
 
-    if self.pool_initial:
-      # output = self.batchnorm1(output, training=training)
-      output = tf.nn.relu(output)
-      output = self.pool1(output)
-      # print('DenseNet pool_initial:', output.get_shape())
-      if verbose:
-        print('DeseNet Pool Initial:')
-        print('\toutput: ', output.get_shape())
+  # first conv and pool layer
+  features = Conv2D(num_filters,
+                    init_filters,
+                    strides=stride,
+                    padding="same",
+                    use_bias=False,
+                    data_format=data_format,
+                    # kernel_initializer="he_normal",
+                    kernel_regularizer=l2(weight_decay),
+                    name='encoder_conv1'
+                    )(image)
+  if pool_initial:
+    features = MaxPooling2D(pool_size=(3, 3),
+                            strides=(2, 2),
+                            padding="same",
+                            data_format=data_format,
+                            name='encoder_pool_init'
+                            )(features)
+  #   self.batchnorm1 = tf.keras.layers.BatchNormalization(axis=axis)
 
-    if verbose:
-      print('DenseNet dense blocks:')
-    for i in range(self.num_of_blocks - 1):
-      output = self.dense_blocks[i](output, training=training)
-      output = self.transition_blocks[i](output, training=training)
-      # print('DenseNet block {}:'.format(i), output.get_shape())
-      if verbose:
-        print('\t{:02d} output:'.format(i), output.get_shape())
+  # calculating the number of filters after each block
+  num_filters_after_each_block = [num_filters]
+  for i in range(1, num_of_blocks):
+    temp_num_filters = num_filters_after_each_block[i-1] + (
+        growth_rate * num_layers_in_each_block[i-1])
+    # using compression to reduce the number of inputs to the
+    # transition block
+    temp_num_filters = int(temp_num_filters * compression)
+    num_filters_after_each_block.append(temp_num_filters)
 
-    output = self.dense_blocks[
-        self.num_of_blocks - 1](output, training=training)
-    # output = self.batchnorm2(output, training=training)
-    output = tf.nn.relu(output)
-    # print('DenseNet block end:', output.get_shape())
-    if verbose:
-      print('DenseNet final dense block:')
-      print('\toutput: ', output.get_shape())
+  # dense blocks
+  for i in range(num_of_blocks):
+    features = DenseBlock(features, 
+                          num_layers_in_each_block[i],
+                          growth_rate,
+                          data_format,
+                          bottleneck,
+                          weight_decay,
+                          dropout_rate, 
+                          mcdropout=mcdropout,
+                          block_num=i)
+    print(features.shape)
 
-    if self.include_top:
-      output = self.last_pool(output)
-      # output = self.classifier(output)
-      if verbose:
-        print('DenseNet top:')
-        print('\toutput: ', output.get_shape())
+    if i+1 < num_of_blocks:
+      features = TransitionBlock(features,
+                          num_filters_after_each_block[i+1],
+                          data_format,
+                          weight_decay,
+                          dropout_rate,
+                          block_num=i)
+      print('transition', features.shape)
 
-    return output
+  # last pooling and fc layer
+  if include_top:
+    # self.last_pool = tf.layers.AveragePooling2D(pool_size=(6,6), strides=(6,6))
+    features = GlobalAveragePooling2D(data_format=data_format, name='encoder_glob_pool')(features)
+    print(features.shape)
+    # self.last_pool = tf.layers.Flatten()
+
+  if with_classifier:
+    features = Dense(num_classes, activation=tf.nn.softmax, name='encoder_classifier')(features)
+
+  if return_model:
+    model = tf.keras.Model(inputs=[image], outputs=[features])
+    return model
+  else:
+    return features

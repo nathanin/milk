@@ -5,7 +5,7 @@ Test classifier in graph mode
 
 from __future__ import print_function
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
+from tensorflow.keras.models import load_model
 import numpy as np
 import argparse
 import os
@@ -62,16 +62,12 @@ def main(args, sess):
         repeats         = args.repeats)
     sess.run(dataset.iterator.initializer)
 
-    model = Classifier(n_classes = args.n_classes)
     x = dataset.x_op
     ytrue = dataset.y_op
-    yhat = tf.nn.softmax(model(x, training=False), axis=-1)
 
+    model = load_model(args.snapshot)
     model.summary()
     sess.run(tf.global_variables_initializer())
-
-    saver = tf.train.Saver(model.variables)
-    saver.restore(sess, args.snapshot)
 
     # Loop:
     ytrue_vector = []
@@ -80,7 +76,11 @@ def main(args, sess):
     while True:
         try:
             counter += 1
-            ytrue_, yhat_ = sess.run([ytrue, yhat])
+            ytrue_, xbatch = sess.run([ytrue, x])
+            yhat_ = model.predict_on_batch(xbatch)
+
+            print(yhat_.shape, xbatch.shape, yhat_.shape)
+
             ytrue_vector.append(ytrue_)
             yhat_vector.append(yhat_)
 
@@ -107,10 +107,8 @@ def main(args, sess):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test_data', 
-        default='../dataset/gleason_grade_val_ext.tfrecord', type=str)
-    parser.add_argument('--snapshot', 
-        default='./trained_ext/classifier-19999', type=str)
+    parser.add_argument('--test_data', default='../dataset/gleason_grade_val_ext.tfrecord', type=str)
+    parser.add_argument('--snapshot', default='./pretrained.h5', type=str)
     parser.add_argument('--n_classes', default=5, type=int)
     parser.add_argument('--input_dim', default=96, type=int)
     parser.add_argument('--downsample', default=0.25, type=float)

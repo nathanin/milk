@@ -40,6 +40,7 @@ class ClassificationDataset(object):
             self.dataset = (tf.data.TFRecordDataset(record_path)
                             .repeat()
                             .shuffle(buffer_size=shuffle_buffer)
+                            .prefetch(buffer_size=int(prefetch_buffer/2))
                             .map(preprocessing, 
                                 num_parallel_calls=n_threads)
                             .prefetch(buffer_size=prefetch_buffer)

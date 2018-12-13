@@ -79,7 +79,7 @@ def main(args):
                                                 args.crop_size, args.scale)
 
     snapshot = 'save/{}.h5'.format(args.timestamp)
-    pretrained_model = load_model(snapshot)
+    trained_model = load_model(snapshot)
     encoder_args = {
         'depth_of_model': 32,
         'growth_rate': 64,
@@ -98,7 +98,7 @@ def main(args):
 
     encode_model, predict_model = model_utils.make_inference_functions(encode_model,
                                                                        predict_model,
-                                                                       pretrained_model)
+                                                                       trained_model)
 
     test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
     test_list = read_test_list(test_list)

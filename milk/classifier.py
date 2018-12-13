@@ -14,7 +14,7 @@ def Classifier(input_shape, n_classes=5, encoder_args=None):
                             input_shape=input_shape, 
                             encoder_args=encoder_args)
 
-    features = Dropout(0.5, name='classifier_dropout')(features)
+    features = Dropout(0.3, name='classifier_dropout')(features)
     features = Dense(n_classes, activation=tf.nn.softmax, name='classifier')(features)
 
     model = tf.keras.Model(inputs=[image], outputs=[features])

@@ -73,23 +73,29 @@ def classifier_loss_fn(model, dataset):
     return loss
 
 
-def make_inference_functions(encode_model, predict_model, pretrained_model):
+def make_inference_functions(encode_model, predict_model, attention_model, pretrained_model):
     pretrained_layers = {l.name: l for l in pretrained_model.layers}
 
     for lname, l in pretrained_layers.items():
         w = l.get_weights()
         if 'encoder' in lname:
-            print('Setting encoder weight for layer {}'.format(lname))
             try:
                 encode_model.get_layer(lname).set_weights(w)
+                print('Set encoder weight for layer {}'.format(lname))
             except:
-                print('Encoder no layer {}'.format(lname))
+                pass
         
         if 'encoder' not in lname:
-            print('Setting predict weight for layer {}'.format(lname))
             try:
                 predict_model.get_layer(lname).set_weights(w)
+                print('Set predict weight for layer {}'.format(lname))
             except:
-                print('Predict no layer {}'.format(lname))
+                pass
 
-    return encode_model, predict_model
+            try:
+                attention_model.get_layer(lname).set_weights(w)
+                print('Set attention weight for layer {}'.format(lname))
+            except:
+                pass
+
+    return encode_model, predict_model, attention_model

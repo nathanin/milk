@@ -41,22 +41,31 @@ def average_pooling(features, n_classes, z_dim, dropout_rate):
     logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
     return logits
 
-def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True):
+def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True, 
+                      return_attention=False):
     attention = Dense(256, activation=tf.nn.tanh, use_bias=False,
                       name='att_0')(features)
     if use_gate:
         gate = Dense(256, activation=tf.nn.sigmoid, use_bias=False, 
                      name='att_gate')(features)
+        print('Gate:', gate.shape)
         attention = Multiply(name='att_1')([attention, gate])
+        print('Gated attention:', attention.shape)
     print('Embedded attention:', attention.shape)
 
     attention = Dense(1, activation=None, use_bias=False, name='att_2')(attention)
     print('Calculated attention:', attention.shape)
 
-    attention = Softmax(axis=0, name='att_sm')(attention)
-    print('Softmaxed attention:', attention.shape)
+    attention = Lambda(lambda x: tf.transpose(x, perm=(1,0)))(attention)
+    print('Transposed attention:', attention.shape)
 
-    features = Dot(axes=0, name='feat_att')([features, attention])
+    attention = Softmax(axis=1, name='att_sm')(attention)
+    print('Softmaxed attention:', attention.shape)
+    if return_attention:
+        return attention
+
+    features = Lambda(lambda x: tf.matmul(x[0], x[1]))([attention, features])
+    # features = Dot(axes=1, name='feat_att')([attention, features])
     print('Scaled features:', features.shape)
 
     features = mil_features(features, n_classes, z_dim, dropout_rate)
@@ -162,3 +171,13 @@ def MilkPredict(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3,
         raise NotImplementedError
 
     return tf.keras.Model(inputs=[features], outputs=[logits])
+
+
+def MilkAttention(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3, 
+                  use_gate=True):
+    
+    features = Input(shape=input_shape, name='feat_in')
+    attention = attention_pooling(features, n_classes, z_dim, dropout_rate, 
+                                use_gate=use_gate, return_attention=True)
+
+    return tf.keras.Model(inputs=[features], outputs=[attention])

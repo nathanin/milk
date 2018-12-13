@@ -31,7 +31,11 @@ scripts/
 |____ deploy/
 |____ evaluate/
 |____ pretraining/
-|____ training/
+|____ experiment/
+      |____ batch_train.sh
+      |____ batch_test.sh
+      |____ train_tpu.py
+      |____ test_npy.py
 |____ usable_area/
 
 ```
@@ -39,5 +43,6 @@ scripts/
 #### Requirements
 Please refer to `requirements.txt`
 
+Milestone: December 11, 2018: moved to Keras functional API to support TPU training
 Date: October 25, 2018
 Contact: Nathan.Ing@cshs.org , ing.nathany@gmail.com

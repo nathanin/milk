@@ -20,7 +20,7 @@ import os
 from milk.utilities import data_utils
 from milk import Milk
 
-with open('../dataset/cases_md5.pkl', 'rb') as f:
+with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
     case_dict = pickle.load(f)
 
 def filter_list_by_label(lst):
@@ -188,7 +188,7 @@ def main(args):
     try:
         model.fit_generator(generator=train_generator,
             validation_data=val_generator,
-            validation_steps=25,
+            validation_steps=50,
             steps_per_epoch=args.steps_per_epoch, 
             epochs=args.epochs)
     except KeyboardInterrupt:
@@ -216,7 +216,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size',       default=1, type=int)
     parser.add_argument('--bag_size',         default=150, type=int)
     parser.add_argument('--mil',              default='attention', type=str)
-    parser.add_argument('--gated_attention',  default=False, action='store_true')
+    parser.add_argument('--gated_attention',  default=True, action='store_false')
     parser.add_argument('--freeze_encoder',   default=False, action='store_true')
 
     parser.add_argument('--data_patt',        default='../dataset/tiles_reduced/*npy', type=str)

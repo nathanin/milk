@@ -14,7 +14,6 @@ original svs files:
     for that particular case. There may be more than one slide, so we'll just choose one.
 
    Be aware that the slide lists in uid2slide need to point somewhere on the local filesystem.
-
 """
 from __future__ import print_function
 import tensorflow as tf
@@ -42,7 +41,8 @@ from milk.utilities import training_utils
 from milk.utilities import model_utils
 from milk import Milk, MilkEncode, MilkPredict, MilkAttention
 
-uid2label = pickle.load(open('../dataset/case_dict_obfuscated.pkl', 'rb'))
+# uid2label = pickle.load(open('../dataset/case_dict_obfuscated.pkl', 'rb'))
+uid2label = pickle.load(open('../dataset/cases_md5.pkl', 'rb'))
 uid2slide = pickle.load(open('../dataset/uid2slide.pkl', 'rb'))
 
 def get_wrapped_fn(svs):
@@ -55,8 +55,8 @@ def get_wrapped_fn(svs):
 
 def auc_curve(ytrue, yhat, savepath=None):
     plt.figure(figsize=(2,2), dpi=300)
-    yhat_c = yhat[:,1]
-    ytrue = np.squeeze(ytrue)
+    yhat_c = yhat[:,1]; print(yhat_c.shape)
+    ytrue = np.squeeze(ytrue); print(ytrue.shape)
     auc_c = roc_auc_score(y_true=ytrue, y_score=yhat_c)
     fpr, tpr, _ = roc_curve(y_true=ytrue, y_score=yhat_c)
 
@@ -114,12 +114,15 @@ def get_slidelist_from_uids(uids):
     slide_list_out = []
     labels = []
     for uid in uids:
-        slide_list = uid2slide[uid]
-        if len(slide_list) > 0:
-            slide_list_out.append(np.random.choice(slide_list))
-            labels.append(uid2label[uid])
-        else:
-            print('WARNING UID: {} found no associated slides'.format(uid))
+        try:
+            slide_list = uid2slide[uid]
+            if len(slide_list) > 0:
+                slide_list_out.append(np.random.choice(slide_list))
+                labels.append(uid2label[uid])
+            else:
+                print('WARNING UID: {} found no associated slides'.format(uid))
+        except:
+            print('WARNING UID: {} not found in slide list'.format(uid))
 
     print('Testing on slides:')
     for s, l in zip(slide_list_out, labels):
@@ -169,21 +172,43 @@ def main(args, sess):
     y_op = predict_model(z_pl)
     att_op = attention_model(z_pl)
 
-    fig = plt.figure(figsize=(3,3), dpi=300)
-
     ## Loop over found slides:
     yhats = []
+    ytrues = []
+    fig = plt.figure(figsize=(2,2), dpi=180)
     for src, lab in zip(slide_list, slide_labels):
         ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
-        svs = Slide(slide_path        = ramdisk_path, 
-                    background_speed  = 'accurate',
-                    preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
-                    process_mag       = args.mag,
-                    process_size      = args.input_dim,
-                    oversample_factor = 1.5)
-        # svs.initialize_output(name='prob', dim=args.n_classes, mode='tile')
-        svs.initialize_output(name='attention', dim=1, mode='tile')
-        # svs.initialize_output(name='rgb', dim=3, mode='full')
+
+        # Check for a background image, and if found, use it to speed things up.
+        try:
+            background_mode = 'accurate'
+            basename = os.path.basename(src).replace('.svs', '')
+            fgdst = os.path.join(args.odir, '{}_fg.png'.format(basename))
+            if os.path.exists(fgdst):
+                print('Found fg img at: {}'.format(fgdst))
+                fgimg = cv2.imread(fgdst,-1)
+                background_mode = 'image'
+                svs = Slide(slide_path        = ramdisk_path, 
+                            background_speed  = 'image',
+                            background_image  = fgimg,
+                            preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
+                            process_mag       = args.mag,
+                            process_size      = args.input_dim,
+                            oversample_factor = 1.5)
+            else:
+                print('No background found')
+                svs = Slide(slide_path        = ramdisk_path, 
+                            background_speed  = 'accurate',
+                            preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
+                            process_mag       = args.mag,
+                            process_size      = args.input_dim,
+                            oversample_factor = 1.5)
+            # svs.initialize_output(name='prob', dim=args.n_classes, mode='tile')
+            svs.initialize_output(name='attention', dim=1, mode='tile')
+            # svs.initialize_output(name='rgb', dim=3, mode='full')
+        except:
+            print('Error making slide')
+            continue
 
         n_tiles = len(svs.tile_list)
         prefetch = min(512, n_tiles)
@@ -214,18 +239,18 @@ def main(args, sess):
         print('zs:', zs.shape)
         print('indices:', indices.shape)
 
-        rnd = np.random.choice(indices, 10)
-        print(rnd)
 
         yhat = sess.run(y_op, feed_dict={z_pl: zs})
         print('yhat:', yhat)
 
+        rnd = np.random.choice(indices, 10)
         att = sess.run(att_op, feed_dict={z_pl: zs})
         att = np.squeeze(att)
         print('att:', att.shape)
         print(att[rnd])
 
         yhats.append(yhat)
+        ytrues.append(lab)
         print('Slide label: {} predicted: {}'.format(lab, yhat))
 
         svs.place_batch(att, indices, 'attention', mode='tile')
@@ -235,9 +260,12 @@ def main(args, sess):
               attention_img.max())
         attention_img = attention_img * (255. / attention_img.max())
 
-        basename = os.path.basename(src).replace('.svs', '')
         dst = os.path.join(args.odir, '{}.jpg'.format(basename))
         cv2.imwrite(dst, attention_img)
+
+        fgdst = os.path.join(args.odir, '{}_fg.png'.format(basename))
+        fgimg = (svs.ds_tile_map > 0).astype(np.uint8)
+        cv2.imwrite(fgdst, fgimg * 255)
 
         dst = os.path.join(args.odir, '{}.png'.format(basename))
         plt.clf()
@@ -251,11 +279,11 @@ def main(args, sess):
 
     dst = os.path.join(args.odir, '{}.png'.format(args.timestamp))
     yhats = np.concatenate(yhats, axis=0)
-    ytrue = np.array(slide_labels)
+    ytrue = np.array(ytrues)
     for i, yt in enumerate(ytrue):
         print(yt, yhats[i, :])
 
-    auc_curve(ytrue, yhat, savepath=dst)
+    auc_curve(ytrue, yhats, savepath=dst)
 
 
 if __name__ == '__main__':

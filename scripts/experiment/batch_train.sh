@@ -11,7 +11,7 @@ for i in `seq 1 5`; do
         --epochs 50 \
         --bag_size 100 \
         --mil attention \
-        --pretrained_model ../pretrained/pretrained_50k.h5
+        --pretrained_model ../pretraining/pretrained_50k.h5
 done
 
 # # Without attention (average)

@@ -97,10 +97,10 @@ class ClassificationDataset(object):
             img, mask = tf.split(image_mask, [3, 1], axis=-1)
 
             # Do color augmentations on image only
-            img = tf.image.random_brightness(img, max_delta=0.1)
-            img = tf.image.random_contrast(img, lower=0.4, upper=0.7)
-            img = tf.image.random_hue(img, max_delta=0.1)
-            img = tf.image.random_saturation(img, lower=0.5, upper=0.7)
+            # img = tf.image.random_brightness(img, max_delta=0.1)
+            # img = tf.image.random_contrast(img, lower=0.4, upper=0.7)
+            # img = tf.image.random_hue(img, max_delta=0.1)
+            # img = tf.image.random_saturation(img, lower=0.5, upper=0.7)
 
             # Get resizing args
             target_h = tf.cast(crop_size*downsample, tf.int32)

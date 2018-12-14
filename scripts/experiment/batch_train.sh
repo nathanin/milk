@@ -8,10 +8,10 @@ set -e
 for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch 1000 \
-        --epochs 100 \
+        --epochs 50 \
         --bag_size 100 \
         --mil attention \
-        --pretrained_model ../pretrained/pretrained_reference.h5
+        --pretrained_model ../pretraining/pretrained_reference.h5
 done
 
 # # Without attention (average)

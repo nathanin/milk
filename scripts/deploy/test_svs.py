@@ -1,20 +1,6 @@
 """
 Test classifier on svs's
 
-We need two files to translate between obfuscated filenames, and the 
-original svs files:
-
-1. case_dict_obfuscated.pkl is a pickled dictionary with the form:
-   {uid: label, ...}
-   We ust it to go from the uid's saved in the test list for a particular run to labels
-
-2. uid2slide.pkl is a pickled dictionary with the form:
-   {uid: [/path/to/1.svs, /path/to/2.svs,...], ...}
-   We use it to translate from the uid given in the test list to a set of slides
-    for that particular case. There may be more than one slide, so we'll just choose one.
-
-   Be aware that the slide lists in uid2slide need to point somewhere on the local filesystem.
-
 """
 from __future__ import print_function
 import tensorflow as tf
@@ -42,8 +28,6 @@ from milk.utilities import training_utils
 from milk.utilities import model_utils
 from milk import Milk, MilkEncode, MilkPredict, MilkAttention
 
-uid2label = pickle.load(open('../dataset/case_dict_obfuscated.pkl', 'rb'))
-uid2slide = pickle.load(open('../dataset/uid2slide.pkl', 'rb'))
 
 def get_wrapped_fn(svs):
     def wrapped_fn(idx):
@@ -53,24 +37,6 @@ def get_wrapped_fn(svs):
 
     return wrapped_fn
 
-def auc_curve(ytrue, yhat, savepath=None):
-    plt.figure(figsize=(2,2), dpi=300)
-    yhat_c = yhat[:,1]
-    ytrue = np.squeeze(ytrue)
-    auc_c = roc_auc_score(y_true=ytrue, y_score=yhat_c)
-    fpr, tpr, _ = roc_curve(y_true=ytrue, y_score=yhat_c)
-
-    plt.plot(fpr, tpr, 
-        label='M1 AUC={:3.3f}'.format(auc_c))
-        
-    plt.legend(loc='lower right', frameon=True)
-    plt.ylabel('Sensitivity')
-    plt.xlabel('1 - specificity')
-
-    if savepath is None:
-        plt.show()
-    else:
-        plt.savefig(savepath, bbox_inches='tight')
 
 def get_img_idx(svs, batch_size, prefetch):
     wrapped_fn = get_wrapped_fn(svs)
@@ -102,29 +68,6 @@ def vect_to_tile(x, target):
     dim = x.shape[-1]
     return np.tile(x, target*target).reshape(batch, target, target, dim)
 
-def read_test_list(test_file):
-    test_list = []
-    with open(test_file, 'r') as f:
-        for l in f:
-            test_list.append(l.replace('\n', ''))
-    
-    return test_list
-
-def get_slidelist_from_uids(uids):
-    slide_list_out = []
-    labels = []
-    for uid in uids:
-        slide_list = uid2slide[uid]
-        if len(slide_list) > 0:
-            slide_list_out.append(np.random.choice(slide_list))
-            labels.append(uid2label[uid])
-        else:
-            print('WARNING UID: {} found no associated slides'.format(uid))
-
-    print('Testing on slides:')
-    for s, l in zip(slide_list_out, labels):
-        print('{}\t\t{}'.format(s, l))
-    return slide_list_out, labels
 
 def main(args, sess):
     ## Search for slides
@@ -133,15 +76,13 @@ def main(args, sess):
     #     for l in f:
     #         slide_list.append(l.replace('\n', ''))
 
-    # Translate obfuscated file names to paths if necessary
-    test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
-    test_list = read_test_list(test_list)
-    test_unique_ids = [os.path.basename(x).replace('.npy', '') for x in test_list]
-    slide_list, slide_labels = get_slidelist_from_uids(test_unique_ids)
-
+    slide_list = sorted(glob.glob(os.path.join(args.slide_dir, '*.svs')))
     print('Found {} slides'.format(len(slide_list)))
 
-    snapshot = os.path.join(args.savedir, '{}.h5'.format(args.timestamp))
+    if args.shuffle:
+        np.random.shuffle(slide_list)
+
+    snapshot = os.path.join('save', '{}.h5'.format(args.timestamp))
     trained_model = load_model(snapshot)
     encoder_args = {
         'depth_of_model': 32,
@@ -169,18 +110,14 @@ def main(args, sess):
     y_op = predict_model(z_pl)
     att_op = attention_model(z_pl)
 
-    fig = plt.figure(figsize=(3,3), dpi=300)
-
     ## Loop over found slides:
-    yhats = []
-    for src, lab in zip(slide_list, slide_labels):
+    for src in slide_list[:5]:
         ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
-        svs = Slide(slide_path        = ramdisk_path, 
-                    background_speed  = 'accurate',
-                    preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
-                    process_mag       = args.mag,
-                    process_size      = args.input_dim,
-                    oversample_factor = 1.5)
+        svs = Slide(slide_path = ramdisk_path, 
+                    preprocess_fn = lambda x: (x/255.).astype(np.float32) ,
+                    process_mag=args.mag,
+                    process_size=args.input_dim,
+                    oversample_factor=1.5)
         # svs.initialize_output(name='prob', dim=args.n_classes, mode='tile')
         svs.initialize_output(name='attention', dim=1, mode='tile')
         # svs.initialize_output(name='rgb', dim=3, mode='full')
@@ -188,13 +125,14 @@ def main(args, sess):
         n_tiles = len(svs.tile_list)
         prefetch = min(512, n_tiles)
 
-        # Get tensors for image and index
+        # Get tensors for image an index
         img, idx = get_img_idx(svs, args.batch_size, prefetch)
         z_op = encode_model(img)
 
         batches = 0
         zs = []
         indices = []
+
         print('Processing {} tiles'.format(len(svs.tile_list)))
         while True:
             try:
@@ -203,8 +141,7 @@ def main(args, sess):
                 zs.append(z)
                 indices.append(idx_)
                 if batches % 25 == 0:
-                    print('batch {:04d}\t{}\t{}'.format(
-                           batches, z.shape, batches*args.batch_size))
+                    print('batch {:04d}\t{}'.format(batches, z.shape))
             except tf.errors.OutOfRangeError:
                 print('Done')
                 break
@@ -225,54 +162,34 @@ def main(args, sess):
         print('att:', att.shape)
         print(att[rnd])
 
-        yhats.append(yhat)
-        print('Slide label: {} predicted: {}'.format(lab, yhat))
+        plt.hist(att, bins=100); plt.show()
 
-        svs.place_batch(att, indices, 'attention', mode='tile')
-        attention_img = svs.output_imgs['attention']
-        print('attention image:', attention_img.shape, 
-              attention_img.dtype, attention_img.min(),
-              attention_img.max())
-        attention_img = attention_img * (255. / attention_img.max())
+        # svs.place_batch(att, indices, 'attention', mode='tile')
+        # attention_img = svs.output_imgs['attention']
+        # print('attention image:', attention_img.shape, 
+        #       attention_img.dtype, attention_img.min(),
+        #       attention_img.max())
 
-        basename = os.path.basename(src).replace('.svs', '')
-        dst = os.path.join(args.odir, '{}.jpg'.format(basename))
-        cv2.imwrite(dst, attention_img)
-
-        dst = os.path.join(args.odir, '{}.png'.format(basename))
-        plt.clf()
-        plt.hist(att, bins=100); 
-        plt.title('Attention distribution\n{} ({} tiles)'.format(basename, n_tiles))
-        plt.xlabel('Attention score')
-        plt.ylabel('Tile count')
-        plt.savefig(dst, bbox_inches='tight')
+        # basename = os.path.basename(src).replace('.svs', '')
+        # dst = os.path.join(args.save_dir, '{}.jpg'.format(basename))
+        # cv2.imwrite(dst, attention_img * 255.)
 
         os.remove(ramdisk_path)
 
-    dst = os.path.join(args.odir, '{}.png'.format(args.timestamp))
-    yhats = np.concatenate(yhats, axis=0)
-    ytrue = np.array(slide_labels)
-    for i, yt in enumerate(ytrue):
-        print(yt, yhats[i, :])
-
-    auc_curve(ytrue, yhat, savepath=dst)
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--slide_dir', default='../dataset/svs/', type=str)
+    parser.add_argument('--shuffle', default=False, action='store_true')
+    parser.add_argument('--mcdropout', default=False, action='store_true')
+    parser.add_argument('--gated_attention', default=True, action='store_false')
     parser.add_argument('--timestamp', default=None, type=str)
-    parser.add_argument('--testdir',   default='test_lists', type=str)
-    parser.add_argument('--savedir',   default='save', type=str)
     parser.add_argument('--n_classes', default=2, type=int)
     parser.add_argument('--input_dim', default=96, type=int)
-    parser.add_argument('--mag',       default=5, type=int)
-    parser.add_argument('--batch_size',default=64, type=int)
-    parser.add_argument('--odir',      default='attention_svs', type=str)
-    parser.add_argument('--ramdisk',   default='/dev/shm', type=str)
-
-    parser.add_argument('--mcdropout', default=False, action='store_true')
-    parser.add_argument('--mil',       default='attention', type=str)
-    parser.add_argument('--gated_attention', default=True, action='store_false')
+    parser.add_argument('--mag', default=5, type=int)
+    parser.add_argument('--batch_size', default=64, type=int)
+    parser.add_argument('--save_dir', default='processed_svs', type=str)
+    parser.add_argument('--ramdisk', default='/dev/shm', type=str)
+    parser.add_argument('--mil', default='attention', type=str)
     args = parser.parse_args()
 
     assert args.timestamp is not None

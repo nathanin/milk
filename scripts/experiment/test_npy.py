@@ -17,9 +17,9 @@ from sklearn.metrics import roc_auc_score, roc_curve, classification_report
 from milk.utilities import data_utils
 from milk.utilities import model_utils
 from milk.utilities import training_utils
-from milk import Milk, MilkEncode, MilkPredict
+from milk import Milk, MilkEncode, MilkPredict, MilkAttention
 
-with open('../dataset/cases_md5.pkl', 'rb') as f:
+with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
     case_dict = pickle.load(f)
 
 def case_label_fn(data_path):
@@ -66,6 +66,9 @@ def run_sample(case_x, encode_model, predict_model, mcdropout=False,
             yhats.append(yhat)
         
         yhats = np.stack(yhats, axis=0)
+        # print('yhats:')
+        # for yh in range(yhats.shape[0]):
+        #     print('\t', yhats[yh, :])
         yhat = np.mean(yhats, axis=0)
 
     else:
@@ -95,10 +98,13 @@ def main(args):
                  encoder_args=encoder_args)
     encode_shape = list(encode_model.output.shape)
     predict_model = MilkPredict(input_shape=[512], mode=args.mil)
+    attention_model = MilkAttention(input_shape=[512])
 
-    encode_model, predict_model = model_utils.make_inference_functions(encode_model,
-                                                                       predict_model,
-                                                                       trained_model)
+    models = model_utils.make_inference_functions(encode_model,
+                                                  predict_model,
+                                                  trained_model, 
+                                                  attention_model=attention_model)
+    encode_model, predict_model, attention_model = models
 
     test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
     test_list = read_test_list(test_list)

@@ -89,10 +89,10 @@ def get_img_idx(svs, batch_size, prefetch):
     img, idx = iterator.get_next()
     return img, idx
         
-
 def transfer_to_ramdisk(src, ramdisk):
     basename = os.path.basename(src)
     dst = os.path.join(ramdisk, basename)
+    print('Transferring {} --> {}'.format(src, dst))
     shutil.copyfile(src, dst)
 
     return dst
@@ -129,13 +129,65 @@ def get_slidelist_from_uids(uids):
         print('{}\t\t{}'.format(s, l))
     return slide_list_out, labels
 
-def main(args, sess):
-    ## Search for slides
-    # slide_list = []
-    # with open('test_lists/{}.txt'.format(args.timestamp), 'r') as f:
-    #     for l in f:
-    #         slide_list.append(l.replace('\n', ''))
+def process_slide(svs, encode_model, y_op, att_op, z_pl, args):
+    n_tiles = len(svs.tile_list)
+    prefetch = min(512, n_tiles)
 
+    # Get tensors for image and index -- spin up a new op 
+    # that consumes from the iterator
+    img, idx = get_img_idx(svs, args.batch_size, prefetch)
+    z_op = encode_model(img)
+
+    batches = 0
+    zs = []
+    indices = []
+    print('Processing {} tiles'.format(n_tiles))
+    while True:
+        try:
+            batches += 1
+            z, idx_ = sess.run([z_op, idx])
+            zs.append(z)
+            indices.append(idx_)
+            if batches % 25 == 0:
+                print('batch {:04d}\t{}\t{}'.format(
+                        batches, z.shape, batches*args.batch_size))
+        except tf.errors.OutOfRangeError:
+            print('Done')
+            break
+
+    zs = np.concatenate(zs, axis=0)
+    indices = np.concatenate(indices)
+    print('zs:', zs.shape)
+    print('indices:', indices.shape)
+
+    yhat = sess.run(y_op, feed_dict={z_pl: zs})
+    print('yhat:', yhat)
+
+    att = sess.run(att_op, feed_dict={z_pl: zs})
+    att = np.squeeze(att)
+    print('att:', att.shape)
+
+    return yhat, att, indices
+
+def process_slide_mcdropout(svs, encode_model, y_op, att_op, z_pl, args):
+    pass
+    yhats = []
+    atts = []
+    for t in range(args.mcdropout_t):
+        yhat, att, indices = process_slide(svs, encode_model, y_op, att_op, z_pl, args)
+        yhats.append(yhat)
+        atts.append(att)
+
+    yhats = np.concatenate(yhats, axis=0)
+    atts  = np.concatenate(atts, axis=0)
+    yhat_mean = np.mean(yhats, axis=0, keepdims=True)
+    att_mean = np.mean(atts, axis=0, keepdims=True)
+    yhat_std = np.std(yhats, axis=0, keepdims=True)
+    att_std  = np.std(atts, axis=0, keepdims=True)
+
+    return yhat_mean, att_mean, yhat_std, att_std, indices
+
+def main(args, sess):
     # Translate obfuscated file names to paths if necessary
     test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
     test_list = read_test_list(test_list)
@@ -172,86 +224,48 @@ def main(args, sess):
     y_op = predict_model(z_pl)
     att_op = attention_model(z_pl)
 
+    fig = plt.figure(figsize=(3,3), dpi=180)
+
     ## Loop over found slides:
     yhats = []
-    ytrues = []
-    fig = plt.figure(figsize=(2,2), dpi=180)
-    for src, lab in zip(slide_list, slide_labels):
+    for i, (src, lab) in enumerate(zip(slide_list, slide_labels)):
+        print('\nSlide {}'.format(i))
         ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
+        basename = os.path.basename(src).replace('.svs', '')
+        fgpth = os.path.join(args.odir, '{}_fg.png'.format(basename))
+        if os.path.exists(fgpth):
+            print('Using fg image at : {}'.format(fgpth))
+            fgimg = cv2.imread(fgpth, 0)
+            svs = Slide(slide_path        = ramdisk_path, 
+                        background_speed  = 'image',
+                        background_image  = fgimg,
+                        preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
+                        process_mag       = args.mag,
+                        process_size      = args.input_dim,
+                        oversample_factor = 1.5)
+        else:
+            print('No fg image found')
+            svs = Slide(slide_path        = ramdisk_path, 
+                        background_speed  = 'accurate',
+                        preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
+                        process_mag       = args.mag,
+                        process_size      = args.input_dim,
+                        oversample_factor = 1.5)
+            fgimg = (svs.ds_tile_map > 0).astype(np.uint8)
+            cv2.imwrite(fgpth, fgimg * 255)
 
-        # Check for a background image, and if found, use it to speed things up.
-        try:
-            background_mode = 'accurate'
-            basename = os.path.basename(src).replace('.svs', '')
-            fgdst = os.path.join(args.odir, '{}_fg.png'.format(basename))
-            if os.path.exists(fgdst):
-                print('Found fg img at: {}'.format(fgdst))
-                fgimg = cv2.imread(fgdst,-1)
-                background_mode = 'image'
-                svs = Slide(slide_path        = ramdisk_path, 
-                            background_speed  = 'image',
-                            background_image  = fgimg,
-                            preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
-                            process_mag       = args.mag,
-                            process_size      = args.input_dim,
-                            oversample_factor = 1.5)
-            else:
-                print('No background found')
-                svs = Slide(slide_path        = ramdisk_path, 
-                            background_speed  = 'accurate',
-                            preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
-                            process_mag       = args.mag,
-                            process_size      = args.input_dim,
-                            oversample_factor = 1.5)
-            # svs.initialize_output(name='prob', dim=args.n_classes, mode='tile')
-            svs.initialize_output(name='attention', dim=1, mode='tile')
-            # svs.initialize_output(name='rgb', dim=3, mode='full')
-        except:
-            print('Error making slide')
-            continue
-
+        svs.initialize_output(name='attention', dim=1, mode='tile')
         n_tiles = len(svs.tile_list)
-        prefetch = min(512, n_tiles)
 
-        # Get tensors for image and index
-        img, idx = get_img_idx(svs, args.batch_size, prefetch)
-        z_op = encode_model(img)
-
-        batches = 0
-        zs = []
-        indices = []
-        print('Processing {} tiles'.format(len(svs.tile_list)))
-        while True:
-            try:
-                batches += 1
-                z, idx_ = sess.run([z_op, idx])
-                zs.append(z)
-                indices.append(idx_)
-                if batches % 25 == 0:
-                    print('batch {:04d}\t{}\t{}'.format(
-                           batches, z.shape, batches*args.batch_size))
-            except tf.errors.OutOfRangeError:
-                print('Done')
-                break
-
-        zs = np.concatenate(zs, axis=0)
-        indices = np.concatenate(indices)
-        print('zs:', zs.shape)
-        print('indices:', indices.shape)
-
-
-        yhat = sess.run(y_op, feed_dict={z_pl: zs})
-        print('yhat:', yhat)
-
-        rnd = np.random.choice(indices, 10)
-        att = sess.run(att_op, feed_dict={z_pl: zs})
-        att = np.squeeze(att)
-        print('att:', att.shape)
-        print(att[rnd])
+        if not args.mcdropout:
+            yhat, att, indices = process_slide(svs, 
+                encode_model, y_op, att_op, z_pl, args)
+        else:
+            yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, 
+                encode_model, y_op, att_op, z_pl, args)
 
         yhats.append(yhat)
-        ytrues.append(lab)
-        print('Slide label: {} predicted: {}'.format(lab, yhat))
+        print('\t\tSlide label: {} predicted: {}'.format(lab, yhat))
 
         svs.place_batch(att, indices, 'attention', mode='tile')
         attention_img = svs.output_imgs['attention']
@@ -260,15 +274,11 @@ def main(args, sess):
               attention_img.max())
         attention_img = attention_img * (255. / attention_img.max())
 
-        dst = os.path.join(args.odir, '{}.jpg'.format(basename))
+        dst = os.path.join(args.odir, '{}_att.png'.format(basename))
         cv2.imwrite(dst, attention_img)
 
-        fgdst = os.path.join(args.odir, '{}_fg.png'.format(basename))
-        fgimg = (svs.ds_tile_map > 0).astype(np.uint8)
-        cv2.imwrite(fgdst, fgimg * 255)
-
-        dst = os.path.join(args.odir, '{}.png'.format(basename))
-        plt.clf()
+        dst = os.path.join(args.odir, '{}_hist.png'.format(basename))
+        fig.clf()
         plt.hist(att, bins=100); 
         plt.title('Attention distribution\n{} ({} tiles)'.format(basename, n_tiles))
         plt.xlabel('Attention score')
@@ -277,14 +287,13 @@ def main(args, sess):
 
         os.remove(ramdisk_path)
 
-    dst = os.path.join(args.odir, '{}.png'.format(args.timestamp))
+    dst = os.path.join(args.odir, 'auc_{}.png'.format(args.timestamp))
     yhats = np.concatenate(yhats, axis=0)
     ytrue = np.array(ytrues)
     for i, yt in enumerate(ytrue):
         print(yt, yhats[i, :])
 
     auc_curve(ytrue, yhats, savepath=dst)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -295,10 +304,11 @@ if __name__ == '__main__':
     parser.add_argument('--input_dim', default=96, type=int)
     parser.add_argument('--mag',       default=5, type=int)
     parser.add_argument('--batch_size',default=64, type=int)
-    parser.add_argument('--odir',      default='attention_svs', type=str)
+    parser.add_argument('--odir',      default='processed_slides', type=str)
     parser.add_argument('--ramdisk',   default='/dev/shm', type=str)
 
     parser.add_argument('--mcdropout', default=False, action='store_true')
+    parser.add_argument('--mcdropout_t', default=10, type=int)
     parser.add_argument('--mil',       default='attention', type=str)
     parser.add_argument('--gated_attention', default=True, action='store_false')
     args = parser.parse_args()

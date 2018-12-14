@@ -9,10 +9,10 @@ import cv2
 import sys
 import glob
 import time
+import pickle
 import shutil
 import argparse
 
-sys.path.insert(0, '.')
 from svs_reader import Slide
 
 config = tf.ConfigProto()
@@ -128,17 +128,24 @@ def main(sess, ramdisk_path, image_op, predict_op):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path')
-    parser.add_argument('--slide_dir')
+    parser.add_argument('--slide')
     parser.add_argument('--out')
 
     args = parser.parse_args()
     model_path = args.model_path
-    slide_dir = args.slide_dir
     out_dir = args.out
     print(args)
 
-    print(slide_dir)
-    slide_list = glob.glob(os.path.join(slide_dir, '*.svs'))
+    ## Ignore slide_dir, use another way to get slides
+    # print(slide_dir)
+    # slide_list = glob.glob(os.path.join(slide_dir, '*.svs'))
+    with open('../dataset/uid2slide.pkl', 'rb') as f:
+        df = pickle.load(f)
+    slide_list = []
+    for k, v in df.items():
+        for v_ in v:
+            if os.path.exists(v_):
+                slide_list.append(v_)
     print('Slide list: {}'.format(len(slide_list)))
 
     if not os.path.exists(out_dir):
@@ -160,6 +167,11 @@ if __name__ == '__main__':
         fpss = {}
         for slide_num, slide_path in enumerate(slide_list):
             print('\n\n[\tSlide {}/{}\t]\n'.format(slide_num, len(slide_list)))
+            outname_prob = os.path.basename(slide_path).replace('.svs', '_prob.npy')
+            outpath =  os.path.join(out_dir, outname_prob)
+            if os.path.exists(outpath):
+                print('{} exists'.format(outpath))
+                continue
             ramdisk_path = transfer_to_ramdisk(slide_path)
             try:
                 time_start = time.time()
@@ -169,14 +181,17 @@ if __name__ == '__main__':
                 print('Writing {}'.format(outpath))
                 np.save(outpath, prob_img)
 
+                outname_fg = os.path.basename(ramdisk_path).replace('.svs', '_fg.png')
+                outname_fg =  os.path.join(out_dir, outname_fg)
+                fgimg = (np.argmax(prob_img, axis=-1) == 1).astype(np.uint8) * 255
+                print('Writing {}'.format(outname_fg))
+                cv2.imwrite(outname_fg, fgimg)
+
                 times[ramdisk_path] = (time.time() - time_start) / 60.
                 fpss[ramdisk_path] = fps
-
             except Exception as e:
                 print('Caught exception')
-                print(e.__doc__)
-                print(e.message)
-
+                print(e)
             finally:
                 os.remove(ramdisk_path)
                 print('Removed {}'.format(ramdisk_path))

@@ -34,18 +34,19 @@ def initialize_output_dirs(output_base):
 
 N_CLASSES = 2
 CLASSES = range(N_CLASSES)
+
 def main(args):
     imglist = sorted(glob.glob(os.path.join(args.source_dir, '*.jpg')))
     
     totalimgs = 0
     for imgpath in imglist:
         img = cv2.imread(imgpath, -1)
-        img = cv2.resize(img, dsize=(0,0), fx=0.125, fy=0.125)
+        img = cv2.resize(img, dsize=(0,0), fx=0.125, fy=0.125) # downsample 40x --> 5x
         subimgs = split_subimgs(img)
 
         print(imgpath, len(subimgs))
         for subimg in subimgs:
-            imgname = os.path.join(args.output_dir, '{:06d}_435.jpg'.format(totalimgs))
+            imgname = os.path.join(args.output_dir, '{:06d}.jpg'.format(totalimgs))
             cv2.imwrite(imgname, subimg)
             totalimgs += 1
             # print(imgname)

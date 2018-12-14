@@ -10,7 +10,6 @@ import pickle
 import glob
 import os
 
-
 from CASE_LABEL_DICT import CASE_LABEL_DICT
 
 src_list = glob.glob('./tiles/*.npy')

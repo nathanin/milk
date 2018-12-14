@@ -73,7 +73,7 @@ def classifier_loss_fn(model, dataset):
     return loss
 
 
-def make_inference_functions(encode_model, predict_model, attention_model, pretrained_model):
+def make_inference_functions(encode_model, predict_model, pretrained_model, attention_model=None):
     pretrained_layers = {l.name: l for l in pretrained_model.layers}
 
     for lname, l in pretrained_layers.items():
@@ -92,6 +92,7 @@ def make_inference_functions(encode_model, predict_model, attention_model, pretr
             except:
                 pass
 
+        if (attention_model is not None) and ('encoder' not in lname):
             try:
                 attention_model.get_layer(lname).set_weights(w)
                 print('Set attention weight for layer {}'.format(lname))

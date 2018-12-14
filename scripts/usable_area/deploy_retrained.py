@@ -13,7 +13,6 @@ import pickle
 import shutil
 import argparse
 
-sys.path.insert(0, '.')
 from svs_reader import Slide
 
 config = tf.ConfigProto()
@@ -168,6 +167,11 @@ if __name__ == '__main__':
         fpss = {}
         for slide_num, slide_path in enumerate(slide_list):
             print('\n\n[\tSlide {}/{}\t]\n'.format(slide_num, len(slide_list)))
+            outname_prob = os.path.basename(slide_path).replace('.svs', '_prob.npy')
+            outpath =  os.path.join(out_dir, outname_prob)
+            if os.path.exists(outpath):
+                print('{} exists'.format(outpath))
+                continue
             ramdisk_path = transfer_to_ramdisk(slide_path)
             try:
                 time_start = time.time()
@@ -187,8 +191,7 @@ if __name__ == '__main__':
                 fpss[ramdisk_path] = fps
             except Exception as e:
                 print('Caught exception')
-                print(e.__doc__)
-                print(e.message)
+                print(e)
             finally:
                 os.remove(ramdisk_path)
                 print('Removed {}'.format(ramdisk_path))

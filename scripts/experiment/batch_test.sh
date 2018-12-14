@@ -17,6 +17,6 @@ for td in $( ls save ); do
     echo $timestamp
     python ./test_svs.py \
         --timestamp $timestamp \
-        --odir attention_svs \
+        --odir processed_slides \
         --testdir test_lists
 done

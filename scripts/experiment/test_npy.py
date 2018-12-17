@@ -19,7 +19,8 @@ from milk.utilities import model_utils
 from milk.utilities import training_utils
 from milk import Milk, MilkEncode, MilkPredict, MilkAttention
 
-with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
+# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
+with open('../dataset/cases_md5.pkl', 'rb') as f:
     case_dict = pickle.load(f)
 
 def case_label_fn(data_path):
@@ -138,8 +139,8 @@ def main(args):
     accuracy = (ytrue_max == yhat_max).mean()
     print('Accuracy: {:3.3f}'.format(accuracy))
 
-    if args.savepath is not None:
-        savepath = os.path.join(args.savepath, '{}.png'.format(args.timestamp))
+    if args.odir is not None:
+        savepath = os.path.join(args.odir, '{}.png'.format(args.timestamp))
     else:
         savepath = None
     auc_curve(ytrue, yhat, savepath=savepath)
@@ -152,7 +153,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_repeat', default=1, type=int)
     parser.add_argument('--mcdropout', default=False, action='store_true')
     parser.add_argument('--testdir', default='test_lists', type=str)
-    parser.add_argument('--savepath', default=None, type=str)
+    parser.add_argument('--odir', default=None, type=str)
 
     parser.add_argument('--x_size', default=128, type=int)
     parser.add_argument('--y_size', default=128, type=int)

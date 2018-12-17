@@ -76,7 +76,7 @@ def main(args):
             args.val_list, args.test_list)
     else:
         train_list, val_list, test_list = data_utils.list_data(args.data_patt, 
-            val_pct=0.1, test_pct=0.3)
+            val_pct=args.val_pct, test_pct=args.test_pct)
     
     if args.verbose:
         print("train_list:")
@@ -209,7 +209,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs',           default=50, type=int)
     parser.add_argument('--steps_per_epoch',  default=500, type=int)
-    parser.add_argument('--learning_rate',    default=1e-5, type=float)
+    parser.add_argument('--learning_rate',    default=5e-6, type=float)
     parser.add_argument('--x_size',           default=128, type=int)
     parser.add_argument('--y_size',           default=128, type=int)
     parser.add_argument('--crop_size',        default=96, type=int)
@@ -221,7 +221,7 @@ if __name__ == '__main__':
     parser.add_argument('--freeze_encoder',   default=False, action='store_true')
 
     parser.add_argument('--data_patt',        default='../dataset/tiles_reduced/*npy', type=str)
-    parser.add_argument('--test_pct',         default=0.1, type=float)
+    parser.add_argument('--test_pct',         default=0.2, type=float)
     parser.add_argument('--val_pct',          default=0.2, type=float)
     parser.add_argument('--pretrained_model', default='../pretraining/pretrained.h5', type=str)
     parser.add_argument('--dont_use_pretrained',   default=False, action='store_true')

@@ -14,9 +14,6 @@ original svs files:
     for that particular case. There may be more than one slide, so we'll just choose one.
 
    Be aware that the slide lists in uid2slide need to point somewhere on the local filesystem.
-
-Forget about attention maps for now !
-Deal with that in a separate script !
 """
 from __future__ import print_function
 import tensorflow as tf
@@ -34,7 +31,6 @@ import re
 
 import seaborn as sns
 from matplotlib import pyplot as plt
-from sklearn.metrics import roc_auc_score, roc_curve, classification_report
 
 from svs_reader import Slide
 
@@ -55,25 +51,6 @@ def get_wrapped_fn(svs):
         return img, idx
 
     return wrapped_fn
-
-def auc_curve(ytrue, yhat, savepath=None):
-    plt.figure(figsize=(2,2), dpi=300)
-    yhat_c = yhat[:,1]; print(yhat_c.shape)
-    ytrue = np.squeeze(ytrue); print(ytrue.shape)
-    auc_c = roc_auc_score(y_true=ytrue, y_score=yhat_c)
-    fpr, tpr, _ = roc_curve(y_true=ytrue, y_score=yhat_c)
-
-    plt.plot(fpr, tpr, 
-        label='M1 AUC={:3.3f}'.format(auc_c))
-        
-    plt.legend(loc='lower right', frameon=True)
-    plt.ylabel('Sensitivity')
-    plt.xlabel('1 - specificity')
-
-    if savepath is None:
-        plt.show()
-    else:
-        plt.savefig(savepath, bbox_inches='tight')
 
 def get_img_idx(svs, batch_size, prefetch, generate_subset=False, sample=1.0):
     wrapped_fn = get_wrapped_fn(svs)
@@ -138,7 +115,7 @@ def get_slidelist_from_uids(uids):
     return slide_list_out, labels
 
 
-def process_slide(svs, sess, encode_model, y_op, z_pl, args, return_z=False):
+def process_slide(svs, encode_model, y_op, att_op, z_pl, args, return_z=False):
     n_tiles = len(svs.tile_list)
     prefetch = min(512, n_tiles)
 
@@ -173,17 +150,21 @@ def process_slide(svs, sess, encode_model, y_op, z_pl, args, return_z=False):
     yhat = sess.run(y_op, feed_dict={z_pl: zs})
     print('yhat:', yhat)
 
-    return yhat, indices
+    att = sess.run(att_op, feed_dict={z_pl: zs})
+    att = np.squeeze(att)
+    print('att:', att.shape)
+
+    return yhat, att, indices
 
 
 """
 Track attention on an included/not-included basis.
 'sample' argument controls the % of the whole slide to use in each mcdropout iteration
 """
-def process_slide_mcdropout(svs, sess, encode_model, y_op, z_pl, args):
+def process_slide_mcdropout(svs, encode_model, y_op, att_op, z_pl, args):
     yhats = []
     atts = np.zeros((len(svs.tile_list), args.mcdropout_t))-1
-    zs, indices_all = process_slide(svs, sess, encode_model, y_op, 
+    zs, indices_all = process_slide(svs, encode_model, y_op, att_op, 
                                 z_pl, args, return_z=True)
 
     n_tiles = len(svs.tile_list)
@@ -199,6 +180,15 @@ def process_slide_mcdropout(svs, sess, encode_model, y_op, z_pl, args):
         yhat = sess.run(y_op, feed_dict={z_pl: zs_})
         print('yhat:', yhat)
 
+        att = sess.run(att_op, feed_dict={z_pl: zs_})
+        att = np.squeeze(att)
+        print('att:', att.shape)
+
+        ## Use returned indices to map attentions back to the tiles
+        att_map = np.zeros(len(svs.tile_list))
+        att_map[indices] = att
+        atts[:,t] = att_map
+
         yhats.append(yhat)
 
     yhats = np.concatenate(yhats, axis=0)
@@ -206,14 +196,14 @@ def process_slide_mcdropout(svs, sess, encode_model, y_op, z_pl, args):
     yhat_std = np.std(yhats, axis=0, keepdims=True)
     print('\tyhat_std:', yhat_std)
 
-    return yhat_mean, yhat_std, indices_all
+    atts[atts==-1] = np.nan
+    att_mean = np.nanmean(atts, axis=1, keepdims=True)
+    att_std  = np.nanstd(atts, axis=1, keepdims=True)
+
+    return yhat_mean, att_mean, yhat_std, att_std, indices_all
+
 
 def main(args, sess):
-    dst = os.path.join(args.odir, 'auc_{}.png'.format(args.timestamp))
-    if os.path.exists(dst):
-        print('{} exists. Exiting.'.format(dst))
-        return
-
     # Translate obfuscated file names to paths if necessary
     test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
     test_list = read_test_list(test_list)
@@ -238,15 +228,17 @@ def main(args, sess):
                  encoder_args=encoder_args)
     encode_shape = list(encode_model.output.shape)
     predict_model = MilkPredict(input_shape=[512], mode=args.mil, use_gate=args.gated_attention)
-    # attention_model = MilkAttention(input_shape=[512], use_gate=args.gated_attention)
+    attention_model = MilkAttention(input_shape=[512], use_gate=args.gated_attention)
 
     models = model_utils.make_inference_functions(encode_model,
                                                   predict_model,
-                                                  trained_model,)
-    encode_model, predict_model = models
+                                                  trained_model,
+                                                  attention_model=attention_model)
+    encode_model, predict_model, attention_model = models
 
     z_pl = tf.placeholder(shape=(None, 512), dtype=tf.float32)
     y_op = predict_model(z_pl)
+    att_op = attention_model(z_pl)
 
     fig = plt.figure(figsize=(2,2), dpi=180)
 
@@ -278,30 +270,46 @@ def main(args, sess):
             print('No fg image found ({})'.format(fgpth))
             continue
         
+        svs.initialize_output(name='attention', dim=1, mode='tile')
         n_tiles = len(svs.tile_list)
 
         if not args.mcdropout:
-            yhat, indices = process_slide(svs, sess, 
-                encode_model, y_op, z_pl, args)
+            yhat, att, indices = process_slide(svs, 
+                encode_model, y_op, att_op, z_pl, args)
         else:
-            yhat, yhat_sd, indices = process_slide_mcdropout(svs, sess,
-                encode_model, y_op, z_pl, args)
+            yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, 
+                encode_model, y_op, att_op, z_pl, args)
+            # svs.initialize_output(name='attention_std', dim=1, mode='tile')
+            # svs.place_batch(att_sd, indices, 'attention_std', mode='tile')
+            # attention_sd_img = svs.output_imgs['attention_std']
+            # attention_sd_img = attention_sd_img * (255. / attention_sd_img.max())
+            # dst = os.path.join(args.odir, '{}_{}_{}_attsd.png'.format(basename, args.timestamp, args.suffix))
+            # cv2.imwrite(dst, attention_sd_img)
 
         yhats.append(yhat)
         ytrues.append(lab)
         print('\tSlide label: {} predicted: {}'.format(lab, yhat))
+
+        svs.place_batch(att, indices, 'attention', mode='tile')
+        attention_img = svs.output_imgs['attention']
+        print('attention image:', attention_img.shape, 
+              attention_img.dtype, attention_img.min(),
+              attention_img.max())
+        attention_img = attention_img * (255. / attention_img.max())
+
+        dst = os.path.join(args.odir, args.timestamp, '{}_att.png'.format(basename))
+        cv2.imwrite(dst, attention_img)
+
+        dst = os.path.join(args.odir, args.timestamp, '{}_hist.png'.format(basename))
+        fig.clf()
+        plt.hist(att, bins=100); 
+        plt.title('Attention distribution\n{} ({} tiles)'.format(basename, n_tiles))
+        plt.xlabel('Attention score')
+        plt.ylabel('Tile count')
+        plt.savefig(dst, bbox_inches='tight')
+
         os.remove(ramdisk_path)
-        svs.close()
-        del svs
 
-    yhats = np.concatenate(yhats, axis=0)
-    ytrue = np.array(ytrues)
-    for i, yt in enumerate(ytrue):
-        print(yt, yhats[i, :])
-
-    auc_curve(ytrue, yhats, savepath=dst)
-    del encode_model
-    del predict_model
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -313,7 +321,7 @@ if __name__ == '__main__':
     parser.add_argument('--mag',       default=5, type=int)
     parser.add_argument('--batch_size',default=64, type=int)
     parser.add_argument('--ramdisk',   default='/dev/shm', type=str)
-    parser.add_argument('--odir',      default='result', type=str)
+    parser.add_argument('--odir',      default='attention_images', type=str)
     parser.add_argument('--fgdir',     default='../usable_area/inference', type=str)
 
     parser.add_argument('--mcdropout', default=False, action='store_true')

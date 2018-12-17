@@ -30,6 +30,7 @@ def prob_output(svs):
 def transfer_to_ramdisk(src, ramdisk = '/dev/shm'):
     base = os.path.basename(src)
     dst = os.path.join(ramdisk, base)
+    print('Transferring: {} --> {}'.format(src, dst))
     shutil.copyfile(src, dst)
     return dst
 
@@ -56,29 +57,38 @@ def get_input_output_ops(sess, model_path):
     print('Output:', predict_op.get_shape())
     return image_op, predict_op
 
+## These must not introduce a shift
 PROCESS_MAG = 5
 BATCH_SIZE = 4
 OVERSAMPLE = 1.5
+INPUT_SIZE = 96
 PRINT_ITER = 500
 def main(sess, ramdisk_path, image_op, predict_op):
     input_size = image_op.get_shape().as_list()
     print(input_size)
     x_size, y_size = input_size[1:3]
 
+    PAD = int((x_size - INPUT_SIZE)/2)
+
     print('Working {}'.format(ramdisk_path))
     svs = Slide(slide_path    = ramdisk_path,
                 preprocess_fn = preprocess_fn,
+                background_speed = 'accurate',
                 process_mag   = PROCESS_MAG,
-                process_size  = x_size,
-                oversample    = OVERSAMPLE,
-                verbose = True
-                )
+                process_size  = INPUT_SIZE,
+                oversample_factor = OVERSAMPLE,
+                verbose       = True)
+    print('calculated foregroud: ', svs.foreground.shape)
+    print('calculated ds_tile_map: ', svs.ds_tile_map.shape)
+
     svs.initialize_output('prob', dim=2, mode='tile')
     PREFETCH = min(len(svs.tile_list), 1024)
 
     def wrapped_fn(idx):
         coords = svs.tile_list[idx]
-        img = svs._read_tile(coords)
+        img = svs._read_tile(coords) # (h, w, 3)
+        img = np.pad(img, pad_width=((PAD, PAD), (PAD, PAD), (0,0)), 
+                     mode='constant', constant_values=0.)
         return img, idx
 
     def read_region_at_index(idx):
@@ -112,6 +122,9 @@ def main(sess, ramdisk_path, image_op, predict_op):
 
         except tf.errors.OutOfRangeError:
             print('Finished')
+            break
+        except Exception as e:
+            print(e)
             break
 
     dt = time.time()-tstart
@@ -152,14 +165,6 @@ if __name__ == '__main__':
         print('Making {}'.format(out_dir))
         os.makedirs(out_dir)
 
-    # processed_list = glob.glob(os.path.join(out_dir, '*_prob.npy'))
-    # print('Found {} processed slides.'.format(len(processed_list)))
-    # processed_base = [os.path.basename(x).replace('_prob.npy', '') for x in processed_list]
-    # slide_base = [os.path.basename(x).replace('.svs', '') for x in slide_list]
-    # slide_base_list = zip(slide_base, slide_list)
-    # slide_list = [lst for bas, lst in slide_base_list if bas not in processed_base]
-    # print('Trimmed processed slides. Working on {}'.format(len(slide_list)))
-
     print('out_dir: ', out_dir)
     with tf.Session(config=config) as sess:
         image_op , predict_op = get_input_output_ops(sess, model_path)
@@ -177,13 +182,14 @@ if __name__ == '__main__':
                 time_start = time.time()
                 prob_img, fps = main(sess, ramdisk_path, image_op, predict_op)
                 outname_prob = os.path.basename(ramdisk_path).replace('.svs', '_prob.npy')
-                outpath =  os.path.join(out_dir, outname_prob)
+                print('prob img', prob_img.shape)
                 print('Writing {}'.format(outpath))
                 np.save(outpath, prob_img)
 
                 outname_fg = os.path.basename(ramdisk_path).replace('.svs', '_fg.png')
                 outname_fg =  os.path.join(out_dir, outname_fg)
                 fgimg = (np.argmax(prob_img, axis=-1) == 1).astype(np.uint8) * 255
+                print('fg img', fgimg.shape)
                 print('Writing {}'.format(outname_fg))
                 cv2.imwrite(outname_fg, fgimg)
 

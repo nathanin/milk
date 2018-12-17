@@ -6,7 +6,7 @@ import sys
 import glob
 import argparse
 
-IMGSIZE = 128
+IMGSIZE = 96
 N_SUBIMGS = 2
 def split_subimgs(img):
     x, y = img.shape[:2]
@@ -36,7 +36,9 @@ N_CLASSES = 2
 CLASSES = range(N_CLASSES)
 
 def main(args):
-    imglist = sorted(glob.glob(os.path.join(args.source_dir, '*.jpg')))
+    jpglist = sorted(glob.glob(os.path.join(args.source_dir, '*.jpg')))
+    pnglist = sorted(glob.glob(os.path.join(args.source_dir, '*.png')))
+    imglist = jpglist + pnglist
     
     totalimgs = 0
     for imgpath in imglist:

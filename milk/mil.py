@@ -157,7 +157,7 @@ def MilkEncode(input_shape, encoder=None, dropout_rate=0.3,
 
 def MilkPredict(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3, 
                 mode="instance", use_gate=True):
-    
+    print('Setting up Predict model in {} mode'.format(mode))
     features = Input(shape=input_shape, name='feat_in')
     if mode == "instance":
         logits = instance_classifier(features, n_classes)

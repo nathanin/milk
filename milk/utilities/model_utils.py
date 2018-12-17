@@ -99,4 +99,7 @@ def make_inference_functions(encode_model, predict_model, pretrained_model, atte
             except:
                 pass
 
-    return encode_model, predict_model, attention_model
+    if attention_model is not None:
+        return encode_model, predict_model, attention_model
+    else:
+        return encode_model, predict_model

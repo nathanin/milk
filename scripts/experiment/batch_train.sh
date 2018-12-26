@@ -16,7 +16,7 @@ for i in `seq 1 3`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch 500 \
         --epochs 50 \
-        --bag_size 50 \
+        --bag_size 150 \
         --mil attention \
         --learning_rate 0.00001 \
         --pretrained_model ../pretraining/pretrained_50k.h5
@@ -27,7 +27,7 @@ for i in `seq 1 3`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch 500 \
         --epochs 50 \
-        --bag_size 50 \
+        --bag_size 150 \
         --mil average \
         --learning_rate 0.00001 \
         --pretrained_model ../pretraining/pretrained_50k.h5
@@ -38,7 +38,7 @@ for i in `seq 1 3`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch 500 \
         --epochs 50 \
-        --bag_size 50 \
+        --bag_size 150 \
         --mil instance \
         --learning_rate 0.00001 \
         --pretrained_model ../pretraining/pretrained_50k.h5
@@ -49,7 +49,7 @@ for i in `seq 1 3`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch 500 \
         --epochs 100 \
-        --bag_size 50 \
+        --bag_size 150 \
         --mil attention \
         --learning_rate 0.00001 \
         --dont_use_pretrained
@@ -60,7 +60,7 @@ for i in `seq 1 3`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch 500 \
         --epochs 100 \
-        --bag_size 50 \
+        --bag_size 150 \
         --mil attention \
         --learning_rate 0.00001 \
         --freeze_encoder \

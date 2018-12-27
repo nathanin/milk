@@ -20,8 +20,8 @@ import os
 from milk.utilities import data_utils
 from milk import Milk
 
-# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
-with open('../dataset/cases_md5.pkl', 'rb') as f:
+with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
+#with open('../dataset/cases_md5.pkl', 'rb') as f:
     case_dict = pickle.load(f)
 
 def filter_list_by_label(lst):
@@ -189,7 +189,7 @@ def main(args):
     try:
         model.fit_generator(generator=train_generator,
             validation_data=val_generator,
-            validation_steps=50,
+            validation_steps=100,
             steps_per_epoch=args.steps_per_epoch, 
             epochs=args.epochs)
     except KeyboardInterrupt:

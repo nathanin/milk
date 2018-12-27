@@ -7,10 +7,10 @@ steps=500
 epochs=50
 bag=100
 lr=0.00001
-pretrained=../pretraining/pretrained_50k.h5
+pretrained=../pretraining/pretrained_reference.h5
 
 # With attention
-for i in `seq 1 3`; do
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch $steps \
         --epochs $epochs \
@@ -22,7 +22,7 @@ for i in `seq 1 3`; do
 done
 
 # Without attention (average)
-for i in `seq 1 3`; do
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch $steps \
         --epochs $epochs \
@@ -34,7 +34,7 @@ for i in `seq 1 3`; do
 done
 
 # Instance classifier --> average predictions
-for i in `seq 1 3`; do
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch $steps \
         --epochs $epochs \
@@ -46,10 +46,10 @@ for i in `seq 1 3`; do
 done
 
 # Without pretraining; with attention
-for i in `seq 1 3`; do
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch $steps \
-        --epochs $epochs \
+        --epochs 100 \
         --bag_size $bag \
         --mil attention \
         --deep_classifier \
@@ -58,7 +58,7 @@ for i in `seq 1 3`; do
 done
 
 # Freeze encoder; with average
-for i in `seq 1 3`; do
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch $steps \
         --epochs $epochs \
@@ -71,7 +71,7 @@ for i in `seq 1 3`; do
 done
 
 # Freeze encoder; with attention
-for i in `seq 1 3`; do
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch $steps \
         --epochs $epochs \
@@ -84,7 +84,7 @@ for i in `seq 1 3`; do
 done
 
 # Use a deep classifier with trainable encoder
-for i in `seq 1 3`; do
+for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch $steps \
         --epochs $epochs \

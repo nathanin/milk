@@ -186,12 +186,25 @@ def main(args):
                 print('error setting layer {}'.format(l.name))
         del pretrained_model 
 
+    if args.early_stop:
+        callbacks = [
+            tf.keras.callbacks.EarlyStopping(monitor='val_loss', 
+                                             min_delta=0.001, 
+                                             patience=10, 
+                                             verbose=1, 
+                                             mode='auto',
+                                             restore_best_weights=True)
+        ]
+    else:
+        callbacks = []
+
     try:
         model.fit_generator(generator=train_generator,
             validation_data=val_generator,
             validation_steps=50,
             steps_per_epoch=args.steps_per_epoch, 
-            epochs=args.epochs)
+            epochs=args.epochs,
+            callbacks=callbacks)
     except KeyboardInterrupt:
         print('Keyboard interrupt caught')
     except Exception as e:
@@ -232,6 +245,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_list',        default=None, type=str)
     parser.add_argument('--val_list',         default=None, type=str)
     parser.add_argument('--verbose',          default=False, action='store_true')
+    parser.add_argument('--early_stop',       default=True, action='store_false')
     args = parser.parse_args()
 
     main(args)

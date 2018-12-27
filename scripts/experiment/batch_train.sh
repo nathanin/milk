@@ -83,14 +83,14 @@ for i in `seq 1 3`; do
         --pretrained_model $pretrained
 done
 
-# Use a deep classifier with trainable encoder
-for i in `seq 1 3`; do
-    python train_tpu_inmemory.py \
-        --steps_per_epoch $steps \
-        --epochs $epochs \
-        --bag_size $bag \
-        --mil attention \
-        --learning_rate $lr \
-        --deep_classifier \
-        --pretrained_model $pretrained
-done
+# # Use a deep classifier with trainable encoder
+# for i in `seq 1 3`; do
+#     python train_tpu_inmemory.py \
+#         --steps_per_epoch $steps \
+#         --epochs $epochs \
+#         --bag_size $bag \
+#         --mil attention \
+#         --learning_rate $lr \
+#         --deep_classifier \
+#         --pretrained_model $pretrained
+# done

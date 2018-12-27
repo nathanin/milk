@@ -78,7 +78,7 @@ def make_inference_functions(encode_model, predict_model, pretrained_model, atte
 
     for lname, l in pretrained_layers.items():
         w = l.get_weights()
-        if 'encoder' in lname:
+        if 'encoder' in lname or 'deep' in lname:
             try:
                 encode_model.get_layer(lname).set_weights(w)
                 print('Set encoder weight for layer {}'.format(lname))

@@ -12,7 +12,8 @@ import re
 
 import seaborn as sns
 from matplotlib import pyplot as plt
-from sklearn.metrics import roc_auc_score, roc_curve, classification_report
+from sklearn.metrics import (roc_auc_score, roc_curve, 
+    classification_report, confusion_matrix)
 
 from milk.utilities import data_utils
 from milk.utilities import model_utils
@@ -57,21 +58,49 @@ def auc_curve(ytrue, yhat, savepath=None):
         plt.savefig(savepath, bbox_inches='tight')
 
 
+""" Return a pretty string """
+def pprint_cm(ytrue, yhat, labels=['0', '1']):
+    n_classes = len(labels)
+    cm = confusion_matrix(y_true=ytrue, y_pred=yhat)
+    s = '\nConfusion Matrix:\n'
+    s += '\t{}\t{}'.format(*labels)
+    for k in range(n_classes):
+        s += '\n'
+        s += '{}'.format(labels[k])
+        for j in range(n_classes):
+            s += '\t{: 3d}'.format(cm[k, j])
+
+    s += '\n'
+    return s
+
+def test_eval(ytrue, yhat, savepath=None):
+    ytrue = ytrue[:,1]
+    yhat_c = np.argmax(yhat, axis=-1)
+    yhat = yhat[:,1]
+    auc_c = 'AUC = {:3.5f}\n'.format(roc_auc_score(y_true=ytrue, y_score=yhat))
+    cr = classification_report(y_true=ytrue, y_pred=yhat_c) + '\n'
+    cm = pprint_cm(ytrue, yhat_c) + '\n'
+    if savepath is not None:
+        with open(savepath, 'w+') as f:
+            f.write(auc_c)
+            f.write(cr)            
+            f.write(cm)
+    else:
+        print(auc_c)
+        print(cr)
+        print(cm)
+
 def run_sample(case_x, encode_model, predict_model, mcdropout=False, 
                batch_size=64):
     if mcdropout:
         yhats = []
-        for _ in range(10):
+        for _ in range(25):
             zs = encode_model.predict(case_x, batch_size=batch_size)
             yhat = predict_model.predict_on_batch(zs)
             yhats.append(yhat)
         
         yhats = np.stack(yhats, axis=0)
-        # print('yhats:')
-        # for yh in range(yhats.shape[0]):
-        #     print('\t', yhats[yh, :])
         yhat = np.mean(yhats, axis=0)
-
     else:
         zs = encode_model.predict(case_x, batch_size=batch_size)
         yhat = predict_model.predict_on_batch(zs)
@@ -84,6 +113,8 @@ def main(args):
 
     snapshot = 'save/{}.h5'.format(args.timestamp)
     trained_model = load_model(snapshot)
+
+    # TODO: stop relying on defining these hyperparameters every time.
     encoder_args = {
         'depth_of_model': 32,
         'growth_rate': 64,
@@ -96,16 +127,15 @@ def main(args):
 
     print('Model initializing')
     encode_model = MilkEncode(input_shape=(args.crop_size, args.crop_size, 3), 
-                 encoder_args=encoder_args)
+                              encoder_args=encoder_args)
     encode_shape = list(encode_model.output.shape)
     predict_model = MilkPredict(input_shape=[512], mode=args.mil)
-    attention_model = MilkAttention(input_shape=[512])
 
     models = model_utils.make_inference_functions(encode_model,
                                                   predict_model,
                                                   trained_model, 
-                                                  attention_model=attention_model)
-    encode_model, predict_model, attention_model = models
+                                                  attention_model=None)
+    encode_model, predict_model = models
 
     test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
     test_list = read_test_list(test_list)
@@ -140,10 +170,15 @@ def main(args):
     print('Accuracy: {:3.3f}'.format(accuracy))
 
     if args.odir is not None:
-        savepath = os.path.join(args.odir, '{}.png'.format(args.timestamp))
+        saveimg = os.path.join(args.odir, '{}.png'.format(args.timestamp))
+        savefn = os.path.join(args.odir, '{}.txt'.format(args.timestamp))
     else:
-        savepath = None
-    auc_curve(ytrue, yhat, savepath=savepath)
+        saveimg = None
+        savefn = None
+
+    auc_curve(ytrue, yhat, savepath=saveimg)
+    test_eval(ytrue, yhat, savepath=savefn)
+
 
 if __name__ == '__main__':
     # n_repeat controls re-sampling from the case

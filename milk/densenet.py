@@ -20,8 +20,8 @@ Densely Connected Convolutional Networks](https://arxiv.org/abs/1608.06993)
 https://github.com/tensorflow/tensorflow/blob/master/ ...
 tensorflow/contrib/eager/python/examples/densenet/densenet.py
 
-Rewritten into Keras' functional API
 
+Rewritten into Keras' functional API by N.Ing
 """
 
 from __future__ import absolute_import
@@ -36,7 +36,7 @@ from tensorflow.keras.layers import (
 l2 = tf.keras.regularizers.l2
 
 def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
-              dropout_rate=0.3, name_suffix='', mcdropout=False):
+              dropout_rate=0.3, name_suffix='', mcdropout=False, trainable=True):
   """Convolutional Block consisting of (batchnorm->relu->conv).
 
   Arguments:
@@ -57,7 +57,8 @@ def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
                       data_format=data_format,
                       # kernel_initializer="he_normal",
                       kernel_regularizer=l2(weight_decay),
-                      name='encoder_bottle{}'.format(name_suffix)
+                      name='encoder_bottle{}'.format(name_suffix),
+                      trainable=trainable
                       )(features)
 
   axis = -1 if data_format == "channels_last" else 1
@@ -70,7 +71,8 @@ def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
                     data_format=data_format,
                     # kernel_initializer="he_normal",
                     kernel_regularizer=l2(weight_decay),
-                    name='encoder{}'.format(name_suffix)
+                    name='encoder{}'.format(name_suffix), 
+                    trainable=trainable
                     )(features)
 
   # self.batchnorm1 = tf.keras.layers.BatchNormalization(axis=axis)
@@ -83,7 +85,7 @@ def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
 
 
 def TransitionBlock(features, num_filters, data_format, weight_decay=1e-4,
-                    dropout_rate=0.3, block_num=0):
+                    dropout_rate=0.3, block_num=0, trainable=True):
   """Transition Block to reduce the number of features.
 
   Arguments:
@@ -104,7 +106,8 @@ def TransitionBlock(features, num_filters, data_format, weight_decay=1e-4,
                     data_format=data_format,
                     #  kernel_initializer="he_normal",
                     kernel_regularizer=l2(weight_decay),
-                    name='encoder_trans{}'.format(block_num)
+                    name='encoder_trans{}'.format(block_num),
+                    trainable=trainable
                     )(features)
 
   features = AveragePooling2D(pool_size=(2,2),
@@ -118,7 +121,7 @@ def TransitionBlock(features, num_filters, data_format, weight_decay=1e-4,
 
 def DenseBlock(features, num_layers, growth_rate, data_format, 
                bottleneck, weight_decay=1e-4, dropout_rate=0.3,
-               block_num=0, mcdropout=False):
+               block_num=0, mcdropout=False, trainable=True):
   """Dense Block consisting of ConvBlocks where each block's
   output is concatenated with its input.
 
@@ -141,7 +144,8 @@ def DenseBlock(features, num_layers, growth_rate, data_format,
                 weight_decay,
                 dropout_rate,
                 mcdropout=mcdropout,
-                name_suffix='{}_f'.format(block_num))
+                name_suffix='{}_f'.format(block_num),
+                trainable=trainable)
   for i in range(int(num_layers)-1):
     x_i = ConvBlock(x, 
                     growth_rate,
@@ -150,7 +154,8 @@ def DenseBlock(features, num_layers, growth_rate, data_format,
                     weight_decay,
                     dropout_rate,
                     mcdropout=mcdropout,
-                    name_suffix='{}_{}'.format(block_num, i))
+                    name_suffix='{}_{}'.format(block_num, i),
+                    trainable=trainable)
     x = Concatenate(axis=axis)([x, x_i])
 
   return x
@@ -159,7 +164,8 @@ def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks,
              num_layers_in_each_block, data_format, bottleneck=True,
              compression=0.5, weight_decay=1e-4, dropout_rate=0.5,
              pool_initial=True, include_top=True, with_classifier=False,
-             num_classes=2, return_model=False, mcdropout=False):
+             num_classes=2, return_model=False, mcdropout=False,
+             trainable=True):
   """Creating the Densenet Architecture.
   All the same as before; except we require a fixed input shape
 
@@ -232,7 +238,8 @@ def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks,
                     data_format=data_format,
                     # kernel_initializer="he_normal",
                     kernel_regularizer=l2(weight_decay),
-                    name='encoder_conv1'
+                    name='encoder_conv1',
+                    trainable=trainable
                     )(image)
   if pool_initial:
     features = MaxPooling2D(pool_size=(3, 3),
@@ -263,7 +270,8 @@ def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks,
                           weight_decay,
                           dropout_rate, 
                           mcdropout=mcdropout,
-                          block_num=i)
+                          block_num=i, 
+                          trainable=trainable)
     print(features.shape)
 
     if i+1 < num_of_blocks:
@@ -272,7 +280,8 @@ def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks,
                           data_format,
                           weight_decay,
                           dropout_rate,
-                          block_num=i)
+                          block_num=i,
+                          trainable=trainable)
       print('transition', features.shape)
 
   # last pooling and fc layer
@@ -283,7 +292,10 @@ def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks,
     # self.last_pool = tf.layers.Flatten()
 
   if with_classifier:
-    features = Dense(num_classes, activation=tf.nn.softmax, name='encoder_classifier')(features)
+    features = Dense(num_classes, 
+                     activation=tf.nn.softmax, 
+                     name='encoder_classifier',
+                     trainable=trainable)(features)
 
   if return_model:
     model = tf.keras.Model(inputs=[image], outputs=[features])

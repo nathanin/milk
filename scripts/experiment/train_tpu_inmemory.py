@@ -127,7 +127,7 @@ def main(args):
     print('Model initializing')
     model = Milk(input_shape=(args.bag_size, args.crop_size, args.crop_size, 3), 
                  encoder_args=encoder_args, mode=args.mil, use_gate=args.gated_attention,
-                 freeze_encoder=args.freeze_encoder)
+                 freeze_encoder=args.freeze_encoder, deep_classifier=args.deep_classifier)
     
     
     optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
@@ -219,6 +219,7 @@ if __name__ == '__main__':
     parser.add_argument('--mil',              default='attention', type=str)
     parser.add_argument('--gated_attention',  default=True, action='store_false')
     parser.add_argument('--freeze_encoder',   default=False, action='store_true')
+    parser.add_argument('--deep_classifier',  default=False, action='store_true')
 
     parser.add_argument('--data_patt',        default='../dataset/tiles_reduced/*npy', type=str)
     parser.add_argument('--test_pct',         default=0.2, type=float)

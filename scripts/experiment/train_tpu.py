@@ -194,7 +194,7 @@ def main(args):
             validation_data=val_generator,
             validation_steps=25,
             steps_per_epoch=1000, 
-            epochs=50,
+            epochs=25,
             use_multiprocessing=True,
             workers=-1)
     except KeyboardInterrupt:

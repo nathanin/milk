@@ -2,30 +2,20 @@
 
 set -e
 
-# for td in $( ls save ); do
-#     timestamp=${td%.*}
-#     echo $timestamp
-#     python ./test_npy.py \
-#         --timestamp $timestamp \
-#         --odir result \
-#         --testdir val_lists
-# done
+testtype=npy
 
-for td in $( ls save ); do
-    timestamp=${td%.*}
-    echo $timestamp
-    python ./test_svs.py \
-        --timestamp $timestamp \
-        --odir result_mcdropout \
-        --mcdropout \
-        --testdir test_lists
-done
+# "test"
+python batch_test.py --test $testtype --odir result_test_mcdrop --mcdropout --run_list runs_attention_mil.txt
+python batch_test.py --test $testtype --odir result_test_mcdrop --mcdropout --run_list runs_average_mil.txt
+python batch_test.py --test $testtype --odir result_test_mcdrop --mcdropout --run_list runs_instance_mil.txt
+python batch_test.py --test $testtype --odir result_test_mcdrop --mcdropout --run_list runs_end2end.txt
+python batch_test.py --test $testtype --odir result_test_mcdrop --mcdropout --run_list runs_frozen_average.txt
+python batch_test.py --test $testtype --odir result_test_mcdrop --mcdropout --run_list runs_frozen_attention.txt
 
-for td in $( ls save ); do
-    timestamp=${td%.*}
-    echo $timestamp
-    python ./test_svs.py \
-        --timestamp $timestamp \
-        --odir result \
-        --testdir test_lists
-done
+# "val"
+python batch_test.py --test $testtype --odir result_val_mcdrop --mcdropout --val --run_list runs_attention_mil.txt
+python batch_test.py --test $testtype --odir result_val_mcdrop --mcdropout --val --run_list runs_average_mil.txt
+python batch_test.py --test $testtype --odir result_val_mcdrop --mcdropout --val --run_list runs_instance_mil.txt
+python batch_test.py --test $testtype --odir result_val_mcdrop --mcdropout --val --run_list runs_end2end.txt
+python batch_test.py --test $testtype --odir result_val_mcdrop --mcdropout --val --run_list runs_frozen_average.txt
+python batch_test.py --test $testtype --odir result_val_mcdrop --mcdropout --val --run_list runs_frozen_attention.txt

@@ -26,6 +26,12 @@ def instance_classifier(features, n_classes):
     print('logits after reduce_mean', logits.shape)
     return logits
 
+def deep_feedforward(features, n_layers=5, width=256):
+    for k in range(n_layers):
+        features = Dense(width, activation=tf.nn.relu, name='deep_{}'.format(k))(features)
+
+    return features
+
 def mil_features(features, n_classes, z_dim, dropout_rate):
     features = Dropout(dropout_rate, name='mil_drop_1')(features)
     features = Dense(z_dim, activation=tf.nn.relu, name='mil_dense_1')(features)
@@ -73,8 +79,16 @@ def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True,
     return logits
 
 
-def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3, 
-         encoder_args=None, mode="instance", use_gate=True, freeze_encoder=False):
+def Milk(input_shape, 
+         encoder=None, 
+         z_dim=256, 
+         n_classes=2, 
+         dropout_rate=0.3, 
+         encoder_args=None,
+         mode="instance", 
+         use_gate=True, 
+         deep_classifier=False,
+         freeze_encoder=False):
 
     """ Build the Multiple Instance Learning model
 
@@ -112,19 +126,29 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3,
                             output_shape=squeeze_output_shape)(image)
     print('image squeezed', image_squeezed.shape)
     if encoder is None:
+        if freeze_encoder:
+            print('NOTE: Initializing encoder with trainable = False')
+            trainable = False
+        else:
+            trainable = True
+
         features = make_encoder(image=image_squeezed, 
                                 input_shape=input_shape,  ## Unused
-                                encoder_args=encoder_args)
+                                encoder_args=encoder_args,
+                                trainable=trainable)
     else:
         features = encoder(image_squeezed)
 
     print('features after encoder', features.shape)
-    # insert a dummy layer to hook into later:
+    # insert an identity layer to hook into later:
     features = Lambda(lambda x: x, name='feature_hook')(features)
 
-    if freeze_encoder:
-        print('Stopping gradient from flowing to the encoder.')
-        features = Lambda(lambda x: tf.stop_gradient(x))(features)
+    # if freeze_encoder:
+    #     print('Stopping gradient from flowing to the encoder.')
+    #     features = Lambda(lambda x: tf.stop_gradient(x))(features)
+
+    if deep_classifier:
+        features = deep_feedforward(features, n_layers=5)
 
     if mode == "instance":
         logits = instance_classifier(features, n_classes)
@@ -141,7 +165,7 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3,
 
 
 def MilkEncode(input_shape, encoder=None, dropout_rate=0.3, 
-               encoder_args=None):
+               encoder_args=None, deep_classifier=False):
     image = Input(shape=input_shape, name='image') #e.g. (None, 100, 96, 96, 3)
     print('image input:', image.shape)
     
@@ -151,6 +175,9 @@ def MilkEncode(input_shape, encoder=None, dropout_rate=0.3,
                                 encoder_args=encoder_args)
     else:
         features = encoder(image)
+
+    if deep_classifier:
+        features = deep_feedforward(features, n_layers=5)
 
     return tf.keras.Model(inputs=[image], outputs=[features])
 

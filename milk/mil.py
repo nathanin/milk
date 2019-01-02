@@ -26,9 +26,10 @@ def instance_classifier(features, n_classes):
     print('logits after reduce_mean', logits.shape)
     return logits
 
-def deep_feedforward(features, n_layers=5, width=256):
+def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
     for k in range(n_layers):
         features = Dense(width, activation=tf.nn.relu, name='deep_{}'.format(k))(features)
+        features = Dropout(dropout_rate, name='deep_drop_{}'.format(k))(features)
 
     return features
 

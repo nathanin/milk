@@ -20,8 +20,8 @@ from milk.utilities import model_utils
 from milk.utilities import training_utils
 from milk import Milk, MilkEncode, MilkPredict, MilkAttention
 
-# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
-with open('../dataset/cases_md5.pkl', 'rb') as f:
+with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
+# with open('../dataset/cases_md5.pkl', 'rb') as f:
     case_dict = pickle.load(f)
 
 def case_label_fn(data_path):
@@ -127,9 +127,13 @@ def main(args):
 
     print('Model initializing')
     encode_model = MilkEncode(input_shape=(args.crop_size, args.crop_size, 3), 
-                              encoder_args=encoder_args)
+                              encoder_args=encoder_args, deep_classifier=args.deep_classifier)
     encode_shape = list(encode_model.output.shape)
-    predict_model = MilkPredict(input_shape=[512], mode=args.mil)
+    if args.deep_classifier:
+        input_shape = 256
+    else:
+        input_shape = 512
+    predict_model = MilkPredict(input_shape=[input_shape], mode=args.mil)
 
     models = model_utils.make_inference_functions(encode_model,
                                                   predict_model,

@@ -44,8 +44,8 @@ from milk.utilities import training_utils
 from milk.utilities import model_utils
 from milk import Milk, MilkEncode, MilkPredict, MilkAttention
 
-# uid2label = pickle.load(open('../dataset/case_dict_obfuscated.pkl', 'rb'))
-uid2label = pickle.load(open('../dataset/cases_md5.pkl', 'rb'))
+uid2label = pickle.load(open('../dataset/case_dict_obfuscated.pkl', 'rb'))
+# uid2label = pickle.load(open('../dataset/cases_md5.pkl', 'rb'))
 uid2slide = pickle.load(open('../dataset/uid2slide.pkl', 'rb'))
 
 def get_wrapped_fn(svs):

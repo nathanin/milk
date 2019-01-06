@@ -20,8 +20,8 @@ import os
 from milk.utilities import data_utils
 from milk import Milk
 
-with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
-#with open('../dataset/cases_md5.pkl', 'rb') as f:
+# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
+with open('../dataset/cases_md5.pkl', 'rb') as f:
     case_dict = pickle.load(f)
 
 def filter_list_by_label(lst):
@@ -115,6 +115,8 @@ def main(args):
     x, y = next(train_generator)
     print('x: ', x.shape)
     print('y: ', y.shape)
+    del x
+    del y 
 
     encoder_args = {
         'depth_of_model': 32,
@@ -216,6 +218,7 @@ def main(args):
         print('Training done. Find val and test datasets at')
         print(val_list_file)
         print(test_list_file)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

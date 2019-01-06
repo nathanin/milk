@@ -25,6 +25,8 @@ import os
 
 from milk import Milk
 
+from encoder_config import encoder_args
+
 def rearrange_bagged_mnist(x, y, positive_label):
     """
     For simplicity, rearrange the mnist digits from
@@ -52,7 +54,11 @@ def generate_negative_bag(x_neg, N):
 
 def generate_positive_bag(x_pos, x_neg, N):
     n_x_pos = x_pos.shape[0]
-    n_pos = int(np.random.uniform(low=1, high=int(N * 0.2)))
+    min_positive = int(N * 0.1)
+    max_positive = int(N * 0.25)
+    # n_pos = int(np.random.uniform(low=1, high=int(N * 0.2)))
+    n_pos = int(np.random.uniform(low=min_positive, 
+                                  high=max_positive))
     # print('Generating bag with {} positive instances'.format(n_pos))
     pos_indices = np.random.choice(range(n_x_pos), n_pos, replace=False)
     xbag = [x_pos[pos_indices,...]]
@@ -119,23 +125,19 @@ def main(args):
     print('\ttest_x_pos:', test_x_pos.shape)
     print('\ttest_x_neg:', test_x_neg.shape)
 
-    generator = generate_bagged_mnist(train_x_pos, train_x_neg, args.N, 1)
-    val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.N, 1)
+    generator = generate_bagged_mnist(train_x_pos, train_x_neg, args.n, 1)
+    val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.n, 1)
     batch_x, batch_y = next(generator)
     print('batch_x:', batch_x.shape, 'batch_y:', batch_y.shape)
 
-    encoder_args = {
-        'depth_of_model': 16,
-        'growth_rate': 32,
-        'num_of_blocks': 2,
-        'output_classes': 2,
-        'num_layers_in_each_block': 8,
-    }
-    model = Milk(input_shape=(args.N, 28, 28, 1), encoder_args=encoder_args)
-    if os.path.exists(args.pretrained_model):
+    model = Milk(input_shape=(args.n, 28, 28, 1), 
+                 encoder_args=encoder_args, 
+                 mode=args.mil,
+    )
+    if os.path.exists(args.pretrained):
         print('Pulling weights from pretrained model')
-        print(args.pretrained_model)
-        pretrained = load_model(args.pretrained_model)
+        print(args.pretrained)
+        pretrained = load_model(args.pretrained)
         pretrained_layers = {l.name: l for l in pretrained.layers if 'encoder' in l.name}
         for l in model.layers:
             if 'encoder' not in l.name:
@@ -148,9 +150,12 @@ def main(args):
                 print('error setting layer {}'.format(l.name))
 
         del pretrained
+    else:
+        print('Pretrained model not found ({}). Continuing end 2 end.'.format(args.pretrained))
 
     model.summary()
-    optimizer = tf.train.AdamOptimizer(learning_rate=1e-5)
+    # optimizer = tf.train.AdamOptimizer(learning_rate=args.lr)
+    optimizer = tf.train.AdagradOptimizer(learning_rate=args.lr)
 
     model.compile(optimizer=optimizer,
                   loss = tf.keras.losses.categorical_crossentropy,
@@ -159,18 +164,25 @@ def main(args):
     model.fit_generator(generator=generator, 
                         validation_data=val_generator,
                         validation_steps=100,
-                        steps_per_epoch=1000, epochs=10)
+                        steps_per_epoch=args.epoch_steps, 
+                        epochs=args.epochs)
+    
+    model.save(args.o)
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--N', default=200, type=int)
-    parser.add_argument('--tpu', default=False, action='store_true')
+    parser.add_argument('-o', default='./bagged_mnist.h5', type=str)
+    parser.add_argument('-n', default=100, type=int)
+    parser.add_argument('--lr',    default=1e-5, type=float)
+    parser.add_argument('--tpu',   default=False, action='store_true')
+    parser.add_argument('--mil',   default='attention', type=str)
     parser.add_argument('--mnist', default=None)
     parser.add_argument('--ntest', default=25, type=int)
-    parser.add_argument('--save_prefix', default='./positive_bag/model', type=str)
-    parser.add_argument('--initial_weights', default=None, type=str)
-    parser.add_argument('--max_fraction_positive', default=0.1, type=int)
-    parser.add_argument('--pretrained_model', default='pretrained_model.h5')
+    parser.add_argument('--epochs', default=250, type=int)
+    parser.add_argument('--pretrained', default='pretrained_model.h5')
+    parser.add_argument('--epoch_steps', default=1e3, type=int)
+    parser.add_argument('--max_fraction_positive', default=0.3, type=int)
+    parser.add_argument('--min_fraction_positive', default=0.1, type=int)
 
     args = parser.parse_args()
     # tf.enable_eager_execution()

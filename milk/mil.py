@@ -34,6 +34,8 @@ def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
     return features
 
 def mil_features(features, n_classes, z_dim, dropout_rate):
+    """ Caclulate the instance features then squish them """
+    print('Features going into `mil_features`:', features.shape)
     features = Dropout(dropout_rate, name='mil_drop_1')(features)
     features = Dense(z_dim, activation=tf.nn.relu, name='mil_dense_1')(features)
     features = Dropout(dropout_rate, name='mil_drop_2')(features)
@@ -44,12 +46,17 @@ def mil_features(features, n_classes, z_dim, dropout_rate):
     return features
 
 def average_pooling(features, n_classes, z_dim, dropout_rate):
+    print('Setting up average pooling MIL')
     features = mil_features(features, n_classes, z_dim, dropout_rate)
     logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
     return logits
 
 def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True, 
                       return_attention=False):
+    """ Calculate attention then modulate the magnitude of the features
+
+    Squish the attention-modulated features and return logits
+    """
     attention = Dense(256, activation=tf.nn.tanh, use_bias=False,
                       name='att_0')(features)
     if use_gate:
@@ -187,6 +194,7 @@ def MilkPredict(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3,
                 mode="instance", use_gate=True):
     print('Setting up Predict model in {} mode'.format(mode))
     features = Input(shape=input_shape, name='feat_in')
+
     if mode == "instance":
         logits = instance_classifier(features, n_classes)
     elif mode == "average":

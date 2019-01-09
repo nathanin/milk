@@ -25,6 +25,8 @@ import os
 
 from milk import Milk
 
+from encoder_config import encoder_args
+
 def rearrange_bagged_mnist(x, y, positive_label):
     """
     For simplicity, rearrange the mnist digits from
@@ -74,27 +76,28 @@ def generate_bagged_mnist(x_pos, x_neg, N, batch):
     bag_x ~ (1, N, h, w, (c))
     bag_y ~ (1, 2)
     """
+    print('Set up generator with batch={}'.format(batch))
     # Coin flip for generating a positive or negative bag:
     while True:
-      batch_x, batch_y = [], []
-      for _ in range(batch):
-        y = np.random.choice([0,1])
-        y_onehot = np.zeros((1,2), dtype=np.float32)
-        y_onehot[0,y] = 1
+        batch_x, batch_y = [], []
+        for _ in range(batch):
+            y = np.random.choice([0,1])
+            y_onehot = np.zeros((1,2), dtype=np.float32)
+            y_onehot[0,y] = 1
 
-        if y == 0:
-            xbag = generate_negative_bag(x_neg, N)
-            xbag = np.expand_dims(xbag, axis=0)
-            xbag = np.expand_dims(xbag, axis=-1)
-        else:
-            xbag = generate_positive_bag(x_pos, x_neg, N)
-            xbag = np.expand_dims(xbag, axis=0)
-            xbag = np.expand_dims(xbag, axis=-1)
-          
-        batch_x.append(xbag.astype(np.float32))
-        batch_y.append(y_onehot)
+            if y == 0:
+                xbag = generate_negative_bag(x_neg, N)
+                xbag = np.expand_dims(xbag, axis=0)
+                xbag = np.expand_dims(xbag, axis=-1)
+            else:
+                xbag = generate_positive_bag(x_pos, x_neg, N)
+                xbag = np.expand_dims(xbag, axis=0)
+                xbag = np.expand_dims(xbag, axis=-1)
+                
+            batch_x.append(xbag.astype(np.float32))
+            batch_y.append(y_onehot)
         
-      yield np.concatenate(batch_x, axis=0), np.concatenate(batch_y, axis=0)
+        yield np.concatenate(batch_x, axis=0), np.concatenate(batch_y, axis=0)
 
 def main(args):
     if args.mnist is not None:
@@ -119,19 +122,15 @@ def main(args):
     print('\ttest_x_pos:', test_x_pos.shape)
     print('\ttest_x_neg:', test_x_neg.shape)
 
-    generator = generate_bagged_mnist(train_x_pos, train_x_neg, args.N, 1)
-    val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.N, 1)
+    generator = generate_bagged_mnist(train_x_pos, train_x_neg, args.N, args.batch)
+    val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.N, args.batch)
     batch_x, batch_y = next(generator)
     print('batch_x:', batch_x.shape, 'batch_y:', batch_y.shape)
 
-    encoder_args = {
-        'depth_of_model': 16,
-        'growth_rate': 32,
-        'num_of_blocks': 2,
-        'output_classes': 2,
-        'num_layers_in_each_block': 8,
-    }
-    model = Milk(input_shape=(args.N, 28, 28, 1), encoder_args=encoder_args)
+    model = Milk(input_shape=(args.N, 28, 28, 1), encoder_args=encoder_args,
+		 mode=args.mil)
+    model.summary()
+
     if os.path.exists(args.pretrained_model):
         print('Pulling weights from pretrained model')
         print(args.pretrained_model)
@@ -139,7 +138,9 @@ def main(args):
         pretrained_layers = {l.name: l for l in pretrained.layers if 'encoder' in l.name}
         for l in model.layers:
             if 'encoder' not in l.name:
+                print('Skipping layer {}'.format(l.name))
                 continue
+
             try:
                 w = pretrained_layers[l.name].get_weights()
                 print('setting layer {}'.format(l.name))
@@ -149,7 +150,10 @@ def main(args):
 
         del pretrained
 
-    model.summary()
+    if args.gpus > 1:
+        print('Duplicating model onto 2 GPUs')
+        model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
+
     optimizer = tf.train.AdamOptimizer(learning_rate=1e-5)
 
     model.compile(optimizer=optimizer,
@@ -159,19 +163,24 @@ def main(args):
     model.fit_generator(generator=generator, 
                         validation_data=val_generator,
                         validation_steps=100,
-                        steps_per_epoch=1000, epochs=10)
+                        steps_per_epoch=1000, 
+			epochs=15)
+    model.save(args.o)
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--o', default='attention.h5', type=str)
     parser.add_argument('--N', default=200, type=int)
+    parser.add_argument('--mil', default='attention', type=str)
     parser.add_argument('--tpu', default=False, action='store_true')
+    parser.add_argument('--gpus', default=1, type=int)
+    parser.add_argument('--batch', default=1, type=int)
     parser.add_argument('--mnist', default=None)
     parser.add_argument('--ntest', default=25, type=int)
-    parser.add_argument('--save_prefix', default='./positive_bag/model', type=str)
     parser.add_argument('--initial_weights', default=None, type=str)
     parser.add_argument('--max_fraction_positive', default=0.1, type=int)
     parser.add_argument('--pretrained_model', default='pretrained_model.h5')
 
     args = parser.parse_args()
-    # tf.enable_eager_execution()
+
     main(args)

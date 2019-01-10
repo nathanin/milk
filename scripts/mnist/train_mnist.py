@@ -54,8 +54,7 @@ def generate_negative_bag(x_neg, N):
 
 def generate_positive_bag(x_pos, x_neg, N):
     n_x_pos = x_pos.shape[0]
-    n_pos = int(np.random.uniform(low=1, high=int(N * 0.2)))
-    # print('Generating bag with {} positive instances'.format(n_pos))
+    n_pos = int(np.random.uniform(low=1, high=int(N * 0.1)))
     pos_indices = np.random.choice(range(n_x_pos), n_pos, replace=False)
     xbag = [x_pos[pos_indices,...]]
 
@@ -154,7 +153,7 @@ def main(args):
         print('Duplicating model onto 2 GPUs')
         model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
 
-    optimizer = tf.train.AdamOptimizer(learning_rate=1e-5)
+    optimizer = tf.train.AdamOptimizer(learning_rate=args.lr)
 
     model.compile(optimizer=optimizer,
                   loss = tf.keras.losses.categorical_crossentropy,
@@ -171,6 +170,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--o', default='attention.h5', type=str)
     parser.add_argument('--N', default=200, type=int)
+    parser.add_argument('--lr', default=1e-5, type=float)
     parser.add_argument('--mil', default='attention', type=str)
     parser.add_argument('--tpu', default=False, action='store_true')
     parser.add_argument('--gpus', default=1, type=int)

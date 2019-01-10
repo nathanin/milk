@@ -21,6 +21,7 @@ def squish_mean(features):
     return features
 
 def instance_classifier(features, n_classes):
+    print('Setting up instance classifier')
     logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
     logits = squish_mean(logits)
     print('logits after reduce_mean', logits.shape)

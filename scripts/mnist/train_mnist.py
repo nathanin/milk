@@ -80,27 +80,28 @@ def generate_bagged_mnist(x_pos, x_neg, N, batch):
     bag_x ~ (1, N, h, w, (c))
     bag_y ~ (1, 2)
     """
+    print('Set up generator with batch={}'.format(batch))
     # Coin flip for generating a positive or negative bag:
     while True:
-      batch_x, batch_y = [], []
-      for _ in range(batch):
-        y = np.random.choice([0,1])
-        y_onehot = np.zeros((1,2), dtype=np.float32)
-        y_onehot[0,y] = 1
+        batch_x, batch_y = [], []
+        for _ in range(batch):
+            y = np.random.choice([0,1])
+            y_onehot = np.zeros((1,2), dtype=np.float32)
+            y_onehot[0,y] = 1
 
-        if y == 0:
-            xbag = generate_negative_bag(x_neg, N)
-            xbag = np.expand_dims(xbag, axis=0)
-            xbag = np.expand_dims(xbag, axis=-1)
-        else:
-            xbag = generate_positive_bag(x_pos, x_neg, N)
-            xbag = np.expand_dims(xbag, axis=0)
-            xbag = np.expand_dims(xbag, axis=-1)
-          
-        batch_x.append(xbag.astype(np.float32))
-        batch_y.append(y_onehot)
+            if y == 0:
+                xbag = generate_negative_bag(x_neg, N)
+                xbag = np.expand_dims(xbag, axis=0)
+                xbag = np.expand_dims(xbag, axis=-1)
+            else:
+                xbag = generate_positive_bag(x_pos, x_neg, N)
+                xbag = np.expand_dims(xbag, axis=0)
+                xbag = np.expand_dims(xbag, axis=-1)
+                
+            batch_x.append(xbag.astype(np.float32))
+            batch_y.append(y_onehot)
         
-      yield np.concatenate(batch_x, axis=0), np.concatenate(batch_y, axis=0)
+        yield np.concatenate(batch_x, axis=0), np.concatenate(batch_y, axis=0)
 
 def main(args):
     if args.mnist is not None:
@@ -141,7 +142,9 @@ def main(args):
         pretrained_layers = {l.name: l for l in pretrained.layers if 'encoder' in l.name}
         for l in model.layers:
             if 'encoder' not in l.name:
+                print('Skipping layer {}'.format(l.name))
                 continue
+
             try:
                 w = pretrained_layers[l.name].get_weights()
                 print('setting layer {}'.format(l.name))
@@ -185,5 +188,5 @@ if __name__ == '__main__':
     parser.add_argument('--min_fraction_positive', default=0.1, type=int)
 
     args = parser.parse_args()
-    # tf.enable_eager_execution()
+
     main(args)

@@ -30,43 +30,31 @@ def generate_batch(x, y, N):
 def main(args):
     (train_x, train_y), (test_x, test_y) = mnist.load_data()
     generator = generate_batch(train_x, train_y, args.batch)
+    test_generator = generate_batch(test_x, test_y, args.batch)
     batch_x, batch_y = next(generator)
     print('batch:', batch_x.shape, batch_y.shape, batch_x.min(), batch_x.max())
 
     model = Classifier(input_shape=(28,28,1), n_classes=10, encoder_args=encoder_args)
-    # model.summary()
-    
-    if os.path.exists(args.pretrained_model):
-        print('Pulling weights from pretrained model')
-        print(args.pretrained_model)
-        pretrained = load_model(args.pretrained_model)
-        pretrained_layers = {l.name: l for l in pretrained.layers if 'encoder' in l.name}
-        for l in model.layers:
-            if 'encoder' not in l.name:
-                continue
-            try:
-                w = pretrained_layers[l.name].get_weights()
-                print('setting layer {}'.format(l.name))
-                l.set_weights(w)
-            except:
-                print('error setting layer {}'.format(l.name))
 
-    optimizer = tf.train.AdamOptimizer(learning_rate=1e-4)
+    optimizer = tf.train.AdamOptimizer(learning_rate=args.lr)
     model.compile(optimizer=optimizer,
-        loss=tf.keras.losses.categorical_crossentropy,
-        metrics=['categorical_accuracy'])
+                  loss=tf.keras.losses.categorical_crossentropy,
+                  metrics=['categorical_accuracy'])
 
-    model.fit_generator(generator, steps_per_epoch=args.steps_per_epoch, 
-                        epochs=args.epochs)
-    model.save(args.save_path)
+    model.fit_generator(generator, 
+                        steps_per_epoch=args.steps_per_epoch, 
+                        epochs=args.epochs,
+                        validation_data=test_generator,
+                        validation_steps=50)
+    model.save(args.o)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch', default=96)
-    parser.add_argument('--epochs', default=10)
+    parser.add_argument('-o', default='mnist_classifier.h5')
+    parser.add_argument('--lr', default=1e-4, type=float)
+    parser.add_argument('--batch', default=96, type=int)
+    parser.add_argument('--epochs', default=25, type=int)
     parser.add_argument('--steps_per_epoch', default=int(1e3))
-    parser.add_argument('--save_path', default='pretrained_model.h5')
-    parser.add_argument('--pretrained_model', default='pretrained_model.h5')
     args = parser.parse_args()
 
     main(args)

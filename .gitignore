@@ -2,6 +2,7 @@
 ./tiles/*
 ./debug/*
 ./dataset/data
+*.h5
 *.pyc
 *.npy
 *.npz

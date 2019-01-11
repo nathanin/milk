@@ -16,8 +16,11 @@ def squish_mean(features):
         shape = list(input_shape)
         shape[0] = 1
         return tuple(shape)
+
+    # Define and register a multiplier on this gradient
     features = Lambda(lambda x: tf.reduce_mean(x, axis=0, keepdims=True),  
                       output_shape=reduce_mean_output_shape)(features)
+
     return features
 
 def instance_classifier(features, n_classes):
@@ -118,9 +121,9 @@ def Milk(input_shape,
       of tf.keras.Model instances.
 
     # `mode` (str) dictates the kind of MIL to use:
-      "instance" -- baseline
-      "average" -- one step up from baseline
-      "attention" -- main method
+      "instance"  -- baseline
+      "average"   -- average over the bag in latent space
+      "attention" -- compute weighted average using learned weights
     """
     image = Input(shape=input_shape, name='image') #e.g. (None, 100, 96, 96, 3)
     print('image input:', image.shape)

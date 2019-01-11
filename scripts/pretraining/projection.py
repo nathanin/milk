@@ -154,6 +154,7 @@ def main(args):
     print('ytrue: {}'.format(ytrue.shape))
     draw_projection(features, yclassif, ytrue, savepath=args.save)
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test_data', 

@@ -17,14 +17,14 @@ import shutil
 import argparse
 
 from encoder_config import encoder_args
-from dataset import ImageNetDataset
+from dataset import ImageNetRecords
 from milk.classifier import Classifier
 
 def main(args):
     print(args) 
     # Build the dataset
     assert args.dataset is not None
-    dataset, n_imgs = ImageNetDataset(src=args.dataset, xsize=args.input_dim,
+    dataset = ImageNetRecords(src=args.dataset, xsize=args.input_dim,
       ysize=args.input_dim, batch=args.batch_size, buffer=args.prefetch_buffer,
       parallel=args.n_threads)
 
@@ -41,7 +41,7 @@ def main(args):
     print('\nStart training...')
     try:
         model.fit(dataset.make_one_shot_iterator(),
-                  steps_per_epoch=int(n_imgs / args.batch_size),
+                  steps_per_epoch=10000,
                   epochs=args.epochs)
 
     except KeyboardInterrupt:
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_classes', default=1000, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--learning_rate', default=1e-4, type=float)
-    parser.add_argument('--prefetch_buffer', default=512, type=int)
+    parser.add_argument('--prefetch_buffer', default=1024, type=int)
 
     args = parser.parse_args()
 

@@ -82,6 +82,10 @@ if __name__ == '__main__':
     print('\t', img_.dtype, label_.dtype)
     print('\t', img_.min(), img_.max())
 
+    for i, im in enumerate(img_):
+      oname = 'testbatch/{:04d}.jpg'.format(i)
+      cv2.imwrite(oname, im[:,:,::-1]*255)
+
     times = np.zeros(100)
     for i in range(100):
       tstart = time.time()

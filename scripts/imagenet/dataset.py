@@ -5,51 +5,66 @@ import tensorflow as tf
 import pandas as pd
 import numpy as np
 import argparse
+import glob
 import time
 import cv2
+import os
 
-def ImageNetDataset(src, batch=32, xsize=96, ysize=96, n_classes=1000, 
-                    parallel=12, buffer=2048, shuffle=True):
+def ImageNetRecords(src, batch=32, xsize=96, ysize=96, n_classes=1000, 
+                    parallel=8, buffer=1024, shuffle=True):
 
-  def preprocess(image_path, image_label):
-    image = tf.read_file(image_path)
-    image = tf.image.decode_jpeg(image, channels=3)
+  def decode(example):
+    features = {'label': tf.FixedLenFeature((), tf.int64, default_value=0),
+                'height': tf.FixedLenFeature((), tf.int64, default_value=0),
+                'width': tf.FixedLenFeature((), tf.int64, default_value=0),
+                'encoded': tf.FixedLenFeature((), tf.string, default_value=''),}
+
+    pf = tf.parse_single_example(example, features)
+    height = tf.squeeze(pf['height'])
+    width = tf.squeeze(pf['width'])
+    label = tf.squeeze(pf['label'])
+
+    image = pf['encoded']
+    image = tf.image.decode_jpeg(image)
+
+
+    # image = tf.decode_raw(image, tf.uint8)
+    # img_shape = tf.stack([height, width, 3], axis=0)
+    # image = tf.reshape(image, img_shape)
+
+    # image = tf.cast(image, tf.float32)
+
+    return image, label
+
+  def preprocess(example):
+    # image = tf.read_file(image_path)
+    # image = tf.image.decode_jpeg(image, channels=3)
+    image, label = decode(example)
 
     # image = tf.image.crop_to_bounding_box(image, 16, 16, xsize+16, ysize+16)
     # image = tf.random_crop(image, [xsize+32, ysize+32, 3])
     image = tf.image.resize_images(image, [xsize, ysize])
 
-    image = image / 255.
-    label = tf.one_hot(image_label, n_classes)
+    image = tf.multiply(image, 1 / 255.)
+    label = tf.one_hot(label, n_classes)
     return image, label
 
-  imagelist = pd.read_csv(src, header=None, index_col=None, sep='\t')
-  if shuffle:
-    print('Before shuffling:')
-    print(imagelist.head())
-    imagelist = imagelist.sample(frac=1)
-    print('After shuffling:')
-    print(imagelist.head())
+  record_patt = os.path.join(src, 'train-*')
+  filenames = tf.data.Dataset.list_files(record_patt)
 
-  n_imgs = imagelist.shape[0]
-  print('imagelist', imagelist.shape)
-
-  image_paths = imagelist[1].values
-  image_labels = imagelist[0].values
-  print(image_paths.shape)
-  print(image_labels.shape)
-
-  image_paths = tf.convert_to_tensor(image_paths, dtype=tf.string)
-  image_labels = tf.convert_to_tensor(image_labels, dtype=tf.int32)
-
-  dataset = tf.data.Dataset.from_tensor_slices((image_paths, image_labels))
-  dataset = dataset.shuffle(10000) # these should be strings
+  dataset = filenames.apply(
+    tf.contrib.data.parallel_interleave(
+        lambda filename: tf.data.TFRecordDataset(filename),
+        cycle_length=8))
+  # dataset = tf.data.TFRecordDataset(filenames)
+  dataset = dataset.repeat()
   dataset = dataset.map(preprocess, num_parallel_calls=parallel)
   dataset = dataset.prefetch(buffer)
   dataset = dataset.batch(batch)
   dataset = dataset.prefetch(100)
 
-  return dataset, n_imgs
+  return dataset
+
 
 if __name__ == '__main__':
   print('Testing ImageNet Dataset')
@@ -59,7 +74,8 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   src = args.src
-  dataset, n_imgs = ImageNetDataset(src)
+  dataset = ImageNetRecords(src)
+
   iterator = dataset.make_one_shot_iterator()
   img_op, label_op = iterator.get_next()
 
@@ -81,7 +97,16 @@ if __name__ == '__main__':
       if i % 50 == 0 and i > 50:
         print('Running average: ', np.mean(times[i-50:i]))
 
+<<<<<<< HEAD
     print('Average over 500 batches: {} +/- {}'.format(
+=======
+      out='examples/{:04d}.jpg'.format(i)
+      if img_.shape[-1] == 1:
+        print('1-channel image')
+        cv2.imwrite(out, img_[:,:,::-1]*255.)
+
+    print('Average over 100 batches: {} +/- {}'.format(
+>>>>>>> fec9414d5a3fa1fb2f23bd93918649c808dc234c
       np.mean(times), np.std(times)
     ))
 

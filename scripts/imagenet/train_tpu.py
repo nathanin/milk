@@ -31,7 +31,7 @@ def main(args):
     # Test batch:
     model = Classifier(input_shape=(args.input_dim, args.input_dim, 3), 
                        n_classes=args.n_classes, encoder_args=encoder_args)
-    optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
+    optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=0.7)
 
     model.compile(optimizer=optimizer,
                   loss=tf.keras.losses.categorical_crossentropy,
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', default='./imagenet_model.h5')
     parser.add_argument('--n_classes', default=1000, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--learning_rate', default=1e-4, type=float)
+    parser.add_argument('--learning_rate', default=1e-3, type=float)
     parser.add_argument('--prefetch_buffer', default=1024, type=int)
 
     args = parser.parse_args()

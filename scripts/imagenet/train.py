@@ -26,12 +26,15 @@ def main(args):
     assert args.dataset is not None
     dataset = ImageNetRecords(src=args.dataset, xsize=args.input_dim,
       ysize=args.input_dim, batch=args.batch_size, buffer=args.prefetch_buffer,
-      parallel=args.n_threads)
+      parallel=args.threads)
 
     # Test batch:
     model = Classifier(input_shape=(args.input_dim, args.input_dim, 3), 
                        n_classes=args.n_classes, encoder_args=encoder_args)
     optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=0.7)
+
+    if args.gpus > 1:
+      model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_relocation=True)
 
     model.compile(optimizer=optimizer,
                   loss=tf.keras.losses.categorical_crossentropy,
@@ -52,11 +55,11 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--tpu', default=False, action='store_true')
+    parser.add_argument('--gpus', default=1, type=int)
     parser.add_argument('--epochs', default=10, type=int)
     parser.add_argument('--dataset', default=None, type=str)
     parser.add_argument('--input_dim', default=96, type=int)
-    parser.add_argument('--n_threads', default=8, type=int)
+    parser.add_argument('--threads', default=4, type=int)
     parser.add_argument('--save_path', default='./imagenet_model.h5')
     parser.add_argument('--n_classes', default=1000, type=int)
     parser.add_argument('--batch_size', default=64, type=int)

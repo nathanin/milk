@@ -50,10 +50,10 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-o', default='mnist_classifier.h5')
+    parser.add_argument('-o', default='pretrained_model.h5')
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--batch', default=96, type=int)
-    parser.add_argument('--epochs', default=25, type=int)
+    parser.add_argument('--epochs', default=10, type=int)
     parser.add_argument('--steps_per_epoch', default=int(1e3))
     args = parser.parse_args()
 

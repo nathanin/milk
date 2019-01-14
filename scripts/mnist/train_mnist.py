@@ -157,8 +157,9 @@ def main(args):
         print('Pretrained model not found ({}). Continuing end 2 end.'.format(args.pretrained))
 
     model.summary()
-    # optimizer = tf.train.AdamOptimizer(learning_rate=args.lr)
-    optimizer = tf.train.AdagradOptimizer(learning_rate=args.lr)
+    optimizer = tf.train.AdamOptimizer(learning_rate=args.lr)
+    # optimizer = tf.keras.optimizers.Adam(lr=args.lr, decay=0.5)
+    # optimizer = tf.train.AdagradOptimizer(learning_rate=args.lr)
 
     model.compile(optimizer=optimizer,
                   loss = tf.keras.losses.categorical_crossentropy,
@@ -181,7 +182,7 @@ if __name__ == '__main__':
     parser.add_argument('--mil',   default='attention', type=str)
     parser.add_argument('--mnist', default=None)
     parser.add_argument('--ntest', default=25, type=int)
-    parser.add_argument('--epochs', default=250, type=int)
+    parser.add_argument('--epochs', default=10, type=int)
     parser.add_argument('--pretrained', default='pretrained_model.h5')
     parser.add_argument('--epoch_steps', default=1e3, type=int)
     parser.add_argument('--max_fraction_positive', default=0.3, type=int)

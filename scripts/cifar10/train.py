@@ -17,14 +17,14 @@ import shutil
 import argparse
 
 from encoder_config import encoder_args
-from data_util import ImageNetRecords
+from data_util import CifarRecords
 from milk.classifier import Classifier
 
 def main(args):
     print(args) 
     # Build the dataset
     assert args.dataset is not None
-    dataset = ImageNetRecords(src=args.dataset, xsize=args.input_dim,
+    dataset = CifarRecords(src=args.dataset, xsize=args.input_dim,
       ysize=args.input_dim, batch=args.batch_size, buffer=args.prefetch_buffer,
       parallel=args.threads)
 
@@ -41,10 +41,9 @@ def main(args):
                   metrics=['categorical_accuracy'])
     model.summary()
 
-    print('\nStart training...')
     try:
         model.fit(dataset.make_one_shot_iterator(),
-                  steps_per_epoch=10000,
+                  steps_per_epoch=args.steps_per_epoch,
                   epochs=args.epochs)
 
     except KeyboardInterrupt:
@@ -56,15 +55,16 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpus', default=1, type=int)
-    parser.add_argument('--epochs', default=10, type=int)
-    parser.add_argument('--dataset', default=None, type=str)
-    parser.add_argument('--input_dim', default=96, type=int)
+    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--dataset', default='cifar-10-tfrecord', type=str)
+    parser.add_argument('--input_dim', default=32, type=int)
     parser.add_argument('--threads', default=4, type=int)
-    parser.add_argument('--save_path', default='./imagenet_model.h5')
-    parser.add_argument('--n_classes', default=1000, type=int)
+    parser.add_argument('--save_path', default='./cifar_10_model.h5')
+    parser.add_argument('--n_classes', default=10, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--learning_rate', default=1e-3, type=float)
-    parser.add_argument('--prefetch_buffer', default=1024, type=int)
+    parser.add_argument('--learning_rate', default=1e-4, type=float)
+    parser.add_argument('--prefetch_buffer', default=2048, type=int)
+    parser.add_argument('--steps_per_epoch', default=50000, type=int)
 
     args = parser.parse_args()
 

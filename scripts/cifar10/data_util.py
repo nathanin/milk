@@ -23,6 +23,7 @@ def CifarRecords(src, batch=32, xsize=32, ysize=32, n_classes=10,
 
   def preprocess(example):
     image, label = decode(example)
+    image = tf.image.random_flip_left_right(image)
     image = tf.multiply(tf.cast(image, tf.float32), 1 / 255.)
     label = tf.one_hot(label, n_classes)
     return image, label

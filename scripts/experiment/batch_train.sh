@@ -7,7 +7,8 @@ steps=500
 epochs=50
 bag=100
 lr=0.00001
-pretrained=../pretraining/pretrained_100k.h5
+# pretrained=../pretraining/pretrained_100k.h5
+pretrained=../pretraining/pretrained_reference.h5
 
 # # With attention
 # for i in `seq 1 5`; do

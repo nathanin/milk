@@ -20,8 +20,8 @@ import os
 from milk.utilities import data_utils
 from milk import Milk
 
-# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
-with open('../dataset/cases_md5.pkl', 'rb') as f:  
+with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
+# with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
 from encoder_config import encoder_args

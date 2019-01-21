@@ -30,6 +30,7 @@ def CifarRecords(src, batch=32, xsize=32, ysize=32, n_classes=10,
 
   dataset = tf.data.TFRecordDataset(src)
   dataset = dataset.repeat()
+  dataset = dataset.shuffle(5000)
   dataset = dataset.map(preprocess, num_parallel_calls=parallel)
   dataset = dataset.prefetch(buffer)
   dataset = dataset.batch(batch)

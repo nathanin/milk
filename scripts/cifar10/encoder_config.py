@@ -1,8 +1,7 @@
 encoder_args = {
-    'depth_of_model': 24,
-    'growth_rate': 42,
+    'depth_of_model': 32,
+    'growth_rate': 32,
     'num_of_blocks': 4,
     'output_classes': 2,
-    'num_layers_in_each_block': 6,
-    'pool_initial': False,
+    'num_layers_in_each_block': 8,
 }

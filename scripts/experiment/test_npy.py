@@ -20,9 +20,11 @@ from milk.utilities import model_utils
 from milk.utilities import training_utils
 from milk import Milk, MilkEncode, MilkPredict, MilkAttention
 
-with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
-# with open('../dataset/cases_md5.pkl', 'rb') as f:
+# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
+with open('../dataset/cases_md5.pkl', 'rb') as f:
     case_dict = pickle.load(f)
+
+from encoder_config import encoder_args
 
 def case_label_fn(data_path):
     case = os.path.splitext(os.path.basename(data_path))[0]
@@ -114,14 +116,6 @@ def main(args):
     snapshot = 'save/{}.h5'.format(args.timestamp)
     trained_model = load_model(snapshot)
 
-    # TODO: stop relying on defining these hyperparameters every time.
-    encoder_args = {
-        'depth_of_model': 32,
-        'growth_rate': 64,
-        'num_of_blocks': 4,
-        'output_classes': 2,
-        'num_layers_in_each_block': 8,
-    }
     if args.mcdropout:
         encoder_args['mcdropout'] = True
 
@@ -174,15 +168,17 @@ def main(args):
     print('Accuracy: {:3.3f}'.format(accuracy))
 
     if args.odir is not None:
-        saveimg = os.path.join(args.odir, '{}.png'.format(args.timestamp))
-        savefn = os.path.join(args.odir, '{}.txt'.format(args.timestamp))
+        save_img = os.path.join(args.odir, '{}.png'.format(args.timestamp))
+        save_metrics = os.path.join(args.odir, '{}.txt'.format(args.timestamp))
+        save_yhat = os.path.join(args.odir, '{}.npy'.format(args.timestamp))
     else:
-        saveimg = None
-        savefn = None
+        save_img = None
+        save_metrics = None
+        save_yhat = None
 
-    auc_curve(ytrue, yhat, savepath=saveimg)
-    test_eval(ytrue, yhat, savepath=savefn)
-
+    auc_curve(ytrue, yhat, savepath=save_img)
+    test_eval(ytrue, yhat, savepath=save_metrics)
+    np.save(save_yhat, yhat)
 
 if __name__ == '__main__':
     # n_repeat controls re-sampling from the case

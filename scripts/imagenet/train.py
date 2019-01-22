@@ -16,7 +16,7 @@ import shutil
 import argparse
 
 from encoder_config import encoder_args
-from dataset import ImageNetRecords
+from data_util import ImageNetRecords
 from milk.classifier import Classifier
 
 def main(args):
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', default='./imagenet_model.h5')
     parser.add_argument('--n_classes', default=1000, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--learning_rate', default=1e-4, type=float)
+    parser.add_argument('--learning_rate', default=1e-3, type=float)
     parser.add_argument('--prefetch_buffer', default=1024, type=int)
 
     args = parser.parse_args()

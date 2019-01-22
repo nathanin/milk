@@ -20,8 +20,8 @@ import re
 from milk.utilities import data_utils
 from milk import Milk
 
-sys.path.insert(0, '..')
-from dataset import CASE_LABEL_DICT
+with open('../dataset/cases_md5.pkl', 'rb') as f:
+    case_dict = pickle.load(f)
 
 def filter_list_by_label(lst):
     lst_out = []
@@ -74,12 +74,12 @@ def main(args):
     # Take care of passed in test and val lists for the ensemble experiment
     # we need both test list and val list to be given.
     if (args.test_list is not None) and (args.val_list is not None):
-        train_list, val_list, test_list = load_lists(args.data_patt, 
+        train_list, val_list, test_list = load_lists(os.path.join(args.data_patt, '*.npy'), 
             args.val_list, args.test_list)
 
     else:
-        train_list, val_list, test_list = data_utils.list_data(args.data_patt, 
-            val_pct=0.1, test_pct=0.3)
+        train_list, val_list, test_list = data_utils.list_data(os.path.join(args.data_patt, '*.npy'), 
+            val_pct=0.1, test_pct=0.3, seed=args.seed)
 
     if args.verbose:
         print("train_list:")
@@ -213,28 +213,29 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--mil',              default='attention', type=str)
+    parser.add_argument('--scale',            default=1.0, type=float)
     parser.add_argument('--epochs',           default=50, type=int)
-    parser.add_argument('--learning_rate',    default=1e-5, type=float)
     parser.add_argument('--x_size',           default=128, type=int)
     parser.add_argument('--y_size',           default=128, type=int)
-    parser.add_argument('--crop_size',        default=96, type=int)
-    parser.add_argument('--scale',            default=1.0, type=float)
-    parser.add_argument('--batch_size',       default=1, type=int)
     parser.add_argument('--bag_size',         default=150, type=int)
-    parser.add_argument('--mil',              default='attention', type=str)
-    parser.add_argument('--gated_attention',  default=False, action='store_true')
+    parser.add_argument('--crop_size',        default=96, type=int)
+    parser.add_argument('--batch_size',       default=1, type=int)
+    parser.add_argument('--learning_rate',    default=1e-5, type=float)
     parser.add_argument('--freeze_encoder',   default=False, action='store_true')
+    parser.add_argument('--gated_attention',  default=False, action='store_true')
 
-    parser.add_argument('--data_patt',        default='../dataset/tiles/*npy', type=str)
-    parser.add_argument('--test_pct',         default=0.2, type=float)
-    parser.add_argument('--val_pct',          default=0.3, type=float)
-    parser.add_argument('--pretrained_model', default='../pretraining/pretrained.h5', type=str)
     parser.add_argument('--tpu',              default=False, action='store_true')
+    parser.add_argument('--seed',             default=None, type=int)
+    parser.add_argument('--val_pct',          default=0.3, type=float)
+    parser.add_argument('--test_pct',         default=0.2, type=float)
+    parser.add_argument('--data_patt',        default='../dataset/tiles', type=str)
     parser.add_argument('--save_prefix',      default='save', type=str)
+    parser.add_argument('--pretrained_model', default='../pretraining/pretrained.h5', type=str)
 
-    parser.add_argument('--test_list',        default=None, type=str)
-    parser.add_argument('--val_list',         default=None, type=str)
     parser.add_argument('--verbose',          default=False, action='store_true')
+    parser.add_argument('--val_list',         default=None, type=str)
+    parser.add_argument('--test_list',        default=None, type=str)
     args = parser.parse_args()
 
     main(args)

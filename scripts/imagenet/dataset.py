@@ -55,13 +55,12 @@ def ImageNetRecords(src, batch=32, xsize=96, ysize=96, n_classes=1000,
   dataset = filenames.apply(
     tf.contrib.data.parallel_interleave(
         lambda filename: tf.data.TFRecordDataset(filename),
-        cycle_length=8))
+        cycle_length=24))
   # dataset = tf.data.TFRecordDataset(filenames)
   dataset = dataset.repeat()
   dataset = dataset.map(preprocess, num_parallel_calls=parallel)
   dataset = dataset.prefetch(buffer)
   dataset = dataset.batch(batch)
-  dataset = dataset.prefetch(100)
 
   return dataset
 
@@ -86,27 +85,18 @@ if __name__ == '__main__':
     print('\t', img_.dtype, label_.dtype)
     print('\t', img_.min(), img_.max())
 
-    print('Testing batches')
-    ntest = 500
-    times = np.zeros(500)
-    for i in range(500):
+    for i, im in enumerate(img_):
+      oname = 'testbatch/{:04d}.jpg'.format(i)
+      cv2.imwrite(oname, im[:,:,::-1]*255)
+
+    times = np.zeros(100)
+    for i in range(100):
       tstart = time.time()
       img_, label_ = sess.run([img_op, label_op])
       tend = time.time()
       times[i] = tend - tstart
-      if i % 50 == 0 and i > 50:
-        print('Running average: ', np.mean(times[i-50:i]))
-
-<<<<<<< HEAD
-    print('Average over 500 batches: {} +/- {}'.format(
-=======
-      out='examples/{:04d}.jpg'.format(i)
-      if img_.shape[-1] == 1:
-        print('1-channel image')
-        cv2.imwrite(out, img_[:,:,::-1]*255.)
 
     print('Average over 100 batches: {} +/- {}'.format(
->>>>>>> fec9414d5a3fa1fb2f23bd93918649c808dc234c
       np.mean(times), np.std(times)
     ))
 

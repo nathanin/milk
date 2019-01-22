@@ -5,7 +5,6 @@ The classifier will be reused as initialization for the MIL encoder
 so it must have at least a subset with the same architecture.
 Currently, it's basically required that the entier encoding architecture
 is kept constant.
-
 """
 from __future__ import print_function
 import numpy as np
@@ -31,7 +30,8 @@ def main(args):
     # Test batch:
     model = Classifier(input_shape=(args.input_dim, args.input_dim, 3), 
                        n_classes=args.n_classes, encoder_args=encoder_args)
-    optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
+    optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-8)
+    # optimizer = tf.train.AdamOptimizer(args.learning_rate)
 
     if args.gpus > 1:
         model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_relocation=True)
@@ -44,7 +44,7 @@ def main(args):
     print('\nStart training...')
     try:
         model.fit(dataset.make_one_shot_iterator(),
-                  steps_per_epoch=10000,
+                  steps_per_epoch=25000,
                   epochs=args.epochs)
 
     except KeyboardInterrupt:

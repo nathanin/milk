@@ -39,9 +39,25 @@ class ImageCoder(object):
     image = tf.image.decode_jpeg(self._cmyk_data, channels=0)
     self._cmyk_to_rgb = tf.image.encode_jpeg(image, format='rgb', quality=100)
 
+    # Initializes function that decodes JPEG data in the native channels.
+    self._decode_jpeg_native_data = tf.placeholder(dtype=tf.string)
+    self._decode_jpeg_native = tf.image.decode_jpeg(self._decode_jpeg_native_data, channels=0)
+
+    # Initializes function that decodes JPEG data in the native channels.
+    self._decode_jpeg_rgb_data = tf.placeholder(dtype=tf.string)
+    self._decode_jpeg_rgb = tf.image.decode_jpeg(self._decode_jpeg_rgb_data, channels=3)
+
     # Initializes function that decodes RGB JPEG data.
-    self._decode_jpeg_data = tf.placeholder(dtype=tf.string)
-    self._decode_jpeg = tf.image.decode_jpeg(self._decode_jpeg_data, channels=0)
+    self._encode_jpeg_data = tf.placeholder(dtype=tf.uint8)
+    self._encode_jpeg = tf.image.encode_jpeg(self._encode_jpeg_data, format='rgb')
+
+    # Initializes function that resizes an RGB image
+    self._resize_image_data = tf.placeholder(dtype=tf.uint8)
+    self._resize_image = tf.image.resize_image_with_pad(self.resize_image_data, 96, 96)
+    
+    # Initializes function that pads an RGB image
+    # self._pad_image_data = tf.placeholder(dtype=tf.uint8)
+    # self._pad_image = tf.image.
 
   def png_to_jpeg(self, image_data):
     return self._sess.run(self._png_to_jpeg,
@@ -51,12 +67,31 @@ class ImageCoder(object):
     return self._sess.run(self._cmyk_to_rgb,
                           feed_dict={self._cmyk_data: image_data})
 
-  def decode_jpeg(self, image_data):
-    image = self._sess.run(self._decode_jpeg,
-                           feed_dict={self._decode_jpeg_data: image_data})
+  def decode_jpeg_native(self, image_data):
+    image = self._sess.run(self._decode_jpeg_native,
+                           feed_dict={self._decode_jpeg_native_data: image_data})
     # assert len(image.shape) == 3
     # assert image.shape[2] == 3
     return image
+
+  def decode_jpeg_rgb(self, image_data):
+    image = self._sess.run(self._decode_jpeg_rgb,
+                           feed_dict={self._decode_jpeg_rgb_data: image_data})
+    assert len(image.shape) == 3
+    assert image.shape[2] == 3
+    return image
+
+  def encode_jpeg(self, image_data):
+    image = self._sess.run(self._encode_jpeg,
+                           feed_dict={self._encode_jpeg_data: image_data})
+    # assert len(image.shape) == 3
+    # assert image.shape[2] == 3
+    return image
+
+  def resize_image(self, image_data):
+    image_resized = self._sess.run(self._resize_image, 
+                                   feed_dict={self._resize_image_data: image_data})
+    return image_resized
 
 
 def _int64_feature(value):
@@ -80,7 +115,7 @@ def _bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def _process_image(filename, coder):
+def _process_image(filename, coder, target=96):
   """Process a single image file.
 
   Args:
@@ -96,18 +131,24 @@ def _process_image(filename, coder):
     image_data = f.read()
 
   # Decode the RGB JPEG.
-  image = coder.decode_jpeg(image_data)
+  image = coder.decode_jpeg_native(image_data)
 
   # Check that image converted to RGB
   height = image.shape[0]
   width = image.shape[1]
+  channels = image.shape[2]
 
-  if len(image.shape) != 3 or image.shape[2] != 3:
-    print('\t\tgot grayscale image; skipping')
-    return 0, 0, 0
-  else: 
-    return image_data, height, width
+  # Grayscale --> rgb if needed
+  if len(image.shape) != 3 or channels != 3:
+    print('\t\tgot grayscale image; re-encoding...')
+    image = coder.decode_jpeg_rgb(image_data)
 
+  # Pad or crop to target size
+  image = coder.resize_image(image)
+
+  image_data = coder.encode_jpeg(image)
+
+  return image_data, height, width
 
 def _convert_to_example(image_buffer, height, width, label):
   """Build an Example proto for an example.
@@ -149,13 +190,13 @@ def write_record(record_path, shard, coder):
     file_path = shard.iloc[i,1]
     
     if file_path.split('/')[-1] in blacklist:
-      print('\t\tSkipping {}'.format(file_path))
+      print('\t\tSkipping {} (blacklisted)'.format(file_path))
       continue
 
     image_buffer, height, width = _process_image(file_path, coder)
-    if image_buffer == 0:
-      print('\t\tSkipping {}'.format(file_path))
-      continue 
+    # if image_buffer == 0:
+    #   print('\t\tSkipping {}'.format(file_path))
+    #   continue 
 
     example = _convert_to_example(image_buffer, height, width, label)
     writer.write(example.SerializeToString())
@@ -175,7 +216,6 @@ def main(args):
   print('Sampled {} file names'.format(filenames.shape[0]))
 
   n_images = filenames.shape[0]
-  # shards = int(n_images // args.n)
   sharded_filenames = np.array_split(filenames, args.n)
 
   coder = ImageCoder()

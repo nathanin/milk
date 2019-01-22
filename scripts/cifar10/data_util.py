@@ -24,13 +24,14 @@ def CifarRecords(src, batch=32, xsize=32, ysize=32, n_classes=10,
   def preprocess(example):
     image, label = decode(example)
     image = tf.image.random_flip_left_right(image)
+    image = tf.image.resize_images(image, (xsize, ysize))
     image = tf.multiply(tf.cast(image, tf.float32), 1 / 255.)
     label = tf.one_hot(label, n_classes)
     return image, label
 
   dataset = tf.data.TFRecordDataset(src)
   dataset = dataset.repeat()
-  dataset = dataset.shuffle(5000)
+  dataset = dataset.shuffle(10000)
   dataset = dataset.map(preprocess, num_parallel_calls=parallel)
   dataset = dataset.prefetch(buffer)
   dataset = dataset.batch(batch)

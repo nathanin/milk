@@ -24,7 +24,6 @@ from encoder_config import encoder_args
 
 def main(args):
     print(args) 
-    # Get crop size from input_dim and downsample
     crop_size = int(args.input_dim / args.downsample)
 
     # Build the dataset
@@ -45,14 +44,13 @@ def main(args):
                        n_classes=args.n_classes, encoder_args=encoder_args)
 
     # optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-    optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=0.001)
+    optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
 
     model.compile(optimizer=optimizer,
                   loss=tf.keras.losses.categorical_crossentropy,
                   metrics=['categorical_accuracy'])
     model.summary()
 
-    print('\nStart training...')
     try:
         model.fit(dataset.dataset.make_one_shot_iterator(),
                   steps_per_epoch=args.iterations,

@@ -1,5 +1,5 @@
 """
-Train a classifier in graph mode
+Train a classifier with keras API
 
 The classifier will be reused as initialization for the MIL encoder
 so it must have at least a subset with the same architecture.
@@ -17,9 +17,11 @@ import shutil
 import argparse
 
 from data_util import CifarRecords
-from encoder_config import encoder_args
 # from cifar_encoder_config import encoder_args
 from milk.classifier import Classifier
+
+sys.path.insert(0, '../experiment')
+from encoder_config import encoder_args
 
 def main(args):
   print(args) 
@@ -62,7 +64,7 @@ if __name__ == '__main__':
   parser.add_argument('--gpus', default=1, type=int)
   parser.add_argument('--epochs', default=50, type=int)
   parser.add_argument('--dataset', default='cifar-10-tfrecord', type=str)
-  parser.add_argument('--input_dim', default=32, type=int)
+  parser.add_argument('--input_dim', default=96, type=int)
   parser.add_argument('--threads', default=8, type=int)
   parser.add_argument('--save_path', default='./cifar_10_model.h5')
   parser.add_argument('--n_classes', default=10, type=int)

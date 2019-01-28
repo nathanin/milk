@@ -267,7 +267,7 @@ def main(args, sess):
                   preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
                   process_mag       = args.mag,
                   process_size      = args.input_dim,
-                  oversample_factor = 1.5,
+                  oversample_factor = 1.25,
                   verbose           = False)
       print('calculated foregroud: ', svs.foreground.shape)
       print('calculated ds_tile_map: ', svs.ds_tile_map.shape)

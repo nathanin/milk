@@ -5,7 +5,7 @@
 set -e
 steps=500
 epochs=25
-bag=100
+bag=50
 lr=0.0001
 pretrained=../pretraining/gleason_classifier_deep.h5
 # pretrained="../cifar10/cifar_10_deep_model.h5"

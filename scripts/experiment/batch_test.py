@@ -134,11 +134,11 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--argdir', default='args', type=str)
-    parser.add_argument('--test', default='svs', type=str)
-    parser.add_argument('--mcdropout', default=False, action='store_true')
     parser.add_argument('--val', default=False, action='store_true')
     parser.add_argument('--odir', default='result', type=str)
+    parser.add_argument('--test', default='npy', type=str)
+    parser.add_argument('--argdir', default='args', type=str)
+    parser.add_argument('--mcdropout', default=False, action='store_true')
 
     ## should point to a text file
     parser.add_argument('--run_list', default=None, type=str)

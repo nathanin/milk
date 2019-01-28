@@ -20,8 +20,8 @@ import os
 from milk.utilities import data_utils
 from milk import Milk
 
-with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
-# with open('../dataset/cases_md5.pkl', 'rb') as f:  
+# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
+with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
 from encoder_config import encoder_args
@@ -141,14 +141,15 @@ def main(args):
     # Need to use tensorflow optimizer
     optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
   else:
-    optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-5)
+    optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
 
   exptime = datetime.datetime.now()
   exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
   out_path = os.path.join(args.save_prefix, '{}.h5'.format(exptime_str))
   if not os.path.exists(os.path.dirname(out_path)):
-    os.makedirs(os.path.dirname(out_path)) # < recursively create the destination directory
+    os.makedirs(os.path.dirname(out_path)) 
 
+  # Todo : clean up
   val_list_file = os.path.join('./val_lists', '{}.txt'.format(exptime_str))
   with open(val_list_file, 'w+') as f:
     for v in val_list:
@@ -184,19 +185,21 @@ def main(args):
   ## Replace randomly initialized weights after model is compiled and on the correct device.
   if os.path.exists(args.pretrained_model) and not args.dont_use_pretrained:
     print('Replacing random weights with weights from {}'.format(args.pretrained_model))
-    pretrained_model = load_model(args.pretrained_model)
-    pretrained_layers = {l.name: l for l in pretrained_model.layers if 'encoder' in l.name}
-    for l in model.layers:
-      if 'encoder' not in l.name:
-        print('not an encoding layer: ', l.name)
-        continue
-      try:
-        w = pretrained_layers[l.name].get_weights()
-        print('setting layer {}'.format(l.name))
-        l.set_weights(w)
-      except:
-        print('error setting layer {}'.format(l.name))
-    del pretrained_model 
+    model.load_weights(args.pretrained_model, by_name=True)
+
+    # pretrained_model = load_model(args.pretrained_model)
+    # pretrained_layers = {l.name: l for l in pretrained_model.layers if 'encoder' in l.name}
+    # for l in model.layers:
+    #   if 'encoder' not in l.name:
+    #     print('not an encoding layer {}'.format(l.name))
+    #     continue
+    #   try:
+    #     w = pretrained_layers[l.name].get_weights()
+    #     print('setting layer {}'.format(l.name))
+    #     l.set_weights(w)
+    #   except:
+    #     print('error setting layer {}'.format(l.name))
+    # del pretrained_model 
 
   if args.early_stop:
     callbacks = [
@@ -232,33 +235,33 @@ def main(args):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--mil',              default='attention', type=str)
-  parser.add_argument('--scale',            default=1.0, type=float)
-  parser.add_argument('--x_size',           default=128, type=int)
-  parser.add_argument('--y_size',           default=128, type=int)
-  parser.add_argument('--epochs',           default=50, type=int)
-  parser.add_argument('--bag_size',         default=150, type=int)
-  parser.add_argument('--crop_size',        default=96, type=int)
-  parser.add_argument('--batch_size',       default=1, type=int)
-  parser.add_argument('--learning_rate',    default=1e-5, type=float)
-  parser.add_argument('--freeze_encoder',   default=False, action='store_true')
-  parser.add_argument('--gated_attention',  default=True, action='store_false')
-  parser.add_argument('--deep_classifier',  default=False, action='store_true')
-  parser.add_argument('--steps_per_epoch',  default=500, type=int)
+  parser.add_argument('--mil',              default = 'attention', type=str)
+  parser.add_argument('--scale',            default = 1.0, type=float)
+  parser.add_argument('--x_size',           default = 128, type=int)
+  parser.add_argument('--y_size',           default = 128, type=int)
+  parser.add_argument('--epochs',           default = 20, type=int)
+  parser.add_argument('--bag_size',         default = 150, type=int)
+  parser.add_argument('--crop_size',        default = 96, type=int)
+  parser.add_argument('--batch_size',       default = 1, type=int)
+  parser.add_argument('--learning_rate',    default = 1e-4, type=float)
+  parser.add_argument('--freeze_encoder',   default = False, action='store_true')
+  parser.add_argument('--gated_attention',  default = True, action='store_false')
+  parser.add_argument('--deep_classifier',  default = False, action='store_true')
+  parser.add_argument('--steps_per_epoch',  default = 5000, type=int)
 
-  parser.add_argument('--tpu',              default=False, action='store_true')
-  parser.add_argument('--seed',             default=None, type=int)
-  parser.add_argument('--val_pct',          default=0.2, type=float)
-  parser.add_argument('--test_pct',         default=0.2, type=float)
-  parser.add_argument('--data_patt',        default='../dataset/tiles_reduced', type=str)
-  parser.add_argument('--save_prefix',      default='save', type=str)
-  parser.add_argument('--pretrained_model', default='../pretraining/pretrained.h5', type=str)
-  parser.add_argument('--dont_use_pretrained',   default=False, action='store_true')
+  parser.add_argument('--tpu',              default = False, action='store_true')
+  parser.add_argument('--seed',             default = None, type=int)
+  parser.add_argument('--val_pct',          default = 0.2, type=float)
+  parser.add_argument('--test_pct',         default = 0.2, type=float)
+  parser.add_argument('--data_patt',        default = '../dataset/tiles_reduced', type=str)
+  parser.add_argument('--save_prefix',      default = 'save', type=str)
+  parser.add_argument('--pretrained_model', default = '../pretraining/pretrained.h5', type=str)
+  parser.add_argument('--dont_use_pretrained', default = False, action='store_true')
 
-  parser.add_argument('--verbose',          default=False, action='store_true')
-  parser.add_argument('--val_list',         default=None, type=str)
-  parser.add_argument('--test_list',        default=None, type=str)
-  parser.add_argument('--early_stop',       default=False, action='store_true')
+  parser.add_argument('--verbose',          default = False, action='store_true')
+  parser.add_argument('--val_list',         default = None, type=str)
+  parser.add_argument('--test_list',        default = None, type=str)
+  parser.add_argument('--early_stop',       default = False, action='store_true')
   args = parser.parse_args()
 
   main(args)

@@ -1,5 +1,5 @@
 """
-Train a classifier in graph mode
+Train a classifier with keras API
 
 The classifier will be reused as initialization for the MIL encoder
 so it must have at least a subset with the same architecture.

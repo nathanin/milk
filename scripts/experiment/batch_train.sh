@@ -101,5 +101,5 @@ for i in `seq 1 5`; do
         --deep_classifier \
         --pretrained_model $pretrained \
         --seed 999 \
-	     --early_stop
+        --early_stop
 done

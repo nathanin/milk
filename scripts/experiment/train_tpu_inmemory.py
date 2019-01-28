@@ -188,6 +188,7 @@ def main(args):
     pretrained_layers = {l.name: l for l in pretrained_model.layers if 'encoder' in l.name}
     for l in model.layers:
       if 'encoder' not in l.name:
+        print('not an encoding layer: ', l.name)
         continue
       try:
         w = pretrained_layers[l.name].get_weights()
@@ -201,7 +202,7 @@ def main(args):
     callbacks = [
         tf.keras.callbacks.EarlyStopping(monitor='val_loss', 
                                          min_delta=0.00001, 
-                                         patience=30, 
+                                         patience=10, 
                                          verbose=1, 
                                          mode='auto',)
     ]

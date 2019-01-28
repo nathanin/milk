@@ -17,9 +17,11 @@ import shutil
 import argparse
 
 from data_util import CifarRecords
-from encoder_config import encoder_args
 # from cifar_encoder_config import encoder_args
 from milk.classifier import Classifier
+
+sys.path.insert(0, '../experiment')
+from encoder_config import encoder_args
 
 def main(args):
   print(args) 
@@ -62,13 +64,13 @@ if __name__ == '__main__':
   parser.add_argument('--gpus', default=1, type=int)
   parser.add_argument('--epochs', default=50, type=int)
   parser.add_argument('--dataset', default='cifar-10-tfrecord', type=str)
-  parser.add_argument('--input_dim', default=32, type=int)
-  parser.add_argument('--threads', default=8, type=int)
+  parser.add_argument('--input_dim', default=96, type=int)
+  parser.add_argument('--threads', default=12, type=int)
   parser.add_argument('--save_path', default='./cifar_10_model.h5')
   parser.add_argument('--n_classes', default=10, type=int)
   parser.add_argument('--batch_size', default=64, type=int)
   parser.add_argument('--learning_rate', default=1e-4, type=float)
-  parser.add_argument('--prefetch_buffer', default=2048, type=int)
+  parser.add_argument('--prefetch_buffer', default=3096, type=int)
 
   args = parser.parse_args()
 

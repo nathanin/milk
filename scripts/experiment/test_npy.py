@@ -20,8 +20,8 @@ from milk.utilities import model_utils
 from milk.utilities import training_utils
 from milk import Milk, MilkEncode, MilkPredict, MilkAttention
 
-# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
-with open('../dataset/cases_md5.pkl', 'rb') as f:
+with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
+#with open('../dataset/cases_md5.pkl', 'rb') as f:
   case_dict = pickle.load(f)
 
 from encoder_config import encoder_args
@@ -129,6 +129,7 @@ def main(args):
     input_shape = 512
   predict_model = MilkPredict(input_shape=[input_shape], mode=args.mil)
 
+  print('loading weights from {}'.format(snapshot))
   encode_model.load_weights(snapshot, by_name=True)
   predict_model.load_weights(snapshot, by_name=True)
 

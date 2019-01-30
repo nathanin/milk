@@ -2,7 +2,7 @@ Code for "Deep Multiple Instance Learning identifies histological features of ag
 
 In progress.
 
-#### Multiple Instance Learning Kit (MILK)
+### Multiple Instance Learning Kit (MILK)
 
 Structure
 ```
@@ -77,14 +77,45 @@ scripts/
       |____ readme.md
       |____ train_mnist.py
 
+|____ cifar10/
+      |____ data_util.py
+      |____ train.py
+      |____ cifar2tfrecord.py
+
 ```
 
 #### Requirements
 Please refer to `requirements.txt`
 
+#### Setup
+```
+pip install -e .
+```
+
+#### MNIST Bags
+MNIST Bags demonstrates the "positive bag" problem.
+We have sets of `n` MNIST digits, with one particular digit designated as the "positive" one.
+If >=1 examples of this digit is present in a bag, we consider the bag positive.
+Else, the bag is negative.
+The task is to build a classifier using only the **bag level** annotations of positive and negative.
+That is, we have no knowledge of the labels for the individual examples composing each bag.
+See [Ilse, et al (2018)](https://arxiv.org/abs/1802.04712).
+
+We can make the problem easier by initializing the `encoder` CNN to be a straight up MNIST classifier.
+
+Run:
+
+```
+scripts/mnist/pretrain_mnist.py -o scripts/mnist/pretrained.h5
+scripts/mnist/train.py -o scripts/mnist/bagged_mnist.h5 --pretrained scripts/mnist/pretrained.h5
+```
+
+
 #### Milestones
 - **Make the whole thing run on TPU.** 
-  - Progress: see branch `functional-api` for a version compatible with TPU execution. See it run the "bagged MNIST" example on [Google Colab](https://colab.research.google.com/drive/1eOcZaqQG01fS16ckn9x94ivW-k12fbcg). The next thing to do is update the main experiment. 
+  - Progress: see branch `functional-api` for a version compatible with TPU execution. 
+  - Update: reworked `master` to use the functional api. Branch `functional-api` is now defunct.
+  - See it run the bagged MNIST example on [Google Colab](https://colab.research.google.com/drive/1eOcZaqQG01fS16ckn9x94ivW-k12fbcg). 
 
-Date: October 25, 2018
+ 
 Contact: Nathan.Ing@cshs.org , ing.nathany@gmail.com

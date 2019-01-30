@@ -1,3 +1,6 @@
+"""
+Spin up a tf.data.Dataset for a list of paths
+"""
 import tensorflow as tf
 import pandas as pd
 import numpy as np
@@ -52,7 +55,7 @@ def ImageNetRecords(src, batch=32, xsize=96, ysize=96, n_classes=1000,
   dataset = filenames.apply(
     tf.contrib.data.parallel_interleave(
         lambda filename: tf.data.TFRecordDataset(filename),
-        cycle_length=8))
+        cycle_length=24))
   # dataset = tf.data.TFRecordDataset(filenames)
   dataset = dataset.repeat()
   dataset = dataset.map(preprocess, num_parallel_calls=parallel)
@@ -92,11 +95,6 @@ if __name__ == '__main__':
       img_, label_ = sess.run([img_op, label_op])
       tend = time.time()
       times[i] = tend - tstart
-
-      out='examples/{:04d}.jpg'.format(i)
-      if img_.shape[-1] == 1:
-        print('1-channel image')
-        cv2.imwrite(out, img_[:,:,::-1]*255.)
 
     print('Average over 100 batches: {} +/- {}'.format(
       np.mean(times), np.std(times)

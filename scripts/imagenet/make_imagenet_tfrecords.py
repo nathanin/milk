@@ -51,6 +51,14 @@ class ImageCoder(object):
     self._encode_jpeg_data = tf.placeholder(dtype=tf.uint8)
     self._encode_jpeg = tf.image.encode_jpeg(self._encode_jpeg_data, format='rgb')
 
+    # Initializes function that resizes an RGB image
+    self._resize_image_data = tf.placeholder(dtype=tf.uint8)
+    self._resize_image = tf.image.resize_image_with_pad(self.resize_image_data, 96, 96)
+    
+    # Initializes function that pads an RGB image
+    # self._pad_image_data = tf.placeholder(dtype=tf.uint8)
+    # self._pad_image = tf.image.
+
   def png_to_jpeg(self, image_data):
     return self._sess.run(self._png_to_jpeg,
                           feed_dict={self._png_data: image_data})
@@ -80,6 +88,11 @@ class ImageCoder(object):
     # assert image.shape[2] == 3
     return image
 
+  def resize_image(self, image_data):
+    image_resized = self._sess.run(self._resize_image, 
+                                   feed_dict={self._resize_image_data: image_data})
+    return image_resized
+
 
 def _int64_feature(value):
   """Wrapper for inserting int64 features into Example proto."""
@@ -102,7 +115,7 @@ def _bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def _process_image(filename, coder):
+def _process_image(filename, coder, target=96):
   """Process a single image file.
 
   Args:
@@ -123,16 +136,19 @@ def _process_image(filename, coder):
   # Check that image converted to RGB
   height = image.shape[0]
   width = image.shape[1]
+  channels = image.shape[2]
 
-  if len(image.shape) != 3 or image.shape[2] != 3:
+  # Grayscale --> rgb if needed
+  if len(image.shape) != 3 or channels != 3:
     print('\t\tgot grayscale image; re-encoding...')
     image = coder.decode_jpeg_rgb(image_data)
-    image_data = coder.encode_jpeg(image)
-    # return 0, 0, 0
-  # else: 
+
+  # Pad or crop to target size
+  image = coder.resize_image(image)
+
+  image_data = coder.encode_jpeg(image)
 
   return image_data, height, width
-
 
 def _convert_to_example(image_buffer, height, width, label):
   """Build an Example proto for an example.
@@ -151,6 +167,7 @@ def _convert_to_example(image_buffer, height, width, label):
       'width': _int64_feature(width),
       'encoded': _bytes_feature(image_buffer)}))
   return example
+
 
 blacklist = ['n01739381_1309.JPEG', 'n02077923_14822.JPEG',
               'n02447366_23489.JPEG', 'n02492035_15739.JPEG',
@@ -199,7 +216,6 @@ def main(args):
   print('Sampled {} file names'.format(filenames.shape[0]))
 
   n_images = filenames.shape[0]
-  # shards = int(n_images // args.n)
   sharded_filenames = np.array_split(filenames, args.n)
 
   coder = ImageCoder()

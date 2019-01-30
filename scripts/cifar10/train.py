@@ -20,8 +20,9 @@ from data_util import CifarRecords
 # from cifar_encoder_config import encoder_args
 from milk.classifier import Classifier
 
-sys.path.insert(0, '../experiment')
-from encoder_config import encoder_args
+#sys.path.insert(0, '../experiment')
+#from encoder_config import encoder_args
+from cifar_encoder_config import encoder_args
 
 def main(args):
   print(args) 
@@ -29,6 +30,10 @@ def main(args):
   assert args.dataset is not None
 
   dataset = CifarRecords(src=args.dataset, xsize=args.input_dim,
+    ysize=args.input_dim, batch=args.batch_size, buffer=args.prefetch_buffer,
+    parallel=args.threads)
+
+  val_dataset = CifarRecords(src=args.dataset_test, xsize=args.input_dim,
     ysize=args.input_dim, batch=args.batch_size, buffer=args.prefetch_buffer,
     parallel=args.threads)
 
@@ -48,8 +53,10 @@ def main(args):
 
   try:
     model.fit(dataset.make_one_shot_iterator(),
-              steps_per_epoch=20000,
-              epochs=args.epochs)
+              steps_per_epoch=48000 // args.batch_size,
+              epochs=args.epochs,
+              validation_data=val_dataset.make_one_shot_iterator(),
+              validation_steps=12000 // args.batch_size)
   except KeyboardInterrupt:
     print('Stop signal')
   except Exception as e:
@@ -63,7 +70,6 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--gpus', default=1, type=int)
   parser.add_argument('--epochs', default=50, type=int)
-  parser.add_argument('--dataset', default='cifar-10-tfrecord', type=str)
   parser.add_argument('--input_dim', default=96, type=int)
   parser.add_argument('--threads', default=8, type=int)
   parser.add_argument('--save_path', default='./cifar_10_model.h5')
@@ -71,6 +77,9 @@ if __name__ == '__main__':
   parser.add_argument('--batch_size', default=64, type=int)
   parser.add_argument('--learning_rate', default=1e-4, type=float)
   parser.add_argument('--prefetch_buffer', default=2048, type=int)
+
+  parser.add_argument('--dataset',      default='data/cifar-10-train-tfrecord', type=str)
+  parser.add_argument('--dataset_test', default='data/cifar-10-test-tfrecord', type=str)
 
   args = parser.parse_args()
 

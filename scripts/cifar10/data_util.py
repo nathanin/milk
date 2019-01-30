@@ -10,7 +10,6 @@ import os
 
 def CifarRecords(src, batch=32, xsize=32, ysize=32, n_classes=10, 
                     parallel=8, buffer=1024, shuffle=True):
-
   def decode(example):
     features = {'label': tf.FixedLenFeature((), tf.int64, default_value=0),
                 'image': tf.FixedLenFeature((), tf.string, default_value=''),}

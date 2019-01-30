@@ -9,19 +9,14 @@ is kept constant.
 python 3.x
 """
 import tensorflow as tf
-import numpy as np
-
-import os
 import sys
-import shutil
 import argparse
 
 from data_util import CifarRecords
-# from cifar_encoder_config import encoder_args
 from milk.classifier import Classifier
 
-sys.path.insert(0, '../experiment')
-from encoder_config import encoder_args
+#sys.path.insert(0, '../experiment')
+from cifar_encoder_config import encoder_args
 
 def main(args):
   print(args) 
@@ -36,10 +31,10 @@ def main(args):
   model = Classifier(input_shape=(args.input_dim, args.input_dim, 3), 
                      n_classes=args.n_classes, encoder_args=encoder_args,
                      deep_classifier=True)
-  ## BUG tf.keras.optimizers.Adam breaks in multi-gpu mode ?
-  #optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate)
 
-  optimizer = tf.train.AdamOptimizer(args.learning_rate)
+  ## BUG tf.keras.optimizers.Adam breaks in multi-gpu mode ?
+  optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
+  #optimizer = tf.train.AdamOptimizer(args.learning_rate)
 
   if args.gpus > 1:
     model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_relocation=True)
@@ -51,15 +46,17 @@ def main(args):
 
   try:
     model.fit(dataset.make_one_shot_iterator(),
-              steps_per_epoch=100000 // args.batch_size,
-              epochs=args.epochs)
+              steps_per_epoch = 10000,
+              epochs = args.epochs)
+              # steps_per_epoch=60000 // args.batch_size,
+              # epochs=args.epochs)
   except KeyboardInterrupt:
     print('Stop signal')
   except Exception as e:
     print('Exception')
     print(e)
   finally:
-    print('Saving one last time')
+    print('Saving')
     model.save(args.save_path)
 
 if __name__ == '__main__':
@@ -73,7 +70,7 @@ if __name__ == '__main__':
   parser.add_argument('--n_classes', default=10, type=int)
   parser.add_argument('--batch_size', default=64, type=int)
   parser.add_argument('--learning_rate', default=1e-4, type=float)
-  parser.add_argument('--prefetch_buffer', default=3096, type=int)
+  parser.add_argument('--prefetch_buffer', default=4096, type=int)
 
   args = parser.parse_args()
 

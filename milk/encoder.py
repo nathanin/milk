@@ -15,6 +15,10 @@ def make_encoder(image, input_shape, trainable=True, encoder_args=None):
     if encoder_args is not None:
         args.update(encoder_args)
 
+    print('Instantiating a DenseNet with settings:')
+    for k, v, in args.items():
+        print('\t{:<25}: {}'.format(k, v))
+
     depth_of_model = args['depth_of_model']
     growth_rate = args['growth_rate']
     num_of_blocks = args['num_of_blocks']

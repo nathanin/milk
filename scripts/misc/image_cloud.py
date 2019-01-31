@@ -10,6 +10,8 @@ def get_images():
 
 def main():
   images = get_images()
+  
+  img = np.zeros((2000, 2000))
 
 if __name__ == '__main__':
   main()

@@ -7,6 +7,8 @@ import os
 import matplotlib.pyplot as plt
 plt.style.use('seaborn-whitegrid')
 
+from scipy.stats import wasserstein_distance
+
 def get_files(src, tree_src, srch='*_att.npy'):
   fnames = glob.glob(os.path.join(src, srch))
   # fbases = [os.path.splitext(os.path.basename(x))[0] for x in fnames]
@@ -38,11 +40,19 @@ def compare_values(fpath_dict, odir):
     plt.clf()
     oname = os.path.join(odir, '{}'.format(fbase.replace('.npy', '.png')))
     xmax = 0
+    perm = np.argsort(xlist[0])
     for x in xlist:
-      # plt.hist(x, bins=50, density=True)
-      plt.scatter(np.arange(len(x)), x, s=2, alpha=0.2)
+      # x -= x.min()
+      # x *= (1 / x.max())
+      x_sorted = x[perm]
+      plt.scatter(np.arange(len(x)), x_sorted, s=2, alpha=0.2)
       xmax = max(xmax, x.max())
+
+      # wd = wasserstein_distance(x, x_0)
+      # print('\twd: {}'.format(wd))
     
+    plt.ylabel('Scaled attention')
+    plt.xlabel('Sorted tiles')
     plt.ylim([0, xmax])
     plt.title(fbase)
     plt.savefig(oname, bbox_inches='tight')
@@ -50,19 +60,26 @@ def compare_values(fpath_dict, odir):
 def compare_images(imgpath_dict, odir):
   for fbase, fpaths in imgpath_dict.items():
     xlist = [cv2.imread(x, -1) for x in fpaths]
+    xlist = [x for x in xlist if len(x.shape) == 3]
     
+    xmean_list = [np.mean(x, axis=-1) for x in xlist]
+
     try:
       xmean = np.mean(xlist, axis=0)
+      xstd = np.std(xmean_list, axis=0)
+      xstd *= (255 / xstd.max())
+      xstd = 255 - xstd
+      xstd = np.dstack([xstd]*3)
     except:
       print('fbase {} shape mismatches'.format(fbase))
       continue
 
-    print(xmean.shape)
+    print(fbase, xmean.shape, xstd.shape)
+    xout = np.concatenate([xmean, xstd], axis=0)
     oname = os.path.join(odir, '{}'.format(fbase.replace('.npy', '_img.png')))
-    cv2.imwrite(oname, xmean)
+    cv2.imwrite(oname, xout)
 
 def main(args):
-
   print('Comparing values')
   fpath_dict = get_files(args.src, args.tree_src, srch='*_att.npy')
   compare_values(fpath_dict, args.odir)

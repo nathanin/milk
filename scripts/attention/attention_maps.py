@@ -14,6 +14,9 @@ original svs files:
     for that particular case. There may be more than one slide, so we'll just choose one.
 
    Be aware that the slide lists in uid2slide need to point somewhere on the local filesystem.
+
+BUG there's a leak
+
 """
 from __future__ import print_function
 import tensorflow as tf
@@ -35,7 +38,6 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 
 from svs_reader import Slide
-
 from attimg import draw_attention
 
 from milk.utilities import data_utils
@@ -136,7 +138,7 @@ def get_slidelist_from_uids(uids, process_all=True):
 
 def process_slide(svs, encode_model, y_op, att_op, z_pl, args, return_z=False):
   n_tiles = len(svs.tile_list)
-  prefetch = min(512, n_tiles)
+  prefetch = min(256, n_tiles)
 
   # Get tensors for image and index -- spin up a new op 
   # that consumes from the iterator
@@ -256,7 +258,7 @@ def main(args, sess):
   y_op = predict_model(z_pl)
   att_op = attention_model(z_pl)
 
-  fig = plt.figure(figsize=(2,2), dpi=180)
+  # fig = plt.figure(figsize=(2,2), dpi=180)
 
   ## Loop over found slides:
   yhats = []
@@ -311,36 +313,37 @@ def main(args, sess):
     dst = os.path.join(args.odir, args.timestamp, '{}_img.png'.format(basename))
     cv2.imwrite(dst, attention_img)
 
-    dst = os.path.join(args.odir, args.timestamp, '{}_hist.png'.format(basename))
-    fig.clf()
-    plt.hist(att, bins=100); 
-    plt.title('Attention distribution\n{} ({} tiles)'.format(basename, n_tiles))
-    plt.xlabel('Attention score')
-    plt.ylabel('Tile count')
-    plt.savefig(dst, bbox_inches='tight')
+    # dst = os.path.join(args.odir, args.timestamp, '{}_hist.png'.format(basename))
+    # fig.clf()
+    # plt.hist(att, bins=100); 
+    # plt.title('Attention distribution\n{} ({} tiles)'.format(basename, n_tiles))
+    # plt.xlabel('Attention score')
+    # plt.ylabel('Tile count')
+    # plt.savefig(dst, bbox_inches='tight')
 
     try:
+      svs.close()
       os.remove(ramdisk_path)
     except:
       print('{} already removed'.format(ramdisk_path))
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--mag',       default=5, type=int)
-  parser.add_argument('--odir',      default='attention_images', type=str)
-  parser.add_argument('--fgdir',     default='../usable_area/inference', type=str)
-  parser.add_argument('--savedir',   default='../experiment/save', type=str)
-  parser.add_argument('--testdir',   default='../experiment/test_lists', type=str)
-  parser.add_argument('--ramdisk',   default='/dev/shm', type=str)
-  parser.add_argument('--timestamp', default=None, type=str)
-  parser.add_argument('--n_classes', default=2, type=int)
-  parser.add_argument('--input_dim', default=96, type=int)
-  parser.add_argument('--randomize', default=False, action='store_true')
-  parser.add_argument('--batch_size',default=64, type=int)
-  parser.add_argument('--oversample',default=1.25, type=float)
+  parser.add_argument('--mag',        default=5, type=int)
+  parser.add_argument('--odir',       default='attention_images', type=str)
+  parser.add_argument('--fgdir',      default='../usable_area/inference', type=str)
+  parser.add_argument('--savedir',    default='../experiment/save', type=str)
+  parser.add_argument('--testdir',    default='../experiment/test_lists', type=str)
+  parser.add_argument('--ramdisk',    default='/dev/shm', type=str)
+  parser.add_argument('--timestamp',  default=None, type=str)
+  parser.add_argument('--n_classes',  default=2, type=int)
+  parser.add_argument('--input_dim',  default=96, type=int)
+  parser.add_argument('--randomize',  default=False, action='store_true')
+  parser.add_argument('--batch_size', default=64, type=int)
+  parser.add_argument('--oversample', default=1.25, type=float)
 
-  parser.add_argument('--mil',       default='attention', type=str)
-  parser.add_argument('--mcdropout', default=False, action='store_true')
+  parser.add_argument('--mil',        default='attention', type=str)
+  parser.add_argument('--mcdropout',  default=False, action='store_true')
   parser.add_argument('--mcdropout_t', default=25, type=int)
   parser.add_argument('--deep_classifier', default=False, action='store_true')
   parser.add_argument('--gated_attention', default=True, action='store_false')

@@ -2,7 +2,6 @@
 Test classifier in graph mode
 
 """
-
 from __future__ import print_function
 import tensorflow as tf
 from tensorflow.keras.models import load_model
@@ -43,7 +42,6 @@ def auc_curves(ytrue, yhat, n_classes=5, savepath=None):
 
     if savepath is None:
         plt.show()
-    
     else:
         plt.savefig(savepath, bbox_inches='tight')
 
@@ -108,7 +106,7 @@ def main(args, sess):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test_data', default='../dataset/gleason_grade_val_ext.tfrecord', type=str)
-    parser.add_argument('--snapshot', default='./pretrained.h5', type=str)
+    parser.add_argument('--snapshot', default='./gleason_classifier_deep.h5', type=str)
     parser.add_argument('--n_classes', default=5, type=int)
     parser.add_argument('--input_dim', default=96, type=int)
     parser.add_argument('--downsample', default=0.25, type=float)

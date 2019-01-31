@@ -21,6 +21,7 @@ from tensorflow.keras.models import load_model
 import numpy as np
 import argparse
 import datetime
+import hashlib
 import shutil
 import pickle
 import time
@@ -81,8 +82,13 @@ def get_img_idx(svs, batch_size, prefetch, generate_subset=False, sample=1.0):
   return img, idx
         
 def transfer_to_ramdisk(src, ramdisk):
+  """
+  Convolve with a random string in case we're in parallel mode.
+  """
   basename = os.path.basename(src)
-  dst = os.path.join(ramdisk, basename)
+  dst = os.path.join(ramdisk, '{}_{}'.format(
+    hashlib.md5('{}'.format(np.random.randn()).encode()).hexdigest(), 
+    basename))
   print('Transferring {} --> {}'.format(src, dst))
   shutil.copyfile(src, dst)
 
@@ -219,6 +225,8 @@ def main(args, sess):
   test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
   test_list = read_test_list(test_list)
   test_unique_ids = [os.path.basename(x).replace('.npy', '') for x in test_list]
+  if args.randomize:
+    np.random.shuffle(test_unique_ids)
   slide_list, slide_labels = get_slidelist_from_uids(test_unique_ids)
 
   print('Found {} slides'.format(len(slide_list)))
@@ -311,7 +319,10 @@ def main(args, sess):
     plt.ylabel('Tile count')
     plt.savefig(dst, bbox_inches='tight')
 
-    os.remove(ramdisk_path)
+    try:
+      os.remove(ramdisk_path)
+    except:
+      print('{} already removed'.format(ramdisk_path))
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -324,6 +335,7 @@ if __name__ == '__main__':
   parser.add_argument('--timestamp', default=None, type=str)
   parser.add_argument('--n_classes', default=2, type=int)
   parser.add_argument('--input_dim', default=96, type=int)
+  parser.add_argument('--randomize', default=False, action='store_true')
   parser.add_argument('--batch_size',default=64, type=int)
   parser.add_argument('--oversample',default=1.25, type=float)
 

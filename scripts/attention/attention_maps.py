@@ -35,6 +35,8 @@ from matplotlib import pyplot as plt
 
 from svs_reader import Slide
 
+from attimg import draw_attention
+
 from milk.utilities import data_utils
 from milk.utilities import model_utils
 from milk.utilities import training_utils
@@ -259,7 +261,6 @@ def main(args, sess):
       ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
       print('Using fg image at : {}'.format(fgpth))
       fgimg = cv2.imread(fgpth, 0)
-      print('fgimg shape: ', fgimg.shape)
       svs = Slide(slide_path        = ramdisk_path, 
                   # background_speed  = 'accurate',
                   background_speed  = 'image',
@@ -267,12 +268,10 @@ def main(args, sess):
                   preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
                   process_mag       = args.mag,
                   process_size      = args.input_dim,
-                  oversample_factor = 1.25,
+                  oversample_factor = args.oversample,
                   verbose           = False)
-      print('calculated foregroud: ', svs.foreground.shape)
-      print('calculated ds_tile_map: ', svs.ds_tile_map.shape)
     else:
-      ## Rigth now, require precomputed background; Exit.
+      ## require precomputed background; Exit.
       print('Required foreground image not found ({})'.format(fgpth))
       continue
     
@@ -291,11 +290,12 @@ def main(args, sess):
     print('\tSlide label: {} predicted: {}'.format(lab, yhat))
 
     svs.place_batch(att, indices, 'attention', mode='tile')
-    attention_img = svs.output_imgs['attention']
+    attention_img = np.squeeze(svs.output_imgs['attention'])
+    attention_img = attention_img * (1. / attention_img.max())
+    attention_img = draw_attention(attention_img, n_bins=50)
     print('attention image:', attention_img.shape, 
           attention_img.dtype, attention_img.min(),
           attention_img.max())
-    attention_img = attention_img * (255. / attention_img.max())
 
     dst = os.path.join(args.odir, args.timestamp, '{}_att.npy'.format(basename))
     np.save(dst, att)
@@ -325,6 +325,7 @@ if __name__ == '__main__':
   parser.add_argument('--n_classes', default=2, type=int)
   parser.add_argument('--input_dim', default=96, type=int)
   parser.add_argument('--batch_size',default=64, type=int)
+  parser.add_argument('--oversample',default=1.25, type=float)
 
   parser.add_argument('--mil',       default='attention', type=str)
   parser.add_argument('--mcdropout', default=False, action='store_true')

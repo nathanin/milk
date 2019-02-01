@@ -38,6 +38,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 
 from svs_reader import Slide
+from svs_reader.normalize import reinhard
 from attimg import draw_attention
 
 from milk.utilities import data_utils
@@ -211,63 +212,77 @@ def main(args, sess):
   att_op = attention_model(z_pl)
 
   ## Loop over found slides:
-  yhats = []
-  ytrues = []
   for i, src in enumerate(slide_list):
     print('\nSlide {}'.format(i))
     basename = os.path.basename(src).replace('.svs', '')
     fgpth = os.path.join(args.fgdir, '{}_fg.png'.format(basename))
-    if os.path.exists(fgpth):
-      ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
-      print('Using fg image at : {}'.format(fgpth))
-      fgimg = cv2.imread(fgpth, 0)
-      svs = Slide(slide_path        = ramdisk_path, 
-                  # background_speed  = 'accurate',
-                  background_speed  = 'image',
-                  background_image  = fgimg,
-                  preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
-                  process_mag       = args.mag,
-                  process_size      = args.input_dim,
-                  oversample_factor = args.oversample,
-                  verbose           = False)
-    else:
-      ## require precomputed background; Exit.
-      print('Required foreground image not found ({})'.format(fgpth))
+    att_dst = os.path.join(args.odir, '{}_att.npy'.format(basename))
+
+    if os.path.exists(att_dst) and not args.overwrite:
+      print('{} exists. Continuing.'.format(att_dst))
       continue
-    
-    svs.initialize_output(name='attention', dim=1, mode='tile')
-    n_tiles = len(svs.tile_list)
 
-    if not args.mcdropout:
-      yhat, att, indices = process_slide(svs, 
-          encode_model, y_op, att_op, z_pl, args)
-    else:
-      yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, 
-          encode_model, y_op, att_op, z_pl, args)
-
-    yhats.append(yhat)
-    print('\tSlide label: {} predicted: {}'.format(lab, yhat))
-
-    svs.place_batch(att, indices, 'attention', mode='tile')
-    attention_img = np.squeeze(svs.output_imgs['attention'])
-    attention_img = attention_img * (1. / attention_img.max())
-    attention_img = draw_attention(attention_img, n_bins=50)
-    print('attention image:', attention_img.shape, 
-          attention_img.dtype, attention_img.min(),
-          attention_img.max())
-
-    dst = os.path.join(args.odir, args.timestamp, '{}_att.npy'.format(basename))
-    np.save(dst, att)
-    dst = os.path.join(args.odir, args.timestamp, '{}_img.png'.format(basename))
-    cv2.imwrite(dst, attention_img)
-
+    ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
     try:
+      if os.path.exists(fgpth):
+        print('Using fg image at : {}'.format(fgpth))
+        fgimg = cv2.imread(fgpth, 0)
+        svs = Slide(slide_path        = ramdisk_path, 
+                    # background_speed  = 'accurate',
+                    background_speed  = 'image',
+                    background_image  = fgimg,
+                    preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32) ,
+                    process_mag       = args.mag,
+                    process_size      = args.input_dim,
+                    oversample_factor = args.oversample,
+                    verbose           = False)
+      else:
+        svs = Slide(slide_path        = ramdisk_path, 
+                    background_speed  = 'accurate',
+                    preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32) ,
+                    process_mag       = args.mag,
+                    process_size      = args.input_dim,
+                    oversample_factor = args.oversample,
+                    verbose           = False)
+      
+      svs.initialize_output(name='attention', dim=1, mode='tile')
+      n_tiles = len(svs.tile_list)
+
+      if not args.mcdropout:
+        yhat, att, indices = process_slide(svs, 
+            encode_model, y_op, att_op, z_pl, args)
+      else:
+        yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, 
+            encode_model, y_op, att_op, z_pl, args)
+
+      print('\tSlide predicted: {}'.format(yhat))
+
+      svs.place_batch(att, indices, 'attention', mode='tile')
+      attention_img = np.squeeze(svs.output_imgs['attention'])
+      attention_img = attention_img * (1. / attention_img.max())
+      attention_img = draw_attention(attention_img, n_bins=50)
+      print('attention image:', attention_img.shape, 
+            attention_img.dtype, attention_img.min(),
+            attention_img.max())
+
+      np.save(att_dst, att)
+      img_dst = os.path.join(args.odir, '{}_img.png'.format(basename))
+      cv2.imwrite(img_dst, attention_img)
+      yhat_dst = os.path.join(args.odir, '{}_ypred.npy'.format(basename))
+      np.save(yhat_dst, yhat)
+
       svs.close()
+    except Exception as e:
+      print(e)
+    finally:
       os.remove(ramdisk_path)
-    except:
-      print('{} already removed'.format(ramdisk_path))
 
 if __name__ == '__main__':
+  """
+  for instance:
+
+  python attention_maps.py --odir tcga-prad --test_list ./tcga_prad_slides.txt --snapshot <path> --fgdir ./tcga-prad-fg
+  """
   parser = argparse.ArgumentParser()
   parser.add_argument('--odir',       default=None, type=str)  # Required
   parser.add_argument('--test_list',  default=None, type=str)  # Required
@@ -279,21 +294,18 @@ if __name__ == '__main__':
   parser.add_argument('--ramdisk',    default='/dev/shm', type=str)
   parser.add_argument('--n_classes',  default=2, type=int)
   parser.add_argument('--input_dim',  default=96, type=int)
-  parser.add_argument('--randomize',  default=False, action='store_true')
   parser.add_argument('--batch_size', default=64, type=int)
   parser.add_argument('--oversample', default=1.25, type=float)
+  parser.add_argument('--randomize',  default=False, action='store_true')
+  parser.add_argument('--overwrite',  default=False, action='store_true')
 
   parser.add_argument('--mil',        default='attention', type=str)
   parser.add_argument('--mcdropout',  default=False, action='store_true')
   parser.add_argument('--mcdropout_t', default=25, type=int)
-  parser.add_argument('--deep_classifier', default=False, action='store_true')
-  parser.add_argument('--gated_attention', default=True, action='store_false')
+  parser.add_argument('--deep_classifier', default=True, action='store_false') ## almost-always True
+  parser.add_argument('--gated_attention', default=True, action='store_false') ## almost-always True
   parser.add_argument('--mcdropout_sample', default=0.25, type=int)
   args = parser.parse_args()
-
-  if not os.path.exists(os.path.join(args.odir, args.timestamp)):
-    os.makedirs(os.path.join(args.odir, args.timestamp))
-  assert args.timestamp is not None
 
   config = tf.ConfigProto()
   config.gpu_options.allow_growth = True

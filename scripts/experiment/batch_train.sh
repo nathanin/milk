@@ -11,100 +11,7 @@ lr=0.00001
 # pretrained=../pretraining/pretrained_reference.h5
 pretrained=../pretraining/pretrained_deep.h5
 
-# # With attention
-# for i in `seq 1 5`; do
-#     python train_tpu_inmemory.py \
-#         --steps_per_epoch $steps \
-#         --epochs $epochs \
-#         --bag_size $bag \
-#         --mil attention \
-#         --deep_classifier \
-#         --learning_rate $lr \
-#         --pretrained_model $pretrained \
-# 	  	  --early_stop
-# done
-# 
-# # Without attention (average)
-# for i in `seq 1 5`; do
-#     python train_tpu_inmemory.py \
-#         --steps_per_epoch $steps \
-#         --epochs $epochs \
-#         --bag_size $bag \
-#         --mil average \
-#         --deep_classifier \
-#         --learning_rate $lr \
-#         --pretrained_model $pretrained \
-# 	      --early_stop
-# done
-# 
-# # Instance classifier --> average predictions
-# for i in `seq 1 5`; do
-#     python train_tpu_inmemory.py \
-#         --steps_per_epoch $steps \
-#         --epochs $epochs \
-#         --bag_size $bag \
-#         --mil instance \
-#         --deep_classifier \
-#         --learning_rate $lr \
-#         --pretrained_model $pretrained \
-# 	--early_stop
-# done
-# 
-# # # Without pretraining; with attention
-# # for i in `seq 1 5`; do
-# #     python train_tpu_inmemory.py \
-# #         --steps_per_epoch $steps \
-# #         --epochs 100 \
-# #         --bag_size $bag \
-# #         --mil attention \
-# #         --deep_classifier \
-# #         --learning_rate $lr \
-# #         --dont_use_pretrained
-# # done
-# 
-# # Freeze encoder; with average
-# for i in `seq 1 5`; do
-#     python train_tpu_inmemory.py \
-#         --steps_per_epoch $steps \
-#         --epochs $epochs \
-#         --bag_size $bag \
-#         --mil average \
-#         --learning_rate $lr \
-#         --freeze_encoder \
-#         --deep_classifier \
-#         --pretrained_model $pretrained \
-# 	      --early_stop
-# done
-# 
-# # Freeze encoder; with attention
-# for i in `seq 1 5`; do
-#     python train_tpu_inmemory.py \
-#         --steps_per_epoch $steps \
-#         --epochs $epochs \
-#         --bag_size $bag \
-#         --mil attention \
-#         --learning_rate $lr \
-#         --freeze_encoder \
-#         --deep_classifier \
-#         --pretrained_model $pretrained \
-# 			  --early_stop
-# done
-# 
-# # Enforce ensemble by setting the random seed
-# for i in `seq 1 5`; do
-#     python train_tpu_inmemory.py \
-#         --steps_per_epoch $steps \
-#         --epochs $epochs \
-#         --bag_size $bag \
-#         --mil attention \
-#         --learning_rate $lr \
-#         --deep_classifier \
-#         --pretrained_model $pretrained \
-#         --seed 999 \
-#         --early_stop
-# done
-
-# Cifar encoder - With attention
+# With attention
 for i in `seq 1 5`; do
     python train_tpu_inmemory.py \
         --steps_per_epoch $steps \
@@ -113,6 +20,86 @@ for i in `seq 1 5`; do
         --mil attention \
         --deep_classifier \
         --learning_rate $lr \
-        --pretrained_model ../cifar10/cifar_10_model.h5 \
+        --pretrained_model $pretrained \
 	  	  --early_stop
+done
+
+# Without attention (average)
+for i in `seq 1 5`; do
+    python train_tpu_inmemory.py \
+        --steps_per_epoch $steps \
+        --epochs $epochs \
+        --bag_size $bag \
+        --mil average \
+        --deep_classifier \
+        --learning_rate $lr \
+        --pretrained_model $pretrained \
+	      --early_stop
+done
+
+# Instance classifier --> average predictions
+for i in `seq 1 5`; do
+    python train_tpu_inmemory.py \
+        --steps_per_epoch $steps \
+        --epochs $epochs \
+        --bag_size $bag \
+        --mil instance \
+        --deep_classifier \
+        --learning_rate $lr \
+        --pretrained_model $pretrained \
+	--early_stop
+done
+
+# # Without pretraining; with attention
+# for i in `seq 1 5`; do
+#     python train_tpu_inmemory.py \
+#         --steps_per_epoch $steps \
+#         --epochs 100 \
+#         --bag_size $bag \
+#         --mil attention \
+#         --deep_classifier \
+#         --learning_rate $lr \
+#         --dont_use_pretrained
+# done
+
+# Freeze encoder; with average
+for i in `seq 1 5`; do
+    python train_tpu_inmemory.py \
+        --steps_per_epoch $steps \
+        --epochs $epochs \
+        --bag_size $bag \
+        --mil average \
+        --learning_rate $lr \
+        --freeze_encoder \
+        --deep_classifier \
+        --pretrained_model $pretrained \
+	      --early_stop
+done
+
+# Freeze encoder; with attention
+for i in `seq 1 5`; do
+    python train_tpu_inmemory.py \
+        --steps_per_epoch $steps \
+        --epochs $epochs \
+        --bag_size $bag \
+        --mil attention \
+        --learning_rate $lr \
+        --freeze_encoder \
+        --deep_classifier \
+        --pretrained_model $pretrained \
+			  --early_stop
+done
+
+# Enforce ensemble by setting the random seed
+for i in `seq 1 5`; do
+    python train_tpu_inmemory.py \
+        --steps_per_epoch $steps \
+        --epochs $epochs \
+        --bag_size $bag \
+        --mil attention \
+        --learning_rate $lr \
+        --deep_classifier \
+        --pretrained_model $pretrained \
+        --seed 999 \
+        --early_stop
 done

@@ -8,9 +8,8 @@ import time
 import cv2
 import os
 
-def CifarRecords(src, batch=32, xsize=32, ysize=32, n_classes=10, 
+def CifarRecords(src, batch=32, xsize=32, ysize=32, decode_size=32, n_classes=10, 
                     parallel=8, buffer=1024, shuffle=True):
-
   def decode(example):
     features = {'label': tf.FixedLenFeature((), tf.int64, default_value=0),
                 'image': tf.FixedLenFeature((), tf.string, default_value=''),}
@@ -23,20 +22,27 @@ def CifarRecords(src, batch=32, xsize=32, ysize=32, n_classes=10,
 
   def preprocess(example):
     image, label = decode(example)
+    #image = tf.image.resize_images(image, (xsize, ysize))
     image = tf.image.random_flip_left_right(image)
-    image = tf.image.resize_images(image, (xsize, ysize))
     image = tf.multiply(tf.cast(image, tf.float32), 1 / 255.)
     label = tf.one_hot(label, n_classes)
     return image, label
 
+  def tf_resize(batch, y):
+    batch = tf.image.resize_bicubic(batch, (xsize, ysize))
+    return batch, y
+
   dataset = tf.data.TFRecordDataset(src)
   dataset = dataset.repeat()
-  dataset = dataset.shuffle(10000)
+  dataset = dataset.shuffle(20000)
   dataset = dataset.map(preprocess, num_parallel_calls=parallel)
   dataset = dataset.prefetch(buffer)
   dataset = dataset.batch(batch)
-  return dataset
 
+  if xsize != decode_size or ysize != decode_size:
+    dataset = dataset.map(tf_resize, num_parallel_calls=parallel)
+
+  return dataset
 
 if __name__ == '__main__':
   print('Testing CIFAR-10 Dataset')

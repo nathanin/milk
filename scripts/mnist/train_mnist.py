@@ -156,10 +156,11 @@ def main(args):
     else:
         print('Pretrained model not found ({}). Continuing end 2 end.'.format(args.pretrained))
 
-    model.summary()
+    if args.gpus > 1:
+        print('Duplicating model onto 2 GPUs')
+        model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
+
     optimizer = tf.train.AdamOptimizer(learning_rate=args.lr)
-    # optimizer = tf.keras.optimizers.Adam(lr=args.lr, decay=0.5)
-    # optimizer = tf.train.AdagradOptimizer(learning_rate=args.lr)
 
     model.compile(optimizer=optimizer,
                   loss = tf.keras.losses.categorical_crossentropy,

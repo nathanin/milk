@@ -75,7 +75,7 @@ def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
                     trainable=trainable
                     )(features)
 
-  # self.batchnorm1 = tf.keras.layers.BatchNormalization(axis=axis)
+  # features = BatchNormalization(axis=axis)(features)
   if mcdropout:
     features = Dropout(dropout_rate)(features, training=True)
   else:
@@ -98,6 +98,7 @@ def TransitionBlock(features, num_filters, data_format, weight_decay=1e-4,
   axis = -1 if data_format == "channels_last" else 1
 
   # self.batchnorm = tf.keras.layers.BatchNormalization(axis=axis)
+  # feautes = BatchNormalization(axis=axis)(features)
   features = Conv2D(num_filters,
                     (1, 1),
                     activation=tf.nn.relu,
@@ -248,7 +249,8 @@ def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks,
                             data_format=data_format,
                             name='encoder_pool_init'
                             )(features)
-  #   self.batchnorm1 = tf.keras.layers.BatchNormalization(axis=axis)
+    # self.batchnorm1 = tf.keras.layers.BatchNormalization(axis=axis)
+    # features = BatchNormalization(axis=axis)(features)
 
   # calculating the number of filters after each block
   num_filters_after_each_block = [num_filters]

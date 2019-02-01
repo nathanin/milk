@@ -1,7 +1,7 @@
 import setuptools
 
 setuptools.setup(name='milk',
-    version='0.0.0',
+    version='0.0.1',
     description='MultipleInstanceLearningKit',
     url='https://github.com/nathanin/milk',
     author='Nathan Ing',

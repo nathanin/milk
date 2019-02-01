@@ -128,7 +128,7 @@ def main():
           cv2.imwrite(o, img_[:,:,::-1])
 
         img_buffer = coder.encode_jpeg(img_)
-        example = _convert_to_example(img_buffer, lab)
+        example    = _convert_to_example(img_buffer, lab)
 
         writer.write(example.SerializeToString())
   

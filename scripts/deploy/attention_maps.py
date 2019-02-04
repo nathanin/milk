@@ -193,11 +193,12 @@ def main(args, sess):
   print('Found {} slides'.format(len(slide_list)))
   encode_model = MilkEncode(input_shape=(args.input_dim, args.input_dim, 3), 
                encoder_args=encoder_args, deep_classifier=args.deep_classifier)
-  if args.deep_classifier:
-    input_shape = 256
-  else:
-    input_shape = 512
-  predict_model = MilkPredict(input_shape=[input_shape], mode=args.mil, use_gate=args.gated_attention)
+  x_pl = tf.placeholder(shape=(None, args.input_dim, args.input_dim, 3), dtype=tf.float32)
+  z_op = encode_model(x_pl)
+
+  input_shape = z_op.shape[-1]
+  predict_model = MilkPredict(input_shape=[input_shape], mode=args.mil, use_gate=args.gated_attention,
+    deep_classifier=args.deep_classifier)
   attention_model = MilkAttention(input_shape=[input_shape], use_gate=args.gated_attention)
 
   print('setting encoder weights')
@@ -218,9 +219,9 @@ def main(args, sess):
     fgpth = os.path.join(args.fgdir, '{}_fg.png'.format(basename))
     att_dst = os.path.join(args.odir, '{}_att.npy'.format(basename))
 
-    if os.path.exists(att_dst) and not args.overwrite:
-      print('{} exists. Continuing.'.format(att_dst))
-      continue
+    # if os.path.exists(att_dst) and not args.overwrite:
+    #   print('{} exists. Continuing.'.format(att_dst))
+    #   continue
 
     ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
     try:
@@ -271,10 +272,14 @@ def main(args, sess):
       yhat_dst = os.path.join(args.odir, '{}_ypred.npy'.format(basename))
       np.save(yhat_dst, yhat)
 
-      svs.close()
     except Exception as e:
       print(e)
     finally:
+      try:
+        svs.close()
+        del svs
+      except:
+        pass
       os.remove(ramdisk_path)
 
 if __name__ == '__main__':
@@ -289,13 +294,12 @@ if __name__ == '__main__':
   parser.add_argument('--snapshot',   default=None, type=str)  # Required
   
   parser.add_argument('--mag',        default=5, type=int)
-  parser.add_argument('--fgdir',      default='../usable_area/inference', type=str)
-  parser.add_argument('--savedir',    default='../experiment/save', type=str)
+  parser.add_argument('--fgdir',      default='tcga-prad-fg', type=str)
   parser.add_argument('--ramdisk',    default='/dev/shm', type=str)
   parser.add_argument('--n_classes',  default=2, type=int)
   parser.add_argument('--input_dim',  default=96, type=int)
   parser.add_argument('--batch_size', default=64, type=int)
-  parser.add_argument('--oversample', default=1.25, type=float)
+  parser.add_argument('--oversample', default=1.1, type=float)
   parser.add_argument('--randomize',  default=False, action='store_true')
   parser.add_argument('--overwrite',  default=False, action='store_true')
 

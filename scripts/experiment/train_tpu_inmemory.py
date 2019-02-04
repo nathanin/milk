@@ -21,7 +21,7 @@ from milk.utilities import data_utils
 from milk import Milk
 
 with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
-#with open('../dataset/cases_md5.pkl', 'rb') as f:  
+# with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
 from encoder_config import encoder_args
@@ -182,24 +182,12 @@ def main(args):
                 loss=tf.keras.losses.categorical_crossentropy,
                 metrics=['categorical_accuracy'])
 
+  model.summary()
+
   ## Replace randomly initialized weights after model is compiled and on the correct device.
   if os.path.exists(args.pretrained_model) and not args.dont_use_pretrained:
     print('Replacing random weights with weights from {}'.format(args.pretrained_model))
     model.load_weights(args.pretrained_model, by_name=True)
-
-    # pretrained_model = load_model(args.pretrained_model)
-    # pretrained_layers = {l.name: l for l in pretrained_model.layers if 'encoder' in l.name}
-    # for l in model.layers:
-    #   if 'encoder' not in l.name:
-    #     print('not an encoding layer {}'.format(l.name))
-    #     continue
-    #   try:
-    #     w = pretrained_layers[l.name].get_weights()
-    #     print('setting layer {}'.format(l.name))
-    #     l.set_weights(w)
-    #   except:
-    #     print('error setting layer {}'.format(l.name))
-    # del pretrained_model 
 
   if args.early_stop:
     callbacks = [

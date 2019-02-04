@@ -240,11 +240,13 @@ def main(args, sess):
 
   encode_model = MilkEncode(input_shape=(args.input_dim, args.input_dim, 3), 
                encoder_args=encoder_args, deep_classifier=args.deep_classifier)
-  if args.deep_classifier:
-    input_shape = 256
-  else:
-    input_shape = 512
-  predict_model = MilkPredict(input_shape=[input_shape], mode=args.mil, use_gate=args.gated_attention)
+
+  x_pl = tf.placeholder(shape=(None, args.input_dim, args.input_dim, 3), dtype=tf.float32)
+  z_op = encode_model(x_pl)
+
+  input_shape = z_op.shape[-1]
+  predict_model = MilkPredict(input_shape=[input_shape], mode=args.mil, use_gate=args.gated_attention,
+    deep_classifier=args.deep_classifier)
   attention_model = MilkAttention(input_shape=[input_shape], use_gate=args.gated_attention)
 
   print('setting encoder weights')

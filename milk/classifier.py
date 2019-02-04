@@ -8,8 +8,8 @@ from .encoder import make_encoder
 """ Same fn as in mil.py """
 def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
   for k in range(n_layers):
-    features = Dense(width, activation=tf.nn.relu, name='deep_{}'.format(k))(features)
-    features = Dropout(dropout_rate, name='deep_drop_{}'.format(k))(features)
+    features = Dense(width, activation=tf.nn.relu, name='classifier_{}'.format(k))(features)
+    features = Dropout(dropout_rate, name='classifier_drop_{}'.format(k))(features)
   return features
 
 def Classifier(input_shape, n_classes=5, encoder_args=None, deep_classifier=True):

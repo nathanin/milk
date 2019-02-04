@@ -5,7 +5,7 @@
 set -e
 steps=2000
 epochs=50
-bag=100
+bag=50
 lr=0.00001
 pretrained=../pretraining/gleason_classifier_deep.h5
 

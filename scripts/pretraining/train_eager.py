@@ -1,92 +1,115 @@
 from __future__ import print_function
 import numpy as np
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
-import os
-import sys
-import shutil
 import argparse
+import shutil
+import sys
+import os
 
 from milk.utilities import ClassificationDataset
-from milk.classifier import Classifier
+from milk.eager import ClassifierEager
+
 from milk.utilities import model_utils
 from milk.utilities import training_utils
 
+from tensorflow.keras.layers import Input
+
+sys.path.insert(0, '../experiment')
+from encoder_config import encoder_args
+
 def main(args):
-    print(args) 
-    # Get crop size from input_dim and downsample
-    crop_size = int(args.input_dim / args.downsample)
+  print(args) 
+  # Get crop size from input_dim and downsample
+  crop_size = int(args.input_dim / args.downsample)
 
-    # Build the dataset
-    dataset = ClassificationDataset(
-        record_path = args.dataset,
-        crop_size = crop_size,
-        downsample = args.downsample,
-        n_threads = args.n_threads,
-        batch = args.batch_size,
-        prefetch_buffer=args.prefetch_buffer,
-        shuffle_buffer=args.shuffle_buffer,
-    )
+  # Build the dataset
+  dataset = ClassificationDataset(
+    record_path = args.dataset,
+    crop_size = crop_size,
+    downsample = args.downsample,
+    n_threads = args.n_threads,
+    batch = args.batch_size,
+    prefetch_buffer = args.prefetch_buffer,
+    shuffle_buffer = args.shuffle_buffer,
+    device = args.device,
+    device_buffer = args.device_buffer,
+    eager = True
+  )
 
-    # Test batch:
-    x, y = dataset.iterator.next()
-    print('Test batch:')
-    print('x: ', x.get_shape())
-    print('y: ', y.get_shape())
+  # Test batch:
+  batchx, batchy = next(dataset.iterator)
+  print('Test batch:')
+  print('batchx: ', batchx.get_shape())
+  print('batchy: ', batchy.get_shape())
 
-    with tf.device('/gpu:0'):
-        model = Classifier(n_classes=args.n_classes)
-        optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-        grad_fn = tfe.implicit_gradients(model_utils.classifier_loss_fn)
+  ## Working on this way -- hoping for a speed up with the keras.Model.fit() functions..
+  # input_tensor = Input(name='images', shape=[args.input_dim, args.input_dim, args.image_channels] )
+  # logits = ClassifierEager(encoder_args=encoder_args, n_classes=args.n_classes)(input_tensor)
+  # model = tf.keras.Model(inputs=input_tensor, outputs=logits)
 
-        # Process once to print network sizes and initialize the variables:
-        yhat = model(x, verbose=True)
-        print('yhat: ', yhat.get_shape())
+  model = ClassifierEager(encoder_args=encoder_args, n_classes=args.n_classes)
+  yhat = model(batchx, training=True, verbose=True)
+  print('yhat: ', yhat.get_shape())
 
-    all_variables = model.variables ## dont need get_nested_variables if TF > 1.10
+  # optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-5)
+  optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
 
-    global_step = tf.train.get_or_create_global_step()
-    if os.path.exists(args.save_dir): shutil.rmtree(args.save_dir)
-    os.makedirs(args.save_dir)
-    save_prefix = os.path.join(args.save_dir, args.snapshot_prefix)
-    saver = tfe.Saver(all_variables)
-    saver.save(save_prefix, global_step)
+  model.summary()
 
-    print('\nStart training...')
-    for k in range(args.iterations):
-        training_utils.classifier_train_step(model, dataset, optimizer, grad_fn, 
-                              global_step=global_step)
+  # model.compile(optimizer = optimizer,
+  #   loss = 'categorical_crossentropy',
+  #   metrics = ['categorical_accuracy'])
 
-        if k % args.save_every == 0:
-            print('Saving step ', global_step)
-            saver.save(save_prefix, global_step.numpy())
+  # model.fit_generator(generator=tf.contrib.eager.Iterator(dataset),
+  #   steps_per_epoch = args.steps_per_epoch,
+  #   epochs = args.epochs)
 
-        if k % args.print_every == 0:
-            loss_ = model_utils.classifier_loss_fn(model, dataset)
-            print('STEP [{:07d}] LOSS = [{:3.4f}]'.format(k, loss_))
+  try:
+    for k in range(args.steps_per_epoch * args.epochs):
+      with tf.GradientTape() as tape:
+        batchx, batchy = next(dataset.iterator)
+        yhat = model(batchx)
+
+        loss = tf.keras.losses.categorical_crossentropy(y_true=batchy, y_pred=yhat)
+
+        grads = tape.gradient(loss, model.variables)
+        optimizer.apply_gradients(zip(grads, model.variables))
+
+      if k % 50 == 0:
+        print('{:05d} loss={:3.3f}'.format(k, np.mean(loss)))
+
+  except:
+    print('Caught exception')
+
+  finally:  
+    print('Saving')
+    model.save_weights(args.saveto)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--iterations', default=20000, type=int)
-    parser.add_argument('--save_dir', default='./trained')
-    parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.75pct.tfrecord')
-    parser.add_argument('--n_classes', default=5, type=int)
-    parser.add_argument('--batch_size', default=128, type=int)
-    parser.add_argument('--input_dim', default=96, type=int)
-    parser.add_argument('--image_channels', default=3, type=int)
-    parser.add_argument('--downsample', default=0.25, type=float)
-    parser.add_argument('--n_threads', default=8, type=int)
-    parser.add_argument('--prefetch_buffer', default=2048, type=int)
-    parser.add_argument('--shuffle_buffer', default=512, type=int)
-    parser.add_argument('--save_every', default=500, type=int)
-    parser.add_argument('--print_every', default=50, type=int)
-    parser.add_argument('--learning_rate', default=1e-4, type=float)
-    parser.add_argument('--snapshot_prefix', default='classifier')
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--batch_size', default=64, type=int)
+  parser.add_argument('--epochs', default=200, type=int)
+  parser.add_argument('--steps_per_epoch', default=2000, type=int)
+  parser.add_argument('--learning_rate', default=1e-4, type=float)
+  parser.add_argument('--saveto', default='eager_classifier.h5')
 
-    args = parser.parse_args()
+  # Usually don't change these
+  parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.75pct.tfrecord')
+  parser.add_argument('--n_threads', default=8, type=int)
+  parser.add_argument('--input_dim', default=96, type=int)
+  parser.add_argument('--n_classes', default=5, type=int)
+  parser.add_argument('--downsample', default=0.25, type=float)
+  parser.add_argument('--image_channels', default=3, type=int)
+  parser.add_argument('--shuffle_buffer', default=512, type=int)
+  parser.add_argument('--prefetch_buffer', default=2048, type=int)
+  parser.add_argument('--device', default='/gpu:0', type=str)
+  parser.add_argument('--device_buffer', default=64, type=int)
 
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    tfe.enable_eager_execution(config=config)
 
-    main(args)
+  args = parser.parse_args()
+
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth = True
+  tf.enable_eager_execution(config=config)
+
+  main(args)

@@ -7,7 +7,7 @@ for use with test_*.py
 from __future__ import print_function
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
-from tensorflow.keras.models import load_model
+
 import numpy as np
 import argparse
 import datetime
@@ -24,7 +24,7 @@ with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
 # with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
-from encoder_config import encoder_args
+from milk.encoder_config import deep_args
 
 def filter_list_by_label(lst):
   lst_out = []
@@ -61,6 +61,41 @@ def load_lists(data_patt, val_list_file, test_list_file):
       train_list.append(d)
 
   return train_list, val_list, test_list
+
+def val_step(model, val_generator, batch_size=8, steps=50):
+  losses = np.zeros(steps)
+  for k in range(steps):
+    x, y = next(val_generator)
+    yhat = model(x, batch_size=batch_size, training=False)
+    loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, tf.float32), y_pred=yhat)
+    losses[k] = np.mean(loss)
+
+  val_loss = np.mean(losses)
+  return val_loss
+
+class ShouldStop():
+  """ Track the validation loss
+
+  send a stop signal if we haven't improved within a patience window
+  """
+  def __init__(self, patience = 5):
+    self.val_loss = np.inf
+    self.n_calls = 0
+    self.patience = patience
+    self.since_last_improvement = 0
+
+  def should_stop(self, new_loss):
+    self.n_calls += 1
+    self.since_last_improvement += 1
+
+    if new_loss < self.val_loss:
+      self.val_loss = new_loss
+      self.since_last_improvement = 0
+      return False
+    elif self.since_last_improvement >= self.patience:
+      return True
+    else:
+      return False
 
 def main(args):
   """ 
@@ -100,10 +135,8 @@ def main(args):
   train_list = data_utils.enforce_minimum_size(train_list, args.bag_size, verbose=True)
   val_list = data_utils.enforce_minimum_size(val_list, args.bag_size, verbose=True)
   test_list = data_utils.enforce_minimum_size(test_list, args.bag_size, verbose=True)
-  transform_fn = data_utils.make_transform_fn(args.x_size, 
-                                              args.y_size, 
-                                              args.crop_size, 
-                                              args.scale)
+  transform_fn = data_utils.make_transform_fn(args.x_size, args.y_size, 
+                                              args.crop_size, args.scale)
   train_x, train_y = data_utils.load_list_to_memory(train_list, case_label_fn)
   val_x, val_y = data_utils.load_list_to_memory(val_list, case_label_fn)
 
@@ -122,8 +155,9 @@ def main(args):
   print('x: ', x.shape)
   print('y: ', y.shape)
 
+  #with tf.device('/gpu:0'): 
   print('Model initializing')
-  model = MilkEager(encoder_args=encoder_args, mil_type=args.mil,
+  model = MilkEager(encoder_args=deep_args, mil_type=args.mil,
                     deep_classifier=args.deep_classifier)
 
   yhat = model(tf.constant(x), batch_size=16, training=True, verbose=True)
@@ -153,7 +187,7 @@ def main(args):
     for a in vars(args):
       f.write('{}\t{}\n'.format(a, getattr(args, a)))
 
-  # API BUG Keras optimizer has no attribute `appli_gradients`
+  # API BUG Keras optimizer has no attribute `apply_gradients`
   # optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
   optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
   model.summary()
@@ -166,32 +200,31 @@ def main(args):
     except Exception as e:
       print(e)
 
-
   if args.early_stop:
-    callbacks = [
-        tf.keras.callbacks.EarlyStopping(monitor='val_loss', 
-                                         min_delta=0.00001, 
-                                         patience=10, 
-                                         verbose=1, 
-                                         mode='auto',)
-    ]
+    stopper = ShouldStop(patience = 10)
   else:
-    callbacks = []
+    stopper = lambda x: False
 
   try:
-    for k in range(args.steps_per_epoch * args.epochs):
-      with tf.GradientTape() as tape:
-        x, y = next(train_generator)
-        yhat = model(tf.constant(x), batch_size=32, training=True)
-        loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
+    for epc in range(args.epochs):
+      for k in range(args.steps_per_epoch):
+        with tf.GradientTape() as tape:
+          x, y = next(train_generator)
+          yhat = model(tf.constant(x), batch_size=16, training=True)
+          loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
 
-      grads = tape.gradient(loss, model.variables)
-      optimizer.apply_gradients(zip(grads, model.variables))
+        grads = tape.gradient(loss, model.variables)
+        optimizer.apply_gradients(zip(grads, model.variables))
 
-      if k % 100 == 0:
-        print('{:06d}: loss={:3.5f}'.format(k, np.mean(loss)))
-        for y_, yh_ in zip(y, yhat):
-          print('\t{} {}'.format(y_, yh_))
+        if k % 50 == 0:
+          print('{:06d}: loss={:3.5f}'.format(k, np.mean(loss)))
+          for y_, yh_ in zip(y, yhat):
+            print('\t{} {}'.format(y_, yh_))
+
+      val_loss = val_step(model, val_generator, batch_size=16, steps=50)
+      print('val_loss = {}'.format(val_loss))
+      if stopper.should_stop(val_loss):
+        break
 
   except KeyboardInterrupt:
     print('Keyboard interrupt caught')
@@ -211,20 +244,25 @@ def main(args):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
+
+  # Model settings
   parser.add_argument('--mil',              default = 'attention', type=str)
   parser.add_argument('--scale',            default = 1.0, type=float)
   parser.add_argument('--x_size',           default = 128, type=int)
   parser.add_argument('--y_size',           default = 128, type=int)
-  parser.add_argument('--epochs',           default = 20, type=int)
   parser.add_argument('--bag_size',         default = 50, type=int)
   parser.add_argument('--crop_size',        default = 96, type=int)
   parser.add_argument('--batch_size',       default = 1, type=int)
-  parser.add_argument('--learning_rate',    default = 1e-4, type=float)
   parser.add_argument('--freeze_encoder',   default = False, action='store_true')
   parser.add_argument('--gated_attention',  default = True, action='store_false')
   parser.add_argument('--deep_classifier',  default = False, action='store_true')
-  parser.add_argument('--steps_per_epoch',  default = 5000, type=int)
 
+  # Optimizer settings
+  parser.add_argument('--learning_rate',    default = 1e-4, type=float)
+  parser.add_argument('--steps_per_epoch',  default = 5000, type=int)
+  parser.add_argument('--epochs',           default = 20, type=int)
+
+  # Experiment / data settings
   parser.add_argument('--seed',             default = None, type=int)
   parser.add_argument('--val_pct',          default = 0.2, type=float)
   parser.add_argument('--test_pct',         default = 0.2, type=float)
@@ -238,7 +276,6 @@ if __name__ == '__main__':
   parser.add_argument('--test_list',        default = None, type=str)
   parser.add_argument('--early_stop',       default = False, action='store_true')
   args = parser.parse_args()
-
 
   config = tf.ConfigProto()
   config.gpu_options.allow_growth = True

@@ -9,16 +9,6 @@ bag=50
 lr=0.00001
 pretrained=../pretraining/gleason_classifier_deep.h5
 
-python train_tpu_inmemory.py \
-    --steps_per_epoch $steps \
-    --epochs $epochs \
-    --bag_size $bag \
-    --mil attention \
-    --deep_classifier \
-    --learning_rate $lr \
-    --pretrained_model $pretrained \
-    --early_stop
-
 # # With attention
 # for i in `seq 1 5`; do
 #     python train_tpu_inmemory.py \
@@ -58,17 +48,19 @@ python train_tpu_inmemory.py \
 # 	--early_stop
 # done
 
-# # # Without pretraining; with attention
-# # for i in `seq 1 5`; do
-# #     python train_tpu_inmemory.py \
-# #         --steps_per_epoch $steps \
-# #         --epochs 100 \
-# #         --bag_size $bag \
-# #         --mil attention \
-# #         --deep_classifier \
-# #         --learning_rate $lr \
-# #         --dont_use_pretrained
-# # done
+# Without pretraining; with attention
+for i in `seq 1 5`; do
+    python train_eager.py \
+        --steps_per_epoch $steps \
+        --batch_size 4 \
+        --epochs $epochs \
+        --bag_size $bag \
+        --mil attention \
+        --deep_classifier \
+        --learning_rate $lr \
+        --dont_use_pretrained \
+        --early_stop
+done
 
 # # Freeze encoder; with average
 # for i in `seq 1 5`; do

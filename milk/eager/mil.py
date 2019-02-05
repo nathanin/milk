@@ -53,7 +53,7 @@ class MilkEager(tf.keras.Model):
         Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
         name = 'mil_deep_{}'.format(i)))
 
-    self.classifier = Dense(units=2, activation=tf.nn.softmax, use_bias=False, name='classifier')
+    self.classifier = Dense(units=2, activation=tf.nn.softmax, use_bias=False, name='mil_classifier')
 
   def mil_attention(self, features, training=True, verbose=False):
     att = self.attention(features)

@@ -23,7 +23,7 @@ from milk.eager import MilkEager
 with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
   case_dict = pickle.load(f)
 
-from encoder_config import encoder_args
+from milk.encoder_config import deep_args as encoder_args
 
 def case_label_fn(data_path):
   case = os.path.splitext(os.path.basename(data_path))[0]
@@ -104,7 +104,7 @@ def run_sample(case_x, model, mcdropout=False,
     yhats = np.stack(yhats, axis=0)
     yhat = np.mean(yhats, axis=0)
   else:
-    yhat = model(tf.constant(case_x), training=False, 
+    yhat = model(tf.constant(case_x), training=True, 
       batch_size=32, verbose=False)
 
   return yhat
@@ -121,6 +121,7 @@ def main(args):
 
   print('Model initializing')
   model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=args.deep_classifier )
+  # model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=False )
   xdummy = tf.zeros((1, args.batch_size, args.x_size, args.y_size, 3))
   ydummy = model(xdummy)
 

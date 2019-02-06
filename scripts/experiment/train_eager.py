@@ -135,23 +135,38 @@ def main(args):
   train_list = data_utils.enforce_minimum_size(train_list, args.bag_size, verbose=True)
   val_list = data_utils.enforce_minimum_size(val_list, args.bag_size, verbose=True)
   test_list = data_utils.enforce_minimum_size(test_list, args.bag_size, verbose=True)
-  transform_fn = data_utils.make_transform_fn(args.x_size, args.y_size, 
-                                              args.crop_size, args.scale)
+  transform_fn_internal = data_utils.make_transform_fn(args.x_size, args.y_size, 
+                                              args.crop_size, args.scale,
+                                              eager=True)
   train_x, train_y = data_utils.load_list_to_memory(train_list, case_label_fn)
   val_x, val_y = data_utils.load_list_to_memory(val_list, case_label_fn)
 
-  train_generator = data_utils.generate_from_memory(train_x, train_y, 
-      batch_size=args.batch_size,
-      bag_size=args.bag_size, 
-      transform_fn=transform_fn,)
-  val_generator = data_utils.generate_from_memory(val_x, val_y, 
-      batch_size=args.batch_size,
-      bag_size=args.bag_size, 
-      transform_fn=transform_fn,)
+  # Wrap transform fn in an apply_:
+  def get_transform_fn(fn):
+    def apply_fn(x_bag):
+      x_bag = [fn(x) for x in x_bag]
+      return np.stack(x_bag, 0)
+    return apply_fn
+
+  transform_fn = get_transform_fn(transform_fn_internal)
+
+  def train_generator():
+    return data_utils.generate_from_memory(train_x, train_y, batch_size=1,
+      bag_size=args.bag_size, #transform_fn=transform_fn,
+      pad_first_dim=False)
+  def val_generator():
+    return data_utils.generate_from_memory(val_x, val_y, batch_size=1,
+      bag_size=args.bag_size, #transform_fn=transform_fn, 
+      pad_first_dim=False)
+
+  train_dataset = data_utils.tf_dataset(train_generator, batch_size=args.batch_size, 
+    preprocess_fn=transform_fn, buffer_size=512, iterator=True)
+  val_dataset = data_utils.tf_dataset(val_generator, batch_size=args.batch_size, 
+    preprocess_fn=transform_fn, buffer_size=100, iterator=True)
 
   print('Testing batch generator')
   ## Some api change between nightly built TF and R1.5
-  x, y = next(train_generator)
+  x, y = next(train_dataset)
   print('x: ', x.shape)
   print('y: ', y.shape)
 
@@ -159,10 +174,9 @@ def main(args):
   print('Model initializing')
   model = MilkEager(encoder_args=deep_args, mil_type=args.mil,
                     deep_classifier=args.deep_classifier)
-
+  #model.build_encode_fn(training=True, verbose=False, batch_size=64)
   yhat = model(tf.constant(x), batch_size=16, training=True, verbose=True)
   print('yhat:', yhat.shape)
-
 
   exptime = datetime.datetime.now()
   exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
@@ -209,8 +223,8 @@ def main(args):
     for epc in range(args.epochs):
       for k in range(args.steps_per_epoch):
         with tf.GradientTape() as tape:
-          x, y = next(train_generator)
-          yhat = model(tf.constant(x), batch_size=16, training=True)
+          x, y = next(train_dataset)
+          yhat = model(tf.constant(x), batch_size=32, training=True)
           loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
 
         grads = tape.gradient(loss, model.variables)
@@ -221,7 +235,7 @@ def main(args):
           for y_, yh_ in zip(y, yhat):
             print('\t{} {}'.format(y_, yh_))
 
-      val_loss = val_step(model, val_generator, batch_size=16, steps=50)
+      val_loss = val_step(model, val_dataset, batch_size=32, steps=50)
       print('val_loss = {}'.format(val_loss))
       if stopper.should_stop(val_loss):
         break
@@ -240,7 +254,6 @@ def main(args):
     print('Training done. Find val and test datasets at')
     print(val_list_file)
     print(test_list_file)
-
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()

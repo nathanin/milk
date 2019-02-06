@@ -99,15 +99,20 @@ class MilkEager(tf.keras.Model):
 
     return z
 
-  def build_encode_fn(self, training=True, verbose=False, batch_size=64):
-    print('building encode fn')
-    def built_fn(x_bag):
-      z_bag = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
-        verbose=verbose)
-      return z_bag
+  #def build_encode_fn(self, training=True, verbose=False, batch_size=64):
+  #  print('building encode fn')
 
-    self.built_encode_fn = built_fn
-    self.built_fn = True
+  #  def built_fn(x_bag):
+  #    z_bag = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
+  #      verbose=verbose)
+  #    return z_bag
+  #
+  #  @tf.contrib.eager.defun
+  #  def func(x_bag):
+  #    return tf.map_fn(built_fn, x_bag, parallel_iterations=4)
+
+  #  self.built_encode_fn = func
+  #  self.built_fn = True
 
   def call(self, x_in, T=20, batch_size=64, 
            training=True, verbose=False,
@@ -132,17 +137,19 @@ class MilkEager(tf.keras.Model):
       print('Encoder Call:')
       print('n_x: ', n_x)
 
-    #zs = []
-    #for x_bag in x_in:
-    #  if verbose:
-    #    print('x_bag:', x_bag.shape)
-    #  z = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
-    #    verbose=verbose)
-    #  zs.append(z)
-    if not self.built_fn:
-      self.build_encode_fn(training=training, verbose=verbose, batch_size=batch_size)
+    zs = []
+    for x_bag in x_in:
+      if verbose:
+        print('x_bag:', x_bag.shape)
+      z = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
+        verbose=verbose)
+      zs.append(z)
 
-    zs = tf.map_fn(self.built_encode_fn, x_in, parallel_iterations=n_x)
+    #if not self.built_fn:
+    #  self.build_encode_fn(training=training, verbose=verbose, batch_size=batch_size)
+
+    ##zs = tf.map_fn(self.built_encode_fn, x_in, parallel_iterations=n_x)
+    #zs = self.built_encode_fn(x_in)
 
     # Gather
     z_concat = tf.concat(zs, axis=0) #(batch, features)

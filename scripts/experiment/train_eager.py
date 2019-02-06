@@ -174,7 +174,7 @@ def main(args):
   print('Model initializing')
   model = MilkEager(encoder_args=deep_args, mil_type=args.mil,
                     deep_classifier=args.deep_classifier)
-  model.build_encode_fn(training=True, verbose=False, batch_size=64)
+  #model.build_encode_fn(training=True, verbose=False, batch_size=64)
   yhat = model(tf.constant(x), batch_size=16, training=True, verbose=True)
   print('yhat:', yhat.shape)
 

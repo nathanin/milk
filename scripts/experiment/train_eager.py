@@ -145,7 +145,7 @@ def main(args):
   def get_transform_fn(fn):
     def apply_fn(x_bag):
       x_bag = [fn(x) for x in x_bag]
-      return np.stack(x_bag, 0)
+      return tf.stack(x_bag, 0)
     return apply_fn
 
   transform_fn = get_transform_fn(transform_fn_internal)
@@ -175,8 +175,10 @@ def main(args):
   model = MilkEager(encoder_args=deep_args, mil_type=args.mil,
                     deep_classifier=args.deep_classifier)
   #model.build_encode_fn(training=True, verbose=False, batch_size=64)
-  yhat = model(tf.constant(x), batch_size=16, training=True, verbose=True)
-  print('yhat:', yhat.shape)
+  tstart = time.time()
+  yhat = model(tf.constant(x), batch_size=32, training=True, verbose=True)
+  tend = time.time()
+  print('yhat:', yhat.shape, 'tdelta = {:3.4f}'.format(tend-tstart))
 
   exptime = datetime.datetime.now()
   exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')

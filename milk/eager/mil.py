@@ -76,7 +76,7 @@ class MilkEager(tf.keras.Model):
     z_bag = []
     n_bags = x_bag.shape[0] // batch_size
     remainder = x_bag.shape[0] - n_bags*batch_size
-    x_bag = tf.split(x_bag, [batch_size]*n_bags + [remainder], axis=0)
+    x_bag = tf.split(x_bag, tf.stack([batch_size]*n_bags + [remainder]), axis=0)
     for x_in in x_bag:
       z = self.densenet(x_in, training=training)
       if verbose:
@@ -99,21 +99,18 @@ class MilkEager(tf.keras.Model):
 
     return z
 
-  #def build_encode_fn(self, training=True, verbose=False, batch_size=64):
-  #  print('building encode fn')
+  def build_encode_fn(self, training=True, verbose=False, batch_size=64):
+    print('building encode fn')
 
-  #  def built_fn(x_bag):
-  #    z_bag = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
-  #      verbose=verbose)
-  #    return z_bag
-  #
-  #  @tf.contrib.eager.defun
-  #  def func(x_bag):
-  #    return tf.map_fn(built_fn, x_bag, parallel_iterations=4)
+    def built_fn(x_bag):
+      z_bag = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
+        verbose=verbose)
+      return z_bag
 
-  #  self.built_encode_fn = func
-  #  self.built_fn = True
+    self.built_encode_fn = built_fn
+    self.built_fn = True
 
+  #@tf.contrib.eager.defun
   def call(self, x_in, T=20, batch_size=64, 
            training=True, verbose=False,
            return_embedding=False,
@@ -138,9 +135,11 @@ class MilkEager(tf.keras.Model):
       print('n_x: ', n_x)
 
     zs = []
-    for x_bag in x_in:
+    x_in_split = tf.split(x_in, n_x, axis=0)
+    for x_bag in x_in_split:
       if verbose:
         print('x_bag:', x_bag.shape)
+      x_bag = tf.squeeze(x_bag, 0)
       z = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
         verbose=verbose)
       zs.append(z)
@@ -148,7 +147,7 @@ class MilkEager(tf.keras.Model):
     #if not self.built_fn:
     #  self.build_encode_fn(training=training, verbose=verbose, batch_size=batch_size)
 
-    ##zs = tf.map_fn(self.built_encode_fn, x_in, parallel_iterations=n_x)
+    #zs = tf.map_fn(self.built_encode_fn, x_in, parallel_iterations=3)
     #zs = self.built_encode_fn(x_in)
 
     # Gather

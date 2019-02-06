@@ -163,7 +163,7 @@ class MilkEager(tf.keras.Model):
       print('z_concat - ff:', z_concat.shape)
 
     yhat = self.classifier(z_concat)
-    yhat = tf.squeeze(yhat, axis=1)
+    #yhat = tf.squeeze(yhat, axis=1)
     if verbose:
       print('yhat:', yhat.shape)
 

@@ -36,6 +36,7 @@ class MilkEager(tf.keras.Model):
     self.drop2  = Dropout(rate=0.3)
 
     if mil_type == 'attention':
+      self.att_batchnorm = BatchNormalization()
       self.attention = Dense(units=256, 
         activation=tf.nn.tanh, use_bias=False, name='attention')
       self.attention_gate = Dense(units=256, 
@@ -56,23 +57,38 @@ class MilkEager(tf.keras.Model):
 
     self.classifier = Dense(units=2, activation=tf.nn.softmax, use_bias=False, name='mil_classifier')
 
-  def mil_attention(self, features, training=True, verbose=False):
+  def mil_attention(self, features, verbose=False, return_att=False, training=True):
+    features = self.att_batchnorm(features, training=training)
     att = self.attention(features)
     att_gate = self.attention_gate(features)
     att = att * att_gate # tf.multiply()
+    if verbose:
+      print('attention:', att.shape)
 
     att = self.attention_layer(att)
     att = tf.transpose(att, perm=(1,0)) 
-    att = tf.nn.softmax(att, axis=1)
+    if verbose:
+      print('attention:', att.shape)
+
+    # Question: WTF?
+    # tensorflow.python.framework.errors_impl.InternalError: CUB segmented reduce errorinvalid configuration argument [Op:Softmax]
+    # unless we put this op on CPU in eager mode.
+    with tf.device('/cpu:0'):
+      att = tf.nn.softmax(att, axis=1)
+
     if verbose:
       print('attention:', att.shape)
 
     # Scale learning proportionally to bag size
-    # z = lr_mult(n_x/4.)(tf.matmul(att, z_concat))
     z = tf.matmul(att, features)
-    return z
 
-  def encode_bag(self, x_bag, batch_size=64, training=True, verbose=False):
+    if return_att:
+      return z, att
+    else:
+      return z
+
+  def encode_bag(self, x_bag, batch_size=64, 
+    training=True, verbose=False, return_z=False):
     z_bag = []
     n_bags = x_bag.shape[0] // batch_size
     remainder = x_bag.shape[0] - n_bags*batch_size
@@ -88,6 +104,13 @@ class MilkEager(tf.keras.Model):
     if verbose:
       print('\tz bag:', z.shape)
 
+    if return_z:
+      return z
+    else:
+      z = self.apply_mil(z, verbose=verbose)
+      return z
+
+  def apply_mil(self, z, training=True, verbose=False):
     if self.mil_type == 'attention':
       z = self.mil_attention(z, training=training, verbose=verbose)
     # Add elif's here
@@ -99,9 +122,21 @@ class MilkEager(tf.keras.Model):
 
     return z
 
+  def apply_classifier(self, features, verbose=False, training=True):
+    for layer in self.classifier_layers:
+      features = layer(features)
+    if verbose:
+      print('features - ff:', features.shape)
+
+    yhat = self.classifier(features)
+    if verbose:
+      print('yhat:', yhat.shape)
+
+    return yhat
+
+  ## BUG for tf.contrib.eager.defun
   #def build_encode_fn(self, training=True, verbose=False, batch_size=64):
   #  print('building encode fn')
-
   #  def built_fn(x_bag):
   #    z_bag = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
   #      verbose=verbose)
@@ -114,10 +149,9 @@ class MilkEager(tf.keras.Model):
   #  self.built_encode_fn = func
   #  self.built_fn = True
 
+  #@tf.contrib.eager.defun
   def call(self, x_in, T=20, batch_size=64, 
-           training=True, verbose=False,
-           return_embedding=False,
-           return_attention=False):
+           training=True, verbose=False,):
     """
     `training` controls the use of dropout and batch norm, if defined
     `return_embedding`
@@ -157,19 +191,6 @@ class MilkEager(tf.keras.Model):
       print('z_concat: ', z_concat.shape)
 
     ## Classifier 
-    for layer in self.classifier_layers:
-      z_concat = layer(z_concat)
-    if verbose:
-      print('z_concat - ff:', z_concat.shape)
+    yhat = self.apply_classifier(z_concat, training=training, verbose=verbose)
 
-    yhat = self.classifier(z_concat)
-    #yhat = tf.squeeze(yhat, axis=1)
-    if verbose:
-      print('yhat:', yhat.shape)
-
-    if return_embedding:
-      return yhat, att, z_concat
-    if return_attention:
-      return yhat, att
-    else:
-      return yhat
+    return yhat

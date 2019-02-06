@@ -160,7 +160,7 @@ def main(args):
       pad_first_dim=False)
 
   train_dataset = data_utils.tf_dataset(train_generator, batch_size=args.batch_size, 
-    preprocess_fn=transform_fn, buffer_size=512, iterator=True)
+    preprocess_fn=transform_fn, buffer_size=100, iterator=True)
   val_dataset = data_utils.tf_dataset(val_generator, batch_size=args.batch_size, 
     preprocess_fn=transform_fn, buffer_size=100, iterator=True)
 

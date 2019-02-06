@@ -19,6 +19,7 @@ class MilkEager(tf.keras.Model):
     self.hidden_dim = z_dim
     self.deep_classifier = deep_classifier
     self.mil_type = mil_type
+    self.built_fn = False
 
     self.densenet = make_encoder_eager( encoder_args = encoder_args )
     # self.densenet = DenseNet(
@@ -72,7 +73,6 @@ class MilkEager(tf.keras.Model):
     return z
 
   def encode_bag(self, x_bag, batch_size=64, training=True, verbose=False):
-    
     z_bag = []
     n_bags = x_bag.shape[0] // batch_size
     remainder = x_bag.shape[0] - n_bags*batch_size
@@ -99,6 +99,16 @@ class MilkEager(tf.keras.Model):
 
     return z
 
+  def build_encode_fn(self, training=True, verbose=False, batch_size=64):
+    print('building encode fn')
+    def built_fn(x_bag):
+      z_bag = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
+        verbose=verbose)
+      return z_bag
+
+    self.built_encode_fn = built_fn
+    self.built_fn = True
+
   def call(self, x_in, T=20, batch_size=64, 
            training=True, verbose=False,
            return_embedding=False,
@@ -122,13 +132,17 @@ class MilkEager(tf.keras.Model):
       print('Encoder Call:')
       print('n_x: ', n_x)
 
-    zs = []
-    for x_bag in x_in:
-      if verbose:
-        print('x_bag:', x_bag.shape)
-      z = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
-        verbose=verbose)
-      zs.append(z)
+    #zs = []
+    #for x_bag in x_in:
+    #  if verbose:
+    #    print('x_bag:', x_bag.shape)
+    #  z = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
+    #    verbose=verbose)
+    #  zs.append(z)
+    if not self.built_fn:
+      self.build_encode_fn(training=training, verbose=verbose, batch_size=batch_size)
+
+    zs = tf.map_fn(self.built_encode_fn, x_in, parallel_iterations=n_x)
 
     # Gather
     z_concat = tf.concat(zs, axis=0) #(batch, features)
@@ -142,6 +156,7 @@ class MilkEager(tf.keras.Model):
       print('z_concat - ff:', z_concat.shape)
 
     yhat = self.classifier(z_concat)
+    yhat = tf.squeeze(yhat, axis=1)
     if verbose:
       print('yhat:', yhat.shape)
 

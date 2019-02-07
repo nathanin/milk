@@ -155,12 +155,13 @@ scripts/mnist/pretrain_mnist.py -o scripts/mnist/pretrained.h5
 scripts/mnist/train.py -o scripts/mnist/bagged_mnist.h5 --pretrained scripts/mnist/pretrained.h5
 ```
 
+See it run the bagged MNIST example on [Google Colab](https://colab.research.google.com/drive/1eOcZaqQG01fS16ckn9x94ivW-k12fbcg). 
 
 #### Milestones
 - **Make the whole thing run on TPU.** 
   - Progress: see branch `functional-api` for a version compatible with TPU execution. 
   - Update: reworked `master` to use the functional api. Branch `functional-api` is now defunct.
-  - See it run the bagged MNIST example on [Google Colab](https://colab.research.google.com/drive/1eOcZaqQG01fS16ckn9x94ivW-k12fbcg). 
+  - Feature: re-introduced `eager` mode as a module (`milk.eager`), allowing baches > 1 on single GPU.
 
  
 Contact: ing.nathany@gmail.com

@@ -285,7 +285,7 @@ if __name__ == '__main__':
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
-  parser.add_argument('--steps_per_epoch',  default = 1000, type=int)
+  parser.add_argument('--steps_per_epoch',  default = 2000, type=int)
   parser.add_argument('--epochs',           default = 30, type=int)
 
   # Experiment / data settings

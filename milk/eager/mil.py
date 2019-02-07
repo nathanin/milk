@@ -12,7 +12,7 @@ from .encoder import make_encoder_eager
 from milk.utilities.model_utils import lr_mult
 
 class MilkEager(tf.keras.Model):
-  def __init__(self, z_dim=256, encoder_args=None, mil_type='attention', deep_classifier=True):
+  def __init__(self, z_dim=512, encoder_args=None, mil_type='attention', deep_classifier=True):
 
     super(MilkEager, self).__init__()
 
@@ -45,7 +45,7 @@ class MilkEager(tf.keras.Model):
         Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
         name = 'mil_deep_{}'.format(i)))
       self.classifier_dropout.append(
-        Dropout(rate = 0.3))
+        Dropout(rate = 0.5))
 
     self.classifier = Dense(units=2, activation=tf.nn.softmax, use_bias=False, name='mil_classifier')
 

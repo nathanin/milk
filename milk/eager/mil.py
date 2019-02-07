@@ -12,7 +12,7 @@ from .encoder import make_encoder_eager
 from milk.utilities.model_utils import lr_mult
 
 class MilkEager(tf.keras.Model):
-  def __init__(self, z_dim=256, encoder_args=None, mil_type='attention', deep_classifier=True):
+  def __init__(self, z_dim=512, encoder_args=None, mil_type='attention', deep_classifier=True):
 
     super(MilkEager, self).__init__()
 
@@ -22,21 +22,10 @@ class MilkEager(tf.keras.Model):
     self.built_fn = False
 
     self.densenet = make_encoder_eager( encoder_args = encoder_args )
-    # self.densenet = DenseNet(
-    #   depth_of_model=36,
-    #   growth_rate=32,
-    #   num_of_blocks=3,
-    #   output_classes=2,
-    #   num_layers_in_each_block=12,
-    #   data_format='channels_last',
-    #   dropout_rate=0.3,
-    #   pool_initial=True
-    # )
-
     self.drop2  = Dropout(rate=0.3)
 
     if mil_type == 'attention':
-      self.att_batchnorm = BatchNormalization()
+      self.att_batchnorm = BatchNormalization(trainable=True)
       self.attention = Dense(units=256, 
         activation=tf.nn.tanh, use_bias=False, name='attention')
       self.attention_gate = Dense(units=256, 
@@ -45,6 +34,7 @@ class MilkEager(tf.keras.Model):
         activation=None, use_bias=False, name='attention_layer')
 
     self.classifier_layers = []
+    self.classifier_dropout = []
     if self.deep_classifier:
       depth=5
     else:
@@ -54,11 +44,13 @@ class MilkEager(tf.keras.Model):
       self.classifier_layers.append(
         Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
         name = 'mil_deep_{}'.format(i)))
+      self.classifier_dropout.append(
+        Dropout(rate = 0.5))
 
     self.classifier = Dense(units=2, activation=tf.nn.softmax, use_bias=False, name='mil_classifier')
 
   def mil_attention(self, features, verbose=False, return_att=False, training=True):
-    features = self.att_batchnorm(features, training=training)
+    # features = self.att_batchnorm(features, training=training)
     att = self.attention(features)
     att_gate = self.attention_gate(features)
     att = att * att_gate # tf.multiply()
@@ -87,8 +79,7 @@ class MilkEager(tf.keras.Model):
     else:
       return z
 
-  def encode_bag(self, x_bag, batch_size=64, 
-    training=True, verbose=False, return_z=False):
+  def encode_bag(self, x_bag, batch_size=64, training=True, verbose=False, return_z=False):
     z_bag = []
     n_bags = x_bag.shape[0] // batch_size
     remainder = x_bag.shape[0] - n_bags*batch_size
@@ -104,6 +95,7 @@ class MilkEager(tf.keras.Model):
     if verbose:
       print('\tz bag:', z.shape)
 
+    z = self.att_batchnorm(z, training=training)
     if return_z:
       return z
     else:
@@ -123,7 +115,8 @@ class MilkEager(tf.keras.Model):
     return z
 
   def apply_classifier(self, features, verbose=False, training=True):
-    for layer in self.classifier_layers:
+    for layer, dropout_layer in zip(self.classifier_layers, self.classifier_dropout):
+      features = dropout_layer(features, training=training)
       features = layer(features)
     if verbose:
       print('features - ff:', features.shape)

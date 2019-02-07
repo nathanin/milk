@@ -37,7 +37,7 @@ import re
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from svs_reader import Slide
+from svs_reader import Slide, reinhard
 from attimg import draw_attention
 
 from milk.utilities import data_utils
@@ -150,7 +150,7 @@ def process_slide(svs, model, args, return_z=False):
   for imgs, idx_ in iterator:
     try:
       batches += 1
-      z = model.encode_bag(imgs, batch_size=args.batch_size, training=True, return_z=True)
+      z = model.encode_bag(imgs, batch_size=args.batch_size, training=False, return_z=True)
       zs.append(z)
       indices.append(idx_)
       if batches % 10 == 0:
@@ -164,8 +164,8 @@ def process_slide(svs, model, args, return_z=False):
   print('zs: ', zs.shape, zs.dtype)
   print('indices: ', indices.shape)
 
-  z_att, att = model.mil_attention(zs, verbose=True, return_att=True)
-  yhat = model.apply_classifier(z_att, verbose=True)
+  z_att, att = model.mil_attention(zs, training=False, verbose=True, return_att=True)
+  yhat = model.apply_classifier(z_att, training=False, verbose=True)
   print('yhat:', yhat)
 
   att = np.squeeze(att)
@@ -320,7 +320,7 @@ if __name__ == '__main__':
   parser.add_argument('--n_classes',  default=2, type=int)
   parser.add_argument('--input_dim',  default=96, type=int)
   parser.add_argument('--randomize',  default=False, action='store_true')
-  parser.add_argument('--batch_size', default=64, type=int)
+  parser.add_argument('--batch_size', default=32, type=int)
   parser.add_argument('--oversample', default=1.25, type=float)
 
   parser.add_argument('--mil',        default='attention', type=str)

@@ -59,7 +59,7 @@ class ConvBlock(tf.keras.Model):
                         # kernel_initializer="he_normal",
                         kernel_regularizer=l2(weight_decay)
                         )
-    self.batchnorm1 = BatchNormalization(axis=axis)
+    self.batchnorm1 = BatchNormalization(trainable=True, axis=axis)
     self.dropout = Dropout(dropout_rate)
 
     if self.bottleneck:
@@ -71,7 +71,7 @@ class ConvBlock(tf.keras.Model):
                           # kernel_initializer="he_normal",
                           kernel_regularizer=l2(weight_decay),
                           )
-      self.batchnorm2 = BatchNormalization(axis=axis)
+      self.batchnorm2 = BatchNormalization(trainable=True, axis=axis)
 
   def call(self, x, training=True):
     output = self.batchnorm1(x, training=training)
@@ -101,7 +101,7 @@ class TransitionBlock(tf.keras.Model):
     super(TransitionBlock, self).__init__()
     axis = -1 if data_format == "channels_last" else 1
 
-    self.batchnorm = BatchNormalization(axis=axis)
+    self.batchnorm = BatchNormalization(trainable=True, axis=axis)
     self.conv = Conv2D(num_filters,
                                  (1, 1),
                                  padding="same",
@@ -244,9 +244,9 @@ class DenseNetEager(tf.keras.Model):
                                 strides=(2, 2),
                                 padding="same",
                                 data_format=self.data_format)
-      self.batchnorm1 = BatchNormalization(axis=axis)
+      self.batchnorm1 = BatchNormalization(trainable=True, axis=axis)
 
-    self.batchnorm2 = BatchNormalization(axis=axis)
+    self.batchnorm2 = BatchNormalization(trainable=True, axis=axis)
 
     # last pooling and fc layer
     if self.include_top:

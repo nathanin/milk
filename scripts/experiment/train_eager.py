@@ -97,6 +97,19 @@ class ShouldStop():
     else:
       return False
 
+class LearningButler():
+  """
+  Track the loss and anneal the learning rate when it stops improving
+  """
+  def __init__(self, learning_rate=1e-4, delta=0.01, divisor=0.01):
+    self.delta = delta
+    self.prev_loss = np.inf
+    self.learning_rate = learning_rate
+
+  def lr(self):
+    pass
+
+
 def main(args):
   """ 
   1. Create generator datasets from the provided lists
@@ -215,7 +228,7 @@ def main(args):
       print(e)
 
   if args.early_stop:
-    stopper = ShouldStop(patience = 10)
+    stopper = ShouldStop(patience = 3)
   else:
     stopper = lambda x: False
 
@@ -272,8 +285,8 @@ if __name__ == '__main__':
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
-  parser.add_argument('--steps_per_epoch',  default = 5000, type=int)
-  parser.add_argument('--epochs',           default = 20, type=int)
+  parser.add_argument('--steps_per_epoch',  default = 1000, type=int)
+  parser.add_argument('--epochs',           default = 30, type=int)
 
   # Experiment / data settings
   parser.add_argument('--seed',             default = None, type=int)

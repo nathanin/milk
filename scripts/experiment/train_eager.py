@@ -230,7 +230,7 @@ def main(args):
       print(e)
 
   if args.early_stop:
-    stopper = ShouldStop(patience = 3)
+    stopper = ShouldStop(patience = 5)
   else:
     stopper = lambda x: False
 
@@ -251,7 +251,7 @@ def main(args):
             print('\t{} {}'.format(y_, yh_))
 
       val_loss = val_step(model, val_dataset, batch_size=32, steps=50)
-      print('val_loss = {}'.format(val_loss))
+      print('epc: {} val_loss = {}'.format(epc, val_loss))
       if stopper.should_stop(val_loss):
         break
 
@@ -287,8 +287,8 @@ if __name__ == '__main__':
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
-  parser.add_argument('--steps_per_epoch',  default = 2000, type=int)
-  parser.add_argument('--epochs',           default = 30, type=int)
+  parser.add_argument('--steps_per_epoch',  default = 500, type=int)
+  parser.add_argument('--epochs',           default = 100, type=int)
 
   # Experiment / data settings
   parser.add_argument('--seed',             default = None, type=int)

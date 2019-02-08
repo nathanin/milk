@@ -12,7 +12,7 @@ from .encoder import make_encoder_eager
 from milk.utilities.model_utils import lr_mult
 
 class MilkEager(tf.keras.Model):
-  def __init__(self, z_dim=512, encoder_args=None, mil_type='attention', deep_classifier=True):
+  def __init__(self, z_dim=256, encoder_args=None, mil_type='attention', deep_classifier=True):
 
     super(MilkEager, self).__init__()
 
@@ -20,12 +20,11 @@ class MilkEager(tf.keras.Model):
     self.deep_classifier = deep_classifier
     self.mil_type = mil_type
     self.built_fn = False
-
     self.densenet = make_encoder_eager( encoder_args = encoder_args )
     self.drop2  = Dropout(rate=0.3)
 
     if mil_type == 'attention':
-      self.att_batchnorm = BatchNormalization(trainable=True)
+      #self.att_batchnorm = BatchNormalization(trainable=True)
       self.attention = Dense(units=256, 
         activation=tf.nn.tanh, use_bias=False, name='attention')
       self.attention_gate = Dense(units=256, 
@@ -34,18 +33,18 @@ class MilkEager(tf.keras.Model):
         activation=None, use_bias=False, name='attention_layer')
 
     self.classifier_layers = []
-    self.classifier_dropout = []
     if self.deep_classifier:
       depth=5
     else:
       depth=1
 
+    #self.classifier_dropout_0 = Dropout(rate = 0.3)
+    #self.classifier_dropout_1 = Dropout(rate = 0.3)
+    self.classifier_bn = BatchNormalization(trainable=True)
     for i in range(depth):
       self.classifier_layers.append(
         Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
         name = 'mil_deep_{}'.format(i)))
-      self.classifier_dropout.append(
-        Dropout(rate = 0.5))
 
     self.classifier = Dense(units=2, activation=tf.nn.softmax, use_bias=False, name='mil_classifier')
 
@@ -95,7 +94,7 @@ class MilkEager(tf.keras.Model):
     if verbose:
       print('\tz bag:', z.shape)
 
-    z = self.att_batchnorm(z, training=training)
+    #z = self.att_batchnorm(z, training=training)
     if return_z:
       return z
     else:
@@ -115,9 +114,12 @@ class MilkEager(tf.keras.Model):
     return z
 
   def apply_classifier(self, features, verbose=False, training=True):
-    for layer, dropout_layer in zip(self.classifier_layers, self.classifier_dropout):
-      features = dropout_layer(features, training=training)
+    features = self.classifier_bn(features, training=training)
+    #features = self.classifier_dropout_0(features, training=training)
+    for layer in self.classifier_layers:
       features = layer(features)
+
+    #features = self.classifier_dropout_1(features, training=training)
     if verbose:
       print('features - ff:', features.shape)
 
@@ -126,21 +128,6 @@ class MilkEager(tf.keras.Model):
       print('yhat:', yhat.shape)
 
     return yhat
-
-  ## BUG for tf.contrib.eager.defun
-  #def build_encode_fn(self, training=True, verbose=False, batch_size=64):
-  #  print('building encode fn')
-  #  def built_fn(x_bag):
-  #    z_bag = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
-  #      verbose=verbose)
-  #    return z_bag
-  #
-  #  @tf.contrib.eager.defun
-  #  def func(x_bag):
-  #    return tf.map_fn(built_fn, x_bag, parallel_iterations=4)
-
-    self.built_encode_fn = built_fn
-    self.built_fn = True
 
   #@tf.contrib.eager.defun
   def call(self, x_in, T=20, batch_size=64, 
@@ -173,15 +160,8 @@ class MilkEager(tf.keras.Model):
       z = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
         verbose=verbose)
       zs.append(z)
-
-    #if not self.built_fn:
-    #  self.build_encode_fn(training=training, verbose=verbose, batch_size=batch_size)
-
-    #zs = tf.map_fn(self.built_encode_fn, x_in, parallel_iterations=3)
-    #zs = self.built_encode_fn(x_in)
-
-    # Gather
     z_concat = tf.concat(zs, axis=0) #(batch, features)
+
     if verbose:
       print('z_concat: ', z_concat.shape)
 

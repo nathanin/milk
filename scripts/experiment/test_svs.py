@@ -44,9 +44,10 @@ from milk.utilities import training_utils
 from milk.utilities import model_utils
 from milk import Milk, MilkEncode, MilkPredict, MilkAttention
 
-uid2label = pickle.load(open('../dataset/case_dict_obfuscated.pkl', 'rb'))
-# uid2label = pickle.load(open('../dataset/cases_md5.pkl', 'rb'))
-uid2slide = pickle.load(open('../dataset/uid2slide.pkl', 'rb'))
+from milk.encoder_config import deep_args as encoder_args
+
+uid2label = pickle.load(open('case_dict_obfuscated.pkl', 'rb'))
+uid2slide = pickle.load(open('uid2slide.pkl', 'rb'))
 
 def get_wrapped_fn(svs):
     def wrapped_fn(idx):
@@ -224,13 +225,6 @@ def main(args, sess):
 
     snapshot = os.path.join(args.savedir, '{}.h5'.format(args.timestamp))
     trained_model = load_model(snapshot)
-    encoder_args = {
-        'depth_of_model': 32,
-        'growth_rate': 64,
-        'num_of_blocks': 4,
-        'output_classes': 2,
-        'num_layers_in_each_block': 8,
-    }
     if args.mcdropout:
         encoder_args['mcdropout'] = True
 

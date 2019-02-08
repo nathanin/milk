@@ -88,6 +88,11 @@ class ShouldStop():
     self.n_calls += 1
     self.since_last_improvement += 1
 
+    print('calls since last improvement = ',
+      self.since_last_improvement)
+    print('checking loss = {:3.5f} vs {:3.5f}'.format(new_loss,
+      self.val_loss))
+
     if new_loss < self.val_loss:
       self.val_loss = new_loss
       self.since_last_improvement = 0
@@ -218,7 +223,6 @@ def main(args):
 
   # API BUG Keras optimizer has no attribute `apply_gradients`
   # optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
-  optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
   model.summary()
 
   ## Replace randomly initialized weights after model is compiled and on the correct device.
@@ -236,6 +240,7 @@ def main(args):
 
   try:
     for epc in range(args.epochs):
+      optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate/(epc+1))
       for k in range(args.steps_per_epoch):
         with tf.GradientTape() as tape:
           x, y = next(train_dataset)
@@ -287,8 +292,8 @@ if __name__ == '__main__':
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
-  parser.add_argument('--steps_per_epoch',  default = 500, type=int)
-  parser.add_argument('--epochs',           default = 100, type=int)
+  parser.add_argument('--steps_per_epoch',  default = 1000, type=int)
+  parser.add_argument('--epochs',           default = 50, type=int)
 
   # Experiment / data settings
   parser.add_argument('--seed',             default = None, type=int)

@@ -2,21 +2,35 @@
 
 set -e
 
-testtype=npy
+# testtype=npy
+# testdir=test_lists
+# python batch_test.py --test $testtype --odir result_test --testdir $testdir --run_list runs_mil.txt
 
+### path including the experiment directory
 runlist=(
-  runs_mil.txt,
-  runs_average.txt,
-  runs_instance.txt,
-  runs_frozen_average.txt,
-  runs_frozen_attention.txt,
+  runs_mil.txt
+  runs_average.txt
+  runs_instance.txt
+  runs_frozen_average.txt
+  runs_frozen_attention.txt
   runs_ensemble.txt
 )
+odir=result_test
+testdir=test_lists
+parallel --dry-run -j 3 "python batch_test.py --test $testtype --odir $odir --run_list {}" ::: ${runlist[@]}
+parallel -j 3 "python batch_test.py --test $testtype --odir $odir --testdir $testdir --run_list {}" ::: ${runlist[@]}
 
-parallel -j 3 "python batch_test.py --test npy --odir result_test --run_list {}" ::: ${runlist[@]}
-parallel -j 3 "python batch_test.py --test npy --val --odir result_val --run_list {}" ::: ${runlist[@]}
-parallel -j 3 "python batch_test.py --test npy --mcdropout --odir result_test_mcdrop --run_list {}" ::: ${runlist[@]}
-parallel -j 3 "python batch_test.py --test npy --mcdropout --val --odir result_val_mcdrop --run_list {}" ::: ${runlist[@]}
+odir=result_val
+testdir=val_lists
+parallel -j 3 "python batch_test.py --test $testtype --odir $odir --testdir $testdir --run_list {}" ::: ${runlist[@]}
+
+odir=result_test_mcdrop
+testdir=test_lists
+parallel -j 3 "python batch_test.py --test $testtype --mcdropout --odir $odir --testdir $testdir --run_list {}" ::: ${runlist[@]}
+
+odir=result_val_mcdrop
+testdir=val_lists
+parallel -j 3 "python batch_test.py --test $testtype --mcdropout --odir $odir --testdir $testdir --run_list {}" ::: ${runlist[@]}
 
 # ## "test"
 # python batch_test.py --test $testtype --odir result_test --run_list runs_mil.txt

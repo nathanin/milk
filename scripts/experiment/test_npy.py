@@ -18,13 +18,14 @@ from sklearn.metrics import (roc_auc_score, roc_curve,
 from milk.utilities import data_utils
 from milk.utilities import model_utils
 from milk.utilities import training_utils
-from milk import Milk, MilkEncode, MilkPredict, MilkAttention
+from milk import MilkEncode, MilkPredict
 
-with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
+# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
 #with open('../dataset/cases_md5.pkl', 'rb') as f:
+with open('case_dict_obfuscated.pkl', 'rb') as f:
   case_dict = pickle.load(f)
 
-from encoder_config import encoder_args
+from milk.encoder_config import deep_args as encoder_args
 
 def case_label_fn(data_path):
   case = os.path.splitext(os.path.basename(data_path))[0]

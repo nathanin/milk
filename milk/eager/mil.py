@@ -40,7 +40,7 @@ class MilkEager(tf.keras.Model):
 
     #self.classifier_dropout_0 = Dropout(rate = 0.3)
     #self.classifier_dropout_1 = Dropout(rate = 0.3)
-    self.classifier_bn = BatchNormalization(trainable=True)
+    # self.classifier_bn = BatchNormalization(trainable=True)
     for i in range(depth):
       self.classifier_layers.append(
         Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
@@ -78,6 +78,18 @@ class MilkEager(tf.keras.Model):
     else:
       return z
 
+  def apply_mil(self, z, training=True, verbose=False):
+    if self.mil_type == 'attention':
+      z = self.mil_attention(z, training=training, verbose=verbose)
+    # Add elif's here
+    else:
+      z = tf.reduce_mean(z, axis=0, keep_dims=True)
+
+    if verbose:
+      print('z:', z.shape)
+
+    return z
+
   def encode_bag(self, x_bag, batch_size=64, training=True, verbose=False, return_z=False):
     z_bag = []
     n_bags = x_bag.shape[0] // batch_size
@@ -101,20 +113,8 @@ class MilkEager(tf.keras.Model):
       z = self.apply_mil(z, verbose=verbose)
       return z
 
-  def apply_mil(self, z, training=True, verbose=False):
-    if self.mil_type == 'attention':
-      z = self.mil_attention(z, training=training, verbose=verbose)
-    # Add elif's here
-    else:
-      z = tf.reduce_mean(z, axis=0, keep_dims=True)
-
-    if verbose:
-      print('z:', z.shape)
-
-    return z
-
   def apply_classifier(self, features, verbose=False, training=True):
-    features = self.classifier_bn(features, training=training)
+    # features = self.classifier_bn(features, training=training)
     #features = self.classifier_dropout_0(features, training=training)
     for layer in self.classifier_layers:
       features = layer(features)

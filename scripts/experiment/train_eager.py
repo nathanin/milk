@@ -66,7 +66,7 @@ def val_step(model, val_generator, batch_size=8, steps=50):
   losses = np.zeros(steps)
   for k in range(steps):
     x, y = next(val_generator)
-    yhat = model(x, batch_size=batch_size, training=False)
+    yhat = model(x, batch_size=batch_size, training=True)
     loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, tf.float32), y_pred=yhat)
     losses[k] = np.mean(loss)
 
@@ -238,6 +238,7 @@ def main(args):
   else:
     stopper = lambda x: False
 
+  avglosses = []
   try:
     for epc in range(args.epochs):
       optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate/(epc+1))
@@ -246,18 +247,21 @@ def main(args):
           x, y = next(train_dataset)
           yhat = model(tf.constant(x), batch_size=32, training=True)
           loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
+          avglosses.append(np.mean(loss))
 
         grads = tape.gradient(loss, model.variables)
         optimizer.apply_gradients(zip(grads, model.variables))
 
-        if k % 50 == 0:
-          print('{:06d}: loss={:3.5f}'.format(k, np.mean(loss)))
+        if k % 100 == 0:
+          print('{:06d}: loss={:3.5f}'.format(k, np.mean(avglosses)))
+          avglosses = []
           for y_, yh_ in zip(y, yhat):
             print('\t{} {}'.format(y_, yh_))
 
       val_loss = val_step(model, val_dataset, batch_size=32, steps=50)
       print('epc: {} val_loss = {}'.format(epc, val_loss))
-      if stopper.should_stop(val_loss):
+
+      if args.early_stop and stopper.should_stop(val_loss):
         break
 
   except KeyboardInterrupt:
@@ -292,7 +296,7 @@ if __name__ == '__main__':
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
-  parser.add_argument('--steps_per_epoch',  default = 1000, type=int)
+  parser.add_argument('--steps_per_epoch',  default = 500, type=int)
   parser.add_argument('--epochs',           default = 50, type=int)
 
   # Experiment / data settings

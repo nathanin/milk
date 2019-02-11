@@ -32,21 +32,23 @@ def get_ytrue(timestamp, srcdir):
   return ytrue
 
 def main(args):
+  print('\n\nrunlist:', args.runlist)
   timestamps = read_list(args.runlist)
   print(timestamps)  
 
-  accs, aucs, precs, recs = [], [], [], []
+  accs, aucs, precs, recs, yhats, ytrues = [], [], [], [], [], []
   
   for ts in timestamps:
     yhat  = get_yhat(ts, args.src)
     ytrue = get_ytrue(ts, args.src)
+
     yhat_1 = np.argmax(yhat, axis=-1)
     ytrue_1 = np.argmax(ytrue, axis=-1)
 
-    acc = np.mean( ( yhat_1 == ytrue_1 ) )
-    auc = roc_auc_score(y_true=ytrue, y_score=yhat)
-    prec = precision_score(y_true=ytrue_1, y_pred=yhat_1)
-    rec = recall_score(y_true=ytrue_1, y_pred=yhat_1)
+    acc =  np.mean( ( yhat_1 == ytrue_1 ) )
+    auc =  roc_auc_score(   y_true = ytrue,   y_score = yhat)
+    prec = precision_score( y_true = ytrue_1, y_pred  = yhat_1)
+    rec  = recall_score(    y_true = ytrue_1, y_pred  = yhat_1)
 
     print('acc={:3.3f}\tauc={:3.3f}\tprec={:3.3f}\trec={:3.3f}'.format(acc, auc, prec, rec))
 
@@ -54,6 +56,10 @@ def main(args):
     aucs.append(auc)
     precs.append(prec)
     recs.append(rec)
+
+    if 'ensemble' in args.runlist:
+      yhats.append(yhat)
+      ytrues.append(ytrue)
 
   acc_mn  = np.mean(accs) 
   auc_mn  = np.mean(aucs) 
@@ -68,6 +74,20 @@ def main(args):
   rec_sd  = np.std(recs) 
   print('std')
   print('acc={:3.3f}\tauc={:3.3f}\tprec={:3.3f}\trec={:3.3f}'.format(acc_sd, auc_sd, prec_sd, rec_sd))
+
+  if 'ensemble' in args.runlist:
+    print('Ensemble:')
+    yhat = np.mean(yhats, axis=0)
+    ytrue = ytrues[0]
+
+    yhat_1 = np.argmax(yhat, axis=-1)
+    ytrue_1 = np.argmax(ytrue, axis=-1)
+
+    acc =  np.mean( ( yhat_1 == ytrue_1 ) )
+    auc =  roc_auc_score(   y_true = ytrue,   y_score = yhat)
+    prec = precision_score( y_true = ytrue_1, y_pred  = yhat_1)
+    rec  = recall_score(    y_true = ytrue_1, y_pred  = yhat_1)
+    print('acc={:3.3f}\tauc={:3.3f}\tprec={:3.3f}\trec={:3.3f}'.format(acc, auc, prec, rec))
 
 
 if __name__ == '__main__':

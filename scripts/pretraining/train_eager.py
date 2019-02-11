@@ -14,8 +14,7 @@ from milk.utilities import training_utils
 
 from tensorflow.keras.layers import Input
 
-sys.path.insert(0, '../experiment')
-from encoder_config import encoder_args
+from milk.encoder_config import deep_args as encoder_args
 
 def main(args):
   print(args) 
@@ -51,6 +50,9 @@ def main(args):
   yhat = model(batchx, training=True, verbose=True)
   print('yhat: ', yhat.get_shape())
 
+  if args.snapshot is not None and os.path.exists(args.snapshot):
+    model.load_weights(args.snapshot)
+
   # optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-5)
   optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
 
@@ -65,18 +67,21 @@ def main(args):
   #   epochs = args.epochs)
 
   try:
+    running_avg = []
     for k in range(args.steps_per_epoch * args.epochs):
       with tf.GradientTape() as tape:
         batchx, batchy = next(dataset.iterator)
         yhat = model(batchx)
 
         loss = tf.keras.losses.categorical_crossentropy(y_true=batchy, y_pred=yhat)
+        running_avg.append(np.mean(loss))
 
         grads = tape.gradient(loss, model.variables)
         optimizer.apply_gradients(zip(grads, model.variables))
 
       if k % 50 == 0:
-        print('{:05d} loss={:3.3f}'.format(k, np.mean(loss)))
+        print('{:05d} loss={:3.3f}'.format(k, np.mean(running_avg)))
+        running_avg = []
 
   except:
     print('Caught exception')
@@ -101,9 +106,11 @@ if __name__ == '__main__':
   parser.add_argument('--downsample', default=0.25, type=float)
   parser.add_argument('--image_channels', default=3, type=int)
   parser.add_argument('--shuffle_buffer', default=512, type=int)
-  parser.add_argument('--prefetch_buffer', default=2048, type=int)
+  parser.add_argument('--prefetch_buffer', default=1024, type=int)
   parser.add_argument('--device', default='/gpu:0', type=str)
   parser.add_argument('--device_buffer', default=64, type=int)
+
+  parser.add_argument('--snapshot', default=None, type=str)
 
 
   args = parser.parse_args()

@@ -152,6 +152,7 @@ class MilkEager(tf.keras.Model):
       print('n_x: ', n_x)
 
     zs = []
+    # This loop is over the batch dimension;
     x_in_split = tf.split(x_in, n_x, axis=0)
     for x_bag in x_in_split:
       if verbose:
@@ -165,7 +166,6 @@ class MilkEager(tf.keras.Model):
     if verbose:
       print('z_concat: ', z_concat.shape)
 
-    ## Classifier 
     yhat = self.apply_classifier(z_concat, training=training, verbose=verbose)
 
     return yhat

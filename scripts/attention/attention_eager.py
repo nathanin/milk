@@ -64,9 +64,9 @@ def get_img_idx(svs, batch_size, prefetch, generate_subset=False, sample=1.0):
   wrapped_fn = get_wrapped_fn(svs)
   def read_region_at_index(idx):
     return tf.py_func(func = wrapped_fn,
-                        inp  = [idx],
-                        Tout = [tf.float32, tf.int64],
-                        stateful = False)            
+                      inp  = [idx],
+                      Tout = [tf.float32, tf.int64],
+                      stateful = False)            
 
   # Replace svs.generate_index with a rolled-out generator that minimizes
   # the amount of unnecessary processing to do:
@@ -148,16 +148,12 @@ def process_slide(svs, model, args, return_z=False):
   indices = []
   print('Processing {} tiles'.format(n_tiles))
   for imgs, idx_ in iterator:
-    try:
-      batches += 1
-      z = model.encode_bag(imgs, batch_size=args.batch_size, training=False, return_z=True)
-      zs.append(z)
-      indices.append(idx_)
-      if batches % 10 == 0:
-          print('batch {:04d}\t{}\t{}'.format( batches, z.shape, batches*args.batch_size ))
-    except tf.errors.OutOfRangeError:
-      print('Done')
-      break
+    batches += 1
+    z = model.encode_bag(imgs, batch_size=args.batch_size, training=True, return_z=True)
+    zs.append(z)
+    indices.append(idx_)
+    if batches % 10 == 0:
+        print('batch {:04d}\t{}\t{}'.format( batches, z.shape, batches*args.batch_size ))
 
   zs = tf.concat(zs, axis=0)
   indices = np.concatenate(indices)

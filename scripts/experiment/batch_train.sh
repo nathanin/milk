@@ -52,12 +52,12 @@ pretrained=../pretraining/gleason_classifier_deep.h5
 for i in `seq 1 5`; do
     python train_eager.py \
         --steps_per_epoch $steps \
-        --batch_size 4 \
+        --batch_size 3 \
         --epochs $epochs \
         --bag_size $bag \
         --mil attention \
         --deep_classifier \
-        --learning_rate $lr \
+        --learning_rate 0.00001 \
         --dont_use_pretrained \
         --early_stop
 done

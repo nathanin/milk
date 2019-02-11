@@ -3,13 +3,13 @@
 # Run all of the experiments, one at a time.
 
 set -e
-steps=1000
+steps=2000
 epochs=50
 bag=100
 lr=0.00001
 # pretrained=../pretraining/pretrained_100k.h5
 # pretrained=../pretraining/pretrained_reference.h5
-pretrained=../pretraining/pretrained.h5
+pretrained=../pretraining/gleason_classifier_deep.h5
 
 # With attention
 for i in `seq 1 5`; do
@@ -21,7 +21,7 @@ for i in `seq 1 5`; do
         --deep_classifier \
         --learning_rate $lr \
         --pretrained_model $pretrained \
-	  	  --early_stop
+        --early_stop
 done
 
 # Without attention (average)
@@ -34,7 +34,7 @@ for i in `seq 1 5`; do
         --deep_classifier \
         --learning_rate $lr \
         --pretrained_model $pretrained \
-	      --early_stop
+        --early_stop
 done
 
 # Instance classifier --> average predictions
@@ -47,7 +47,7 @@ for i in `seq 1 5`; do
         --deep_classifier \
         --learning_rate $lr \
         --pretrained_model $pretrained \
-	--early_stop
+        --early_stop
 done
 
 # # Without pretraining; with attention
@@ -73,7 +73,7 @@ for i in `seq 1 5`; do
         --freeze_encoder \
         --deep_classifier \
         --pretrained_model $pretrained \
-	      --early_stop
+        --early_stop
 done
 
 # Freeze encoder; with attention
@@ -87,7 +87,7 @@ for i in `seq 1 5`; do
         --freeze_encoder \
         --deep_classifier \
         --pretrained_model $pretrained \
-			  --early_stop
+        --early_stop
 done
 
 # Enforce ensemble by setting the random seed
@@ -100,6 +100,6 @@ for i in `seq 1 5`; do
         --learning_rate $lr \
         --deep_classifier \
         --pretrained_model $pretrained \
-        --seed 999 \
-        --early_stop
+        --early_stop \
+        --seed 1337
 done

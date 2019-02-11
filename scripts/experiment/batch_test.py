@@ -8,7 +8,7 @@ import argparse
 import tensorflow as tf
 from argparse import Namespace
 
-from test_svs import main as test_svs
+#from test_svs import main as test_svs
 from test_npy import main as test_npy
 
 """ Get the base timestamps """

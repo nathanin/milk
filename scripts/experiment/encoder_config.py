@@ -1,3 +1,4 @@
+## Wide model
 # encoder_args = {
 #     'depth_of_model': 48,
 #     'growth_rate': 64,
@@ -6,6 +7,7 @@
 #     'num_layers_in_each_block': 12,
 # }
 
+## Deep model
 encoder_args = {
     'depth_of_model': 64,
     'growth_rate': 24,

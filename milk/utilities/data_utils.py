@@ -338,7 +338,7 @@ def make_transform_fn(height, width, crop_size, scale=1.0, normalize=False):
 
   def _chained_fns(x_):
     x_ = _random_crop(x_)
-    # x_ = _rotate_90(x_)
+    x_ = _rotate_90(x_)
     # x_ = _resize_fn(x_)
     x_ = _flip_fn(x_)
     if normalize:

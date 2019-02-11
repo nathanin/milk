@@ -20,8 +20,8 @@ import os
 from milk.utilities import data_utils
 from milk import Milk
 
-# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
-with open('../dataset/cases_md5.pkl', 'rb') as f:  
+with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
+# with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
 from encoder_config import encoder_args
@@ -103,7 +103,8 @@ def main(args):
   transform_fn = data_utils.make_transform_fn(args.x_size, 
                                               args.y_size, 
                                               args.crop_size, 
-                                              args.scale)
+                                              args.scale, 
+                                              normalize=True)
   train_x, train_y = data_utils.load_list_to_memory(train_list, case_label_fn)
   val_x, val_y = data_utils.load_list_to_memory(val_list, case_label_fn)
 

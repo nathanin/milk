@@ -24,7 +24,7 @@ with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
 # with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
-from milk.encoder_config import deep_args
+from milk.encoder_config import big_args as encoder_args
 
 def filter_list_by_label(lst):
   lst_out = []
@@ -190,7 +190,7 @@ def main(args):
 
   #with tf.device('/gpu:0'): 
   print('Model initializing')
-  model = MilkEager(encoder_args=deep_args, mil_type=args.mil,
+  model = MilkEager(encoder_args=encoder_args, mil_type=args.mil,
                     deep_classifier=args.deep_classifier)
   #model.build_encode_fn(training=True, verbose=False, batch_size=64)
   tstart = time.time()

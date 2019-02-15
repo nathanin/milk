@@ -12,6 +12,13 @@ deep_args = {
     'num_layers_in_each_block': 16,
 }
 
+big_args = {
+    'depth_of_model': 80,
+    'growth_rate': 36,
+    'num_of_blocks': 4,
+    'num_layers_in_each_block': 20,
+}
+
 mnist_args = {
     'depth_of_model': 16,
     'growth_rate': 24,

@@ -3,7 +3,7 @@
 # Run all of the experiments, one at a time.
 
 set -e
-steps=1000
+steps=500
 epochs=50
 bag=50
 lr=0.0001
@@ -49,17 +49,19 @@ pretrained=../pretraining/gleason_classifier_deep.h5
 # done
 
 # Without pretraining; with attention
-for i in `seq 1 5`; do
+for i in `seq 1 1`; do
     python train_eager.py \
         --steps_per_epoch $steps \
-        --batch_size 3 \
+        --batch_size 1 \
         --epochs $epochs \
         --bag_size $bag \
         --mil attention \
         --deep_classifier \
-        --learning_rate 0.00001 \
+        --learning_rate 0.0001 \
         --dont_use_pretrained \
-        --early_stop
+        --early_stop \
+        --seed $i \
+        --accumulate 10
 done
 
 # # Freeze encoder; with average

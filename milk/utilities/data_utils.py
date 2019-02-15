@@ -314,7 +314,8 @@ def load(data_path,
   y_ = np.expand_dims(y_, 0)
   return batch_x, as_one_hot(y_)
 
-def make_transform_fn(height, width, crop_size, scale=1.0, normalize=False, eager=False):
+def make_transform_fn(height, width, crop_size, scale=1.0, 
+  flip=True, middle_crop=False, rotate=True, normalize=False, eager=False):
   """ Return a series of chained numpy and open-cv functions
   
   """
@@ -363,12 +364,22 @@ def make_transform_fn(height, width, crop_size, scale=1.0, normalize=False, eage
     if eager:
       x_ = x_.numpy()
     
-    x_ = _random_crop(x_)
-    # x_ = _rotate_90(x_)
+    if middle_crop:
+      x_ = _center_crop(x_)
+    else:
+      x_ = _random_crop(x_)
+
+    if rotate:
+      x_ = _rotate_90(x_)
+
     # x_ = _resize_fn(x_)
-    x_ = _flip_fn(x_)
+
+    if flip:
+      x_ = _flip_fn(x_)
+
     if normalize:
       x_ = reinhard(x_)
+
     x_ = _zero_center(x_)
 
     if eager:

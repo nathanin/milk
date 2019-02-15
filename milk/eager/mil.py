@@ -38,8 +38,8 @@ class MilkEager(tf.keras.Model):
     else:
       depth=1
 
-    #self.classifier_dropout_0 = Dropout(rate = 0.3)
-    #self.classifier_dropout_1 = Dropout(rate = 0.3)
+    # self.classifier_dropout_0 = Dropout(rate = 0.3)
+    # self.classifier_dropout_1 = Dropout(rate = 0.3)
     # self.classifier_bn = BatchNormalization(trainable=True)
     for i in range(depth):
       self.classifier_layers.append(
@@ -48,7 +48,7 @@ class MilkEager(tf.keras.Model):
 
     self.classifier = Dense(units=2, activation=tf.nn.softmax, use_bias=False, name='mil_classifier')
 
-  def mil_attention(self, features, verbose=False, return_att=False, training=True):
+  def mil_attention(self, features, verbose=False, return_att=False, return_raw_att=False, training=True):
     # features = self.att_batchnorm(features, training=training)
     att = self.attention(features)
     att_gate = self.attention_gate(features)
@@ -64,17 +64,25 @@ class MilkEager(tf.keras.Model):
     # Question: WTF?
     # tensorflow.python.framework.errors_impl.InternalError: CUB segmented reduce errorinvalid configuration argument [Op:Softmax]
     # unless we put this op on CPU in eager mode.
+
+    if return_raw_att:
+      att_ret = tf.identity(att)
+
     with tf.device('/cpu:0'):
       att = tf.nn.softmax(att, axis=1)
 
     if verbose:
       print('attention:', att.shape)
 
-    # Scale learning proportionally to bag size
     z = tf.matmul(att, features)
+    if verbose:
+      print('features - attention:', z.shape)
 
-    if return_att:
-      return z, att
+    if return_att or return_raw_att:
+      if not return_raw_att:
+        att_ret = tf.identity(att)
+
+      return z, att_ret
     else:
       return z
 
@@ -100,6 +108,12 @@ class MilkEager(tf.keras.Model):
       if verbose:
         print('\t z: ', z.shape)
       z = self.drop2(z, training=training)
+
+      if self.mil_type == 'instance':
+        z = self.apply_classifier(z, verbose=verbose, training=training)
+        if verbose:
+          print('Instance yhat:', z.shape)
+
       z_bag.append(z)
 
     z = tf.concat(z_bag, axis=0)
@@ -110,16 +124,20 @@ class MilkEager(tf.keras.Model):
     if return_z:
       return z
     else:
-      z = self.apply_mil(z, verbose=verbose)
+      if self.mil_type == 'instance':
+        z = tf.reduce_mean(z, axis=0, keep_dims=True)
+      else:
+        z = self.apply_mil(z, verbose=verbose)
+        
       return z
 
   def apply_classifier(self, features, verbose=False, training=True):
     # features = self.classifier_bn(features, training=training)
-    #features = self.classifier_dropout_0(features, training=training)
+    # features = self.classifier_dropout_0(features, training=training)
     for layer in self.classifier_layers:
       features = layer(features)
 
-    #features = self.classifier_dropout_1(features, training=training)
+    # features = self.classifier_dropout_1(features, training=training)
     if verbose:
       print('features - ff:', features.shape)
 
@@ -158,14 +176,17 @@ class MilkEager(tf.keras.Model):
       if verbose:
         print('x_bag:', x_bag.shape)
       x_bag = tf.squeeze(x_bag, 0)
-      z = self.encode_bag(x_bag, batch_size=batch_size, training=training, 
-        verbose=verbose)
+      z = self.encode_bag(x_bag, batch_size=batch_size, training=training, verbose=verbose)
       zs.append(z)
-    z_concat = tf.concat(zs, axis=0) #(batch, features)
+
+    z_batch = tf.concat(zs, axis=0) #(batch, features)
 
     if verbose:
-      print('z_concat: ', z_concat.shape)
+      print('z_batch: ', z_batch.shape)
 
-    yhat = self.apply_classifier(z_concat, training=training, verbose=verbose)
+    if self.mil_type != 'instance':
+      yhat = self.apply_classifier(z_batch, training=training, verbose=verbose)
+    else:
+      yhat = z_batch
 
     return yhat

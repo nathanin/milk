@@ -23,7 +23,7 @@ from milk.eager import MilkEager
 with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
   case_dict = pickle.load(f)
 
-from milk.encoder_config import deep_args as encoder_args
+from milk.encoder_config import big_args as encoder_args
 
 def case_label_fn(data_path):
   case = os.path.splitext(os.path.basename(data_path))[0]
@@ -98,19 +98,23 @@ def run_sample(case_x, model, mcdropout=False,
   if mcdropout:
     yhats = []
     for _ in range(25):
-      yhat = model(tf.constant(case_x), batch_size=32, training=True)
+      yhat = model(tf.constant(case_x), batch_size=32, training=False)
       yhats.append(yhat)
     
     yhats = np.stack(yhats, axis=0)
     yhat  = np.mean( yhats, axis=0)
   else:
-    yhat = model(tf.constant(case_x), training=True, batch_size=32, verbose=False)
+    yhat = model(tf.constant(case_x), training=False, batch_size=32, verbose=False)
 
   return yhat
 
 def main(args):
   transform_fn = data_utils.make_transform_fn(args.x_size, args.y_size, 
-                                              args.crop_size, args.scale)
+                                              args.crop_size, args.scale,
+                                              flip=False,
+                                              middle_crop=True,
+                                              rotate=False,
+                                              normalize=True)
 
   snapshot = 'save/{}.h5'.format(args.timestamp)
   # trained_model = load_model(snapshot)

@@ -5,9 +5,10 @@ import os
 
 import seaborn as sns
 
-def draw_attention(attimg, n_bins=50, backgroud=1):
+
+def draw_attention(attimg, n_bins=100, backgroud=1):
   palette = sns.color_palette("RdBu", n_colors=n_bins)
-  bins = np.linspace(0, 1, n_bins)
+  bins = np.linspace(-10, 5, n_bins)
 
   attimg = cv2.resize(attimg, fx=3., fy=3., dsize=(0,0),
     interpolation=cv2.INTER_LINEAR)
@@ -15,10 +16,10 @@ def draw_attention(attimg, n_bins=50, backgroud=1):
   imgout = np.dstack([np.zeros_like(attimg)]*3)
   background_mask = attimg == 0
 
-  # now that we have the real background, 
-  # we have to level out a low baseline:
-  attimg -= attimg[1-background_mask].min()
-  attimg *= (1. / attimg.max())
+  ## now that we have the real background, 
+  ## we have to level out a low baseline:
+  # attimg -= attimg[1-background_mask].min()
+  # attimg *= (1. / attimg.max())
   # attimg = -np.log(1-attimg)
 
   # and bin it

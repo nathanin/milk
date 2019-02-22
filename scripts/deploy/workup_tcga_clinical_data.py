@@ -101,3 +101,35 @@ pickle.dump(first_new_tumor_event, open('prad_days_to_new_tumor_event.pkl', 'bw+
   - neoplasm status
   - gleason score
 """
+
+sums = {6:0, 7:0, 8:0, 9:0, 10:0}
+gleason_sum = {}
+for col in df.columns.values[1:]:
+  barcode = df.loc[11, col].upper()
+  gs = int(df.loc[313, col])
+
+  print(col, barcode, gs)
+
+  gleason_sum[barcode] = gs
+  sums[gs] += 1
+
+pickle.dump(gleason_sum, open('prad_gleason_sum.pkl', 'bw+'))
+print(sums)
+
+sums = {k:0 for k in range(20)}
+positive_lymphnodes = {}
+for col in df.columns.values[1:]:
+  barcode = df.loc[11, col].upper()
+  try:
+    lymphnodes = int(df.loc[227, col])
+  except:
+    print(barcode, 'error getting lymph nodes')
+    continue
+
+  print(col, barcode, lymphnodes)
+
+  positive_lymphnodes[barcode] = lymphnodes
+  sums[lymphnodes] += 1
+
+pickle.dump(positive_lymphnodes, open('prad_positive_lymphnodes.pkl', 'bw+'))
+print(sums)

@@ -20,6 +20,8 @@ import os
 from milk.utilities import data_utils
 from milk.eager import MilkEager
 
+import collections
+
 with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
 # with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
@@ -78,7 +80,8 @@ class ShouldStop():
 
   send a stop signal if we haven't improved within a patience window
   """
-  def __init__(self, patience = 5):
+  def __init__(self, min_calls = 10, patience = 5):
+    self.min_calls = min_calls
     self.val_loss = np.inf
     self.n_calls = 0
     self.patience = patience
@@ -88,19 +91,27 @@ class ShouldStop():
     self.n_calls += 1
     self.since_last_improvement += 1
 
-    print('calls since last improvement = ',
-      self.since_last_improvement)
     print('checking loss = {:3.5f} vs {:3.5f}'.format(new_loss,
       self.val_loss))
 
+    ret = False
     if new_loss < self.val_loss:
+      print('improved. resetting counter.')
       self.val_loss = new_loss
       self.since_last_improvement = 0
-      return False
+      ret = False
     elif self.since_last_improvement >= self.patience:
-      return True
+      ret = True
     else:
-      return False
+      ret = False
+
+    print('calls since last improvement = ',
+      self.since_last_improvement)
+
+    if self.n_calls < self.min_calls:
+      ret = False
+
+    return ret
 
 class LearningButler():
   """
@@ -114,6 +125,47 @@ class LearningButler():
   def lr(self):
     pass
 
+class GradientAccumulator():
+  def __init__(self, n = 10, batch_size = 1):
+    self.grad_counter = 0
+    self.n = n
+    self.batch_size = batch_size
+
+    self.grads_and_vars = collections.defaultdict(list)
+
+  def track(self, grads, variables):
+    for g, v in zip(grads, variables):
+      self.grads_and_vars[v.name].append(g)
+
+    self.grad_counter += 1
+
+    if self.grad_counter == self.n:
+      should_update = True
+    else:
+      should_update = False
+
+    return should_update
+
+  def accumualte(self):
+    grads = []
+    for v, g in self.grads_and_vars.items():
+      if any(x is None for x in g):
+        grads.append(None)
+        continue
+        
+      if self.n == 1:
+        grads.append(g[0])
+      else:
+        gmean = tf.reduce_mean(g, axis=0, keep_dims=False)
+        grads.append(gmean)
+
+    self.reset()
+
+    return grads
+
+  def reset(self):
+    self.grads_and_vars = collections.defaultdict(list)
+    self.grad_counter = 0
 
 def main(args):
   """ 
@@ -238,10 +290,15 @@ def main(args):
   else:
     stopper = lambda x: False
 
+  accumulator = GradientAccumulator(n = args.accumulate)
+
   avglosses = []
+  # trainable_variables = [v for v in model.variables if 'batch_normalization' not in v.name]
+  trainable_variables = model.variables
   try:
     for epc in range(args.epochs):
       optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate/(epc+1))
+      # accumulator_n = 0
       for k in range(args.steps_per_epoch):
         with tf.GradientTape() as tape:
           x, y = next(train_dataset)
@@ -249,8 +306,11 @@ def main(args):
           loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
           avglosses.append(np.mean(loss))
 
-        grads = tape.gradient(loss, model.variables)
-        optimizer.apply_gradients(zip(grads, model.variables))
+        grads = tape.gradient(loss, trainable_variables)
+        should_update = accumulator.track(grads, trainable_variables)
+        if should_update:
+          grads = accumulator.accumualte()
+          optimizer.apply_gradients(zip(grads, trainable_variables))
 
         if k % 100 == 0:
           print('{:06d}: loss={:3.5f}'.format(k, np.mean(avglosses)))
@@ -296,6 +356,7 @@ if __name__ == '__main__':
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
+  parser.add_argument('--accumulate',       default = 1, type=float)
   parser.add_argument('--steps_per_epoch',  default = 500, type=int)
   parser.add_argument('--epochs',           default = 50, type=int)
 

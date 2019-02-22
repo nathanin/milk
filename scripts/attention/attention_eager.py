@@ -50,7 +50,7 @@ from milk.eager import MilkEager
 uid2label = pickle.load(open('../dataset/cases_md5.pkl', 'rb'))
 uid2slide = pickle.load(open('../dataset/uid2slide.pkl', 'rb'))
 
-from milk.encoder_config import deep_args
+from milk.encoder_config import big_args as encoder_args
 
 def get_wrapped_fn(svs):
   def wrapped_fn(idx):
@@ -149,7 +149,7 @@ def process_slide(svs, model, args, return_z=False):
   print('Processing {} tiles'.format(n_tiles))
   for imgs, idx_ in iterator:
     batches += 1
-    z = model.encode_bag(imgs, batch_size=args.batch_size, training=True, return_z=True)
+    z = model.encode_bag(imgs, batch_size=args.batch_size, training=False, return_z=True)
     zs.append(z)
     indices.append(idx_)
     if batches % 10 == 0:
@@ -160,7 +160,7 @@ def process_slide(svs, model, args, return_z=False):
   print('zs: ', zs.shape, zs.dtype)
   print('indices: ', indices.shape)
 
-  z_att, att = model.mil_attention(zs, training=False, verbose=True, return_att=True)
+  z_att, att = model.mil_attention(zs, training=False, verbose=True, return_raw_att=True)
   yhat = model.apply_classifier(z_att, training=False, verbose=True)
   print('yhat:', yhat)
 
@@ -168,51 +168,6 @@ def process_slide(svs, model, args, return_z=False):
   print('att:', att.shape)
 
   return yhat, att, indices
-
-"""
-Track attention on an included/not-included basis.
-'sample' argument controls the % of the whole slide to use in each mcdropout iteration
-"""
-# def process_slide_mcdropout(svs, encode_model, args):
-#   yhats = []
-#   atts = np.zeros((len(svs.tile_list), args.mcdropout_t))-1
-#   zs, indices_all = process_slide(svs, encode_model, y_op, att_op, 
-#                               z_pl, args, return_z=True)
-
-#   n_tiles = len(svs.tile_list)
-#   n_sample = int(n_tiles * args.mcdropout_sample)
-#   print('zs:', zs.shape)
-#   print('indices:', indices_all.shape)
-#   for t in range(args.mcdropout_t):
-#     zs_sample = np.random.choice(range(n_tiles), n_sample)
-#     zs_ = zs[zs_sample, :]
-#     indices = indices_all[zs_sample]
-#     print('sampled {} images from z ({})'.format(n_sample, zs_.shape))
-
-#     yhat = sess.run(y_op, feed_dict={z_pl: zs_})
-#     print('yhat:', yhat)
-
-#     att = sess.run(att_op, feed_dict={z_pl: zs_})
-#     att = np.squeeze(att)
-#     print('att:', att.shape)
-
-#     ## Use returned indices to map attentions back to the tiles
-#     att_map = np.zeros(len(svs.tile_list))
-#     att_map[indices] = att
-#     atts[:,t] = att_map
-
-#     yhats.append(yhat)
-
-#   yhats = np.concatenate(yhats, axis=0)
-#   yhat_mean = np.mean(yhats, axis=0, keepdims=True)
-#   yhat_std = np.std(yhats, axis=0, keepdims=True)
-#   print('\tyhat_std:', yhat_std)
-
-#   atts[atts==-1] = np.nan
-#   att_mean = np.nanmean(atts, axis=1, keepdims=True)
-#   att_std  = np.nanstd(atts, axis=1, keepdims=True)
-
-#   return yhat_mean, att_mean, yhat_std, att_std, indices_all
 
 def main(args):
   # Translate obfuscated file names to paths if necessary
@@ -230,7 +185,7 @@ def main(args):
   # if args.mcdropout:
   #   encoder_args['mcdropout'] = True
 
-  model = MilkEager( encoder_args=deep_args, mil_type=args.mil, deep_classifier=args.deep_classifier )
+  model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=args.deep_classifier )
 
   x_pl = np.zeros((1, args.batch_size, args.input_dim, args.input_dim, 3), dtype=np.float32)
   yhat = model(tf.constant(x_pl), verbose=True)
@@ -254,7 +209,7 @@ def main(args):
                   # background_speed  = 'accurate',
                   background_speed  = 'image',
                   background_image  = fgimg,
-                  preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
+                  preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32),
                   process_mag       = args.mag,
                   process_size      = args.input_dim,
                   oversample_factor = args.oversample,
@@ -267,11 +222,10 @@ def main(args):
     svs.initialize_output(name='attention', dim=1, mode='tile')
     n_tiles = len(svs.tile_list)
 
-    # if args.mcdropout:
-    #   yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, model, args)
-    # else:
     yhat, att, indices = process_slide(svs, model, args)
+    print('returned attention:', np.min(att), np.max(att), att.shape)
 
+    yhat = yhat.numpy()
     yhats.append(yhat)
     ytrues.append(lab)
     print('\tSlide label: {} predicted: {}'.format(lab, yhat))
@@ -279,15 +233,15 @@ def main(args):
     svs.place_batch(att, indices, 'attention', mode='tile')
     attention_img = np.squeeze(svs.output_imgs['attention'])
     attention_img = attention_img * (1. / attention_img.max())
-    attention_img = draw_attention(attention_img, n_bins=50)
+    attention_img = draw_attention(attention_img, n_bins=100)
     print('attention image:', attention_img.shape, 
           attention_img.dtype, attention_img.min(),
           attention_img.max())
 
-    dst = os.path.join(args.odir, args.timestamp, '{}_att.npy'.format(basename))
+    dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_att.npy'.format(basename, yhat[0,1]))
     np.save(dst, att)
 
-    dst = os.path.join(args.odir, args.timestamp, '{}_img.png'.format(basename))
+    dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_img.png'.format(basename, yhat[0,1]))
     cv2.imwrite(dst, attention_img)
 
     # dst = os.path.join(args.odir, args.timestamp, '{}_hist.png'.format(basename))
@@ -320,8 +274,8 @@ if __name__ == '__main__':
   parser.add_argument('--oversample', default=1.25, type=float)
 
   parser.add_argument('--mil',        default='attention', type=str)
-  parser.add_argument('--mcdropout',  default=False, action='store_true')
-  parser.add_argument('--mcdropout_t', default=25, type=int)
+  # parser.add_argument('--mcdropout',  default=False, action='store_true')
+  # parser.add_argument('--mcdropout_t', default=25, type=int)
   parser.add_argument('--deep_classifier', default=False, action='store_true')
   parser.add_argument('--gated_attention', default=True, action='store_false')
   parser.add_argument('--mcdropout_sample', default=0.25, type=int)

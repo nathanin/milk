@@ -110,7 +110,11 @@ def run_sample(case_x, model, mcdropout=False,
 
 def main(args):
   transform_fn = data_utils.make_transform_fn(args.x_size, args.y_size, 
-                                              args.crop_size, args.scale)
+                                              args.crop_size, args.scale,
+                                              flip=False,
+                                              middle_crop=True,
+                                              rotate=False,
+                                              normalize=True)
 
   snapshot = 'save/{}.h5'.format(args.timestamp)
   # trained_model = load_model(snapshot)

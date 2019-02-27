@@ -47,8 +47,8 @@ from milk.utilities import training_utils
 from milk.utilities import model_utils
 from milk import Milk, MilkEncode, MilkPredict, MilkAttention
 
-sys.path.insert(0, '../experiment')
-from encoder_config import encoder_args
+# sys.path.insert(0, '../experiment')
+from milk.encoder_config import big_args as encoder_args
 
 def get_wrapped_fn(svs):
   def wrapped_fn(idx):
@@ -286,7 +286,11 @@ if __name__ == '__main__':
   """
   for instance:
 
-  python attention_maps.py --odir tcga-prad --test_list ./tcga_prad_slides.txt --snapshot <path> --fgdir ./tcga-prad-fg
+  python attention_maps.py \
+    --odir tcga-prad \
+    --test_list ./tcga_prad_slides.txt \
+    --snapshot <path> \
+    --fgdir ./tcga-prad-fg
   """
   parser = argparse.ArgumentParser()
   parser.add_argument('--odir',       default=None, type=str)  # Required

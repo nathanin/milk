@@ -49,7 +49,7 @@ pretrained=../pretraining/gleason_classifier_deep.h5
 # done
 
 # Without pretraining; with attention
-for i in `seq 1 1`; do
+for i in `seq 1 3`; do
     python train_eager.py \
         --steps_per_epoch $steps \
         --batch_size 1 \
@@ -61,7 +61,7 @@ for i in `seq 1 1`; do
         --dont_use_pretrained \
         --early_stop \
         --seed $i \
-        --accumulate 10
+        --accumulate 32
 done
 
 # # Freeze encoder; with average

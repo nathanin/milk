@@ -147,7 +147,7 @@ class GradientAccumulator():
     return should_update
 
   def accumualte(self):
-    print('averaging gradients')
+    # print('averaging gradients')
     grads = []
     for v, g in self.grads_and_vars.items():
       if any(x is None for x in g):

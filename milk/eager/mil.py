@@ -61,13 +61,12 @@ class MilkEager(tf.keras.Model):
     if verbose:
       print('attention:', att.shape)
 
-    # Question: WTF?
-    # tensorflow.python.framework.errors_impl.InternalError: CUB segmented reduce errorinvalid configuration argument [Op:Softmax]
-    # unless we put this op on CPU in eager mode.
-
     if return_raw_att:
       att_ret = tf.identity(att)
 
+    # Question: WTF?
+    # tensorflow.python.framework.errors_impl.InternalError: CUB segmented reduce errorinvalid configuration argument [Op:Softmax]
+    # unless we put this op on CPU in eager mode.
     with tf.device('/cpu:0'):
       att = tf.nn.softmax(att, axis=1)
 

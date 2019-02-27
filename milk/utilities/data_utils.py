@@ -24,6 +24,7 @@ def pyfunc_wrapper(path):
 
 """
 from __future__ import print_function
+import tensorflow as tf
 import numpy as np
 import cv2
 import os
@@ -183,7 +184,8 @@ def load_list_to_memory(case_list, case_label_fn):
 
   return data, labels
 
-def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda x: x):
+def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda x: x,
+  pad_first_dim=True):
   """ Yield cases from dictionaries
   batch_x = (batch_size, bag_size, h, w, c)  
   batch_y = (batch_size, 2)
@@ -199,12 +201,16 @@ def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda
       label = ydict[k]
       indices = np.random.choice(range(data.shape[0]), bag_size)
       data = apply_transform(transform_fn, data[indices, ...])
-      batch_x.append(np.expand_dims(data, 0))
-      batch_y.append(np.expand_dims(label, 0))
+      batch_x.append(data)
+      batch_y.append(label)
 
-    batch_x = np.concatenate(batch_x, axis=0)
-    batch_y = np.concatenate(batch_y, axis=0)
-    # Special case for batch = 1
+    if batch_size==1 and not pad_first_dim:
+      batch_x = batch_x[0]
+      batch_y = batch_y[0]
+    else:
+      batch_x = np.stack(batch_x, axis=0)
+      batch_y = np.stack(batch_y, axis=0)
+    # Special case for batch = 1 ; can't use the eye() trick
     if batch_size == 1:
       if batch_y == 1:
         y = np.expand_dims(np.array([0, 1]), 0)
@@ -213,7 +219,24 @@ def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda
     else:
       y = np.eye(batch_size, 2)[batch_y]
 
-    yield batch_x, y
+    yield batch_x, y.astype(np.float32)
+
+def tf_dataset(generator, preprocess_fn=lambda x: x, batch_size=1, buffer_size=256, threads=8, iterator=False):
+  def map_fn(x,y):
+    x = tf.contrib.eager.py_func(preprocess_fn, inp=[x], Tout=(tf.float32))
+    y = tf.squeeze(y)
+    return x, y
+
+  dataset = tf.data.Dataset.from_generator(generator, output_types=(tf.float32, tf.float32))
+  dataset = dataset.map(map_fn, num_parallel_calls=threads)
+  dataset = dataset.prefetch(buffer_size)
+  dataset = dataset.batch(batch_size)
+  dataset = dataset.apply(tf.data.experimental.prefetch_to_device('/gpu:0'))
+
+  if iterator:
+    #dataset = tf.contrib.eager.Iterator(dataset)
+    dataset = dataset.make_one_shot_iterator()
+  return dataset
 
 def load(data_path, 
        transform_fn=lambda x: x, 
@@ -291,7 +314,7 @@ def load(data_path,
   y_ = np.expand_dims(y_, 0)
   return batch_x, as_one_hot(y_)
 
-def make_transform_fn(height, width, crop_size, scale=1.0, normalize=False):
+def make_transform_fn(height, width, crop_size, scale=1.0, normalize=False, eager=False):
   """ Return a series of chained numpy and open-cv functions
   
   """
@@ -337,6 +360,9 @@ def make_transform_fn(height, width, crop_size, scale=1.0, normalize=False):
     # return (x_ * (2/255.) - 1).astype(np.float32)
 
   def _chained_fns(x_):
+    if eager:
+      x_ = x_.numpy()
+    
     x_ = _random_crop(x_)
     x_ = _rotate_90(x_)
     # x_ = _resize_fn(x_)
@@ -344,6 +370,9 @@ def make_transform_fn(height, width, crop_size, scale=1.0, normalize=False):
     if normalize:
       x_ = reinhard(x_)
     x_ = _zero_center(x_)
+
+    if eager:
+      x_ = tf.constant(x_)
     return x_
 
   return _chained_fns

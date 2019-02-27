@@ -23,18 +23,20 @@ def squish_mean(features):
 
   return features
 
-def instance_classifier(features, n_classes):
+def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
+  for k in range(n_layers):
+    features = Dense(width, activation=tf.nn.relu, name='deep_mil_{}'.format(k))(features)
+    features = Dropout(dropout_rate, name='deep_mil_drop_{}'.format(k))(features)
+
+  return features
+
+def instance_classifier(features, n_classes, deep_classifier=True):
+  if deep_classifier:
+    features = deep_feedforward(features)
   logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
   logits = squish_mean(logits)
   print('logits after reduce_mean', logits.shape)
   return logits
-
-def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
-  for k in range(n_layers):
-    features = Dense(width, activation=tf.nn.relu, name='deep_{}'.format(k))(features)
-    features = Dropout(dropout_rate, name='deep_drop_{}'.format(k))(features)
-
-  return features
 
 def mil_features(features, n_classes, z_dim, dropout_rate):
   """ Caclulate the instance features then squish them """
@@ -48,14 +50,18 @@ def mil_features(features, n_classes, z_dim, dropout_rate):
   print('features after reduce_mean', features.shape)
   return features
 
-def average_pooling(features, n_classes, z_dim, dropout_rate):
+def average_pooling(features, n_classes, z_dim, dropout_rate, deep_classifier=True):
   print('Setting up average pooling MIL')
   features = mil_features(features, n_classes, z_dim, dropout_rate)
+
+  if deep_classifier:
+    features = deep_feedforward(features)
+
   logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
   return logits
 
 def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True, 
-                    return_attention=False):
+                    return_attention=False, deep_classifier=True):
   """ Calculate attention then modulate the magnitude of the features
 
   Squish the attention-modulated features and return logits
@@ -86,19 +92,16 @@ def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True,
   print('Scaled features:', features.shape)
 
   features = mil_features(features, n_classes, z_dim, dropout_rate)
+
+  if deep_classifier:
+    features = deep_feedforward(features)
+
   logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
   return logits
 
 
-def Milk(input_shape, 
-         encoder=None, 
-         z_dim=256, 
-         n_classes=2, 
-         dropout_rate=0.3, 
-         encoder_args=None,
-         mode="instance", 
-         use_gate=True, 
-         deep_classifier=False,
+def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3, 
+         encoder_args=None, mode="instance", use_gate=True, deep_classifier=False,
          freeze_encoder=False):
 
   """ Build the Multiple Instance Learning model
@@ -151,22 +154,19 @@ def Milk(input_shape,
     features = encoder(image_squeezed)
 
   print('features after encoder', features.shape)
-  # insert an identity layer to hook into later:
-  features = Lambda(lambda x: x, name='feature_hook')(features)
 
-  # if freeze_encoder:
-  #     print('Stopping gradient from flowing to the encoder.')
-  #     features = Lambda(lambda x: tf.stop_gradient(x))(features)
-
-  if deep_classifier:
-    features = deep_feedforward(features, n_layers=5)
+  # if deep_classifier:
+  #   features = deep_feedforward(features, n_layers=5)
 
   if mode == "instance":
-    logits = instance_classifier(features, n_classes)
+    logits = instance_classifier(features, n_classes, 
+      deep_classifier=deep_classifier)
   elif mode == "average":
-    logits = average_pooling(features, n_classes, z_dim, dropout_rate)
+    logits = average_pooling(features, n_classes, z_dim, dropout_rate,
+      deep_classifier=deep_classifier)
   elif mode == "attention":
-    logits = attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=use_gate)
+    logits = attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=use_gate,
+      deep_classifier=deep_classifier)
   else:
     print('Multiple-Instance mode {} not recognized'.format(mode))
     raise NotImplementedError
@@ -187,24 +187,26 @@ def MilkEncode(input_shape, encoder=None, dropout_rate=0.3,
   else:
     features = encoder(image)
 
-  if deep_classifier:
-    features = deep_feedforward(features, n_layers=5)
+  # if deep_classifier:
+  #   features = deep_feedforward(features, n_layers=5)
 
   return tf.keras.Model(inputs=[image], outputs=[features])
 
 
 def MilkPredict(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3, 
-              mode="instance", use_gate=True):
+              mode="instance", use_gate=True, deep_classifier=True):
   print('Setting up Predict model in {} mode'.format(mode))
   features = Input(shape=input_shape, name='feat_in')
 
   if mode == "instance":
-    logits = instance_classifier(features, n_classes)
+    logits = instance_classifier(features, n_classes, 
+      deep_classifier=deep_classifier)
   elif mode == "average":
-    logits = average_pooling(features, n_classes, z_dim, dropout_rate)
+    logits = average_pooling(features, n_classes, z_dim, dropout_rate,
+      deep_classifier=deep_classifier)
   elif mode == "attention":
     logits = attention_pooling(features, n_classes, z_dim, dropout_rate, 
-                               use_gate=use_gate)
+      use_gate=use_gate, deep_classifier=deep_classifier)
   else:
     print('Multiple-Instance mode {} not recognized'.format(mode))
     raise NotImplementedError

@@ -8,23 +8,23 @@ from .encoder import make_encoder
 """ Same fn as in mil.py """
 def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
   for k in range(n_layers):
-    features = Dense(width, activation=tf.nn.relu, name='deep_{}'.format(k))(features)
-    features = Dropout(dropout_rate, name='deep_drop_{}'.format(k))(features)
+    features = Dense(width, activation=tf.nn.relu, name='classifier_{}'.format(k))(features)
+    features = Dropout(dropout_rate, name='classifier_drop_{}'.format(k))(features)
   return features
 
 def Classifier(input_shape, n_classes=5, encoder_args=None, deep_classifier=True):
-    image = Input(shape=input_shape)
+  image = Input(shape=input_shape)
 
-    #input_shape needs to make its way into the encoder initialization:
-    features = make_encoder(image=image, 
-                            input_shape=input_shape, 
-                            encoder_args=encoder_args)
-    features = Dropout(0.3, name='classifier_dropout')(features)
+  #input_shape needs to make its way into the encoder initialization:
+  features = make_encoder(image=image, 
+                          input_shape=input_shape, 
+                          encoder_args=encoder_args)
+  features = Dropout(0.3, name='classifier_dropout')(features)
 
-    if deep_classifier:
-      features = deep_feedforward(features)
+  if deep_classifier:
+    features = deep_feedforward(features)
 
-    logits = Dense(n_classes, activation=tf.nn.softmax, name='classifier')(features)
-    model = tf.keras.Model(inputs=[image], outputs=[logits])
+  logits = Dense(n_classes, activation=tf.nn.softmax, name='classifier')(features)
+  model = tf.keras.Model(inputs=[image], outputs=[logits])
 
-    return model
+  return model

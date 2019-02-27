@@ -11,17 +11,10 @@ class ClassificationDataset(object):
     Test if prefetch_to_device in graph mode is significantly faster.
     Prefetch buffer doesn't seem to work
     """
-    def __init__(self, 
-                 record_path, 
-                 crop_size = 512, 
-                 downsample = 0.25, 
-                 n_classes = 5, 
-                 n_threads = 6, 
-                 batch = 16, 
-                 prefetch_buffer = 4096, 
-                 shuffle_buffer = 2048,
-                 eager = True, 
-                 repeats = None):
+    def __init__(self, record_path, crop_size = 512, downsample = 0.25, 
+                 n_classes = 5, n_threads = 6, batch = 16, prefetch_buffer = 4096, 
+                 shuffle_buffer = 2048, eager = True, repeats = None, device=None,
+                 device_buffer=64):
 
         # Get a preprocessing function that uses tensorflow ops only
         preprocessing = self._build_preprocessing(crop_size, downsample, n_classes)
@@ -46,9 +39,15 @@ class ClassificationDataset(object):
                             .prefetch(buffer_size=prefetch_buffer)
                             .batch(batch))
         
+        # if device is not None:
+        #   self.dataset = self.dataset.apply(tf.data.experimental.prefetch_to_device(
+        #     device=device, buffer_size=device_buffer
+        #   ))
+        
         if eager:
             # Eager iterator
             self.iterator = tfe.Iterator(self.dataset)
+            # pass
         else:
             self.iterator = self.dataset.make_initializable_iterator()
             self.x_op, self.y_op = self.iterator.get_next()

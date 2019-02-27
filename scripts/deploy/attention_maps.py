@@ -15,7 +15,7 @@ original svs files:
 
    Be aware that the slide lists in uid2slide need to point somewhere on the local filesystem.
 
-BUG there's a leak
+BUG there's a memory leak
 
 """
 from __future__ import print_function
@@ -38,6 +38,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 
 from svs_reader import Slide
+from svs_reader.normalize import reinhard
 from attimg import draw_attention
 
 from milk.utilities import data_utils
@@ -45,10 +46,6 @@ from milk.utilities import model_utils
 from milk.utilities import training_utils
 from milk.utilities import model_utils
 from milk import Milk, MilkEncode, MilkPredict, MilkAttention
-
-# uid2label = pickle.load(open('../dataset/case_dict_obfuscated.pkl', 'rb'))
-uid2label = pickle.load(open('../dataset/cases_md5.pkl', 'rb'))
-uid2slide = pickle.load(open('../dataset/uid2slide.pkl', 'rb'))
 
 sys.path.insert(0, '../experiment')
 from encoder_config import encoder_args
@@ -96,45 +93,13 @@ def transfer_to_ramdisk(src, ramdisk):
 
   return dst
 
-def vect_to_tile(x, target):
-    batch = x.shape[0]
-    dim = x.shape[-1]
-    return np.tile(x, target*target).reshape(batch, target, target, dim)
-
-def read_test_list(test_file):
+def read_list(test_file):
   test_list = []
   with open(test_file, 'r') as f:
     for l in f:
       test_list.append(l.replace('\n', ''))
   
   return test_list
-
-def get_slidelist_from_uids(uids, process_all=True):
-  """ Translate the numpy name into a path to some slides
-
-  Each case can have multiple slides, so decide what to do with them
-  """
-  slide_list_out = []
-  labels = []
-  for uid in uids:
-    try:
-      slide_list = uid2slide[uid]
-      if len(slide_list) > 0:
-        if process_all:
-          slide_list_out += slide_list
-          labels += [uid2label[uid]]*len(slide_list)
-        else:
-          slide_list_out.append(np.random.choice(slide_list))
-          labels.append(uid2label[uid])
-      else:
-        print('WARNING UID: {} found no associated slides'.format(uid))
-    except:
-      print('WARNING UID: {} not found in slide list'.format(uid))
-
-  print('Testing on slides:')
-  for i, (s, l) in enumerate(zip(slide_list_out, labels)):
-    print('{:03d} {}\t\t{}'.format(i, s, l))
-  return slide_list_out, labels
 
 def process_slide(svs, encode_model, y_op, att_op, z_pl, args, return_z=False):
   n_tiles = len(svs.tile_list)
@@ -223,24 +188,11 @@ def process_slide_mcdropout(svs, encode_model, y_op, att_op, z_pl, args):
   return yhat_mean, att_mean, yhat_std, att_std, indices_all
 
 def main(args, sess):
-  # Translate obfuscated file names to paths if necessary
-  test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
-  test_list = read_test_list(test_list)
-  test_unique_ids = [os.path.basename(x).replace('.npy', '') for x in test_list]
-  if args.randomize:
-    np.random.shuffle(test_unique_ids)
-  slide_list, slide_labels = get_slidelist_from_uids(test_unique_ids)
+  slide_list = read_list(args.test_list)
 
   print('Found {} slides'.format(len(slide_list)))
-
-  snapshot = os.path.join(args.savedir, '{}.h5'.format(args.timestamp))
-  # trained_model = load_model(snapshot)
-  # if args.mcdropout:
-  #   encoder_args['mcdropout'] = True
-
   encode_model = MilkEncode(input_shape=(args.input_dim, args.input_dim, 3), 
                encoder_args=encoder_args, deep_classifier=args.deep_classifier)
-
   x_pl = tf.placeholder(shape=(None, args.input_dim, args.input_dim, 3), dtype=tf.float32)
   z_op = encode_model(x_pl)
 
@@ -250,111 +202,114 @@ def main(args, sess):
   attention_model = MilkAttention(input_shape=[input_shape], use_gate=args.gated_attention)
 
   print('setting encoder weights')
-  encode_model.load_weights(snapshot, by_name=True)
+  encode_model.load_weights(args.snapshot, by_name=True)
   print('setting predict weights')
-  predict_model.load_weights(snapshot, by_name=True)
+  predict_model.load_weights(args.snapshot, by_name=True)
   print('setting attention weights')
-  attention_model.load_weights(snapshot, by_name=True)
+  attention_model.load_weights(args.snapshot, by_name=True)
 
   z_pl = tf.placeholder(shape=(None, input_shape), dtype=tf.float32)
   y_op = predict_model(z_pl)
   att_op = attention_model(z_pl)
 
-  # fig = plt.figure(figsize=(2,2), dpi=180)
-
   ## Loop over found slides:
-  yhats = []
-  ytrues = []
-  for i, (src, lab) in enumerate(zip(slide_list, slide_labels)):
+  for i, src in enumerate(slide_list):
     print('\nSlide {}'.format(i))
     basename = os.path.basename(src).replace('.svs', '')
     fgpth = os.path.join(args.fgdir, '{}_fg.png'.format(basename))
-    if os.path.exists(fgpth):
-      ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
-      print('Using fg image at : {}'.format(fgpth))
-      fgimg = cv2.imread(fgpth, 0)
-      svs = Slide(slide_path        = ramdisk_path, 
-                  # background_speed  = 'accurate',
-                  background_speed  = 'image',
-                  background_image  = fgimg,
-                  preprocess_fn     = lambda x: (x/255.).astype(np.float32) ,
-                  process_mag       = args.mag,
-                  process_size      = args.input_dim,
-                  oversample_factor = args.oversample,
-                  verbose           = False)
-    else:
-      ## require precomputed background; Exit.
-      print('Required foreground image not found ({})'.format(fgpth))
-      continue
-    
-    svs.initialize_output(name='attention', dim=1, mode='tile')
-    n_tiles = len(svs.tile_list)
+    att_dst = os.path.join(args.odir, '{}_att.npy'.format(basename))
 
-    if not args.mcdropout:
-      yhat, att, indices = process_slide(svs, 
-          encode_model, y_op, att_op, z_pl, args)
-    else:
-      yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, 
-          encode_model, y_op, att_op, z_pl, args)
+    # if os.path.exists(att_dst) and not args.overwrite:
+    #   print('{} exists. Continuing.'.format(att_dst))
+    #   continue
 
-    yhats.append(yhat)
-    ytrues.append(lab)
-    print('\tSlide label: {} predicted: {}'.format(lab, yhat))
-
-    svs.place_batch(att, indices, 'attention', mode='tile')
-    attention_img = np.squeeze(svs.output_imgs['attention'])
-    attention_img = attention_img * (1. / attention_img.max())
-    attention_img = draw_attention(attention_img, n_bins=50)
-    print('attention image:', attention_img.shape, 
-          attention_img.dtype, attention_img.min(),
-          attention_img.max())
-
-    dst = os.path.join(args.odir, args.timestamp, '{}_att.npy'.format(basename))
-    np.save(dst, att)
-
-    dst = os.path.join(args.odir, args.timestamp, '{}_img.png'.format(basename))
-    cv2.imwrite(dst, attention_img)
-
-    # dst = os.path.join(args.odir, args.timestamp, '{}_hist.png'.format(basename))
-    # fig.clf()
-    # plt.hist(att, bins=100); 
-    # plt.title('Attention distribution\n{} ({} tiles)'.format(basename, n_tiles))
-    # plt.xlabel('Attention score')
-    # plt.ylabel('Tile count')
-    # plt.savefig(dst, bbox_inches='tight')
-
+    ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
     try:
-      svs.close()
+      if os.path.exists(fgpth):
+        print('Using fg image at : {}'.format(fgpth))
+        fgimg = cv2.imread(fgpth, 0)
+        svs = Slide(slide_path        = ramdisk_path, 
+                    # background_speed  = 'accurate',
+                    background_speed  = 'image',
+                    background_image  = fgimg,
+                    preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32) ,
+                    process_mag       = args.mag,
+                    process_size      = args.input_dim,
+                    oversample_factor = args.oversample,
+                    verbose           = False)
+      else:
+        svs = Slide(slide_path        = ramdisk_path, 
+                    background_speed  = 'accurate',
+                    preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32) ,
+                    process_mag       = args.mag,
+                    process_size      = args.input_dim,
+                    oversample_factor = args.oversample,
+                    verbose           = False)
+      
+      svs.initialize_output(name='attention', dim=1, mode='tile')
+      n_tiles = len(svs.tile_list)
+
+      if not args.mcdropout:
+        yhat, att, indices = process_slide(svs, 
+            encode_model, y_op, att_op, z_pl, args)
+      else:
+        yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, 
+            encode_model, y_op, att_op, z_pl, args)
+
+      print('\tSlide predicted: {}'.format(yhat))
+
+      svs.place_batch(att, indices, 'attention', mode='tile')
+      attention_img = np.squeeze(svs.output_imgs['attention'])
+      attention_img = attention_img * (1. / attention_img.max())
+      attention_img = draw_attention(attention_img, n_bins=50)
+      print('attention image:', attention_img.shape, 
+            attention_img.dtype, attention_img.min(),
+            attention_img.max())
+
+      np.save(att_dst, att)
+      img_dst = os.path.join(args.odir, '{}_img.png'.format(basename))
+      cv2.imwrite(img_dst, attention_img)
+      yhat_dst = os.path.join(args.odir, '{}_ypred.npy'.format(basename))
+      np.save(yhat_dst, yhat)
+
+    except Exception as e:
+      print(e)
+    finally:
+      try:
+        svs.close()
+        del svs
+      except:
+        pass
       os.remove(ramdisk_path)
-    except:
-      print('{} already removed'.format(ramdisk_path))
 
 if __name__ == '__main__':
+  """
+  for instance:
+
+  python attention_maps.py --odir tcga-prad --test_list ./tcga_prad_slides.txt --snapshot <path> --fgdir ./tcga-prad-fg
+  """
   parser = argparse.ArgumentParser()
+  parser.add_argument('--odir',       default=None, type=str)  # Required
+  parser.add_argument('--test_list',  default=None, type=str)  # Required
+  parser.add_argument('--snapshot',   default=None, type=str)  # Required
+  
   parser.add_argument('--mag',        default=5, type=int)
-  parser.add_argument('--odir',       default='attention_images', type=str)
-  parser.add_argument('--fgdir',      default='../usable_area/inference', type=str)
-  parser.add_argument('--savedir',    default='../experiment/save', type=str)
-  parser.add_argument('--testdir',    default='../experiment/test_lists', type=str)
+  parser.add_argument('--fgdir',      default='tcga-prad-fg', type=str)
   parser.add_argument('--ramdisk',    default='/dev/shm', type=str)
-  parser.add_argument('--timestamp',  default=None, type=str)
   parser.add_argument('--n_classes',  default=2, type=int)
   parser.add_argument('--input_dim',  default=96, type=int)
-  parser.add_argument('--randomize',  default=False, action='store_true')
   parser.add_argument('--batch_size', default=64, type=int)
-  parser.add_argument('--oversample', default=1.25, type=float)
+  parser.add_argument('--oversample', default=1.1, type=float)
+  parser.add_argument('--randomize',  default=False, action='store_true')
+  parser.add_argument('--overwrite',  default=False, action='store_true')
 
   parser.add_argument('--mil',        default='attention', type=str)
   parser.add_argument('--mcdropout',  default=False, action='store_true')
   parser.add_argument('--mcdropout_t', default=25, type=int)
-  parser.add_argument('--deep_classifier', default=False, action='store_true')
-  parser.add_argument('--gated_attention', default=True, action='store_false')
+  parser.add_argument('--deep_classifier', default=True, action='store_false') ## almost-always True
+  parser.add_argument('--gated_attention', default=True, action='store_false') ## almost-always True
   parser.add_argument('--mcdropout_sample', default=0.25, type=int)
   args = parser.parse_args()
-
-  if not os.path.exists(os.path.join(args.odir, args.timestamp)):
-    os.makedirs(os.path.join(args.odir, args.timestamp))
-  assert args.timestamp is not None
 
   config = tf.ConfigProto()
   config.gpu_options.allow_growth = True

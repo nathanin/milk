@@ -6,81 +6,126 @@ In progress.
 
 Structure
 ```
-# The main module
-milk/
-|____ utilities/
-      |____ __init__.py
-      |____ classification_dataset.py
-      |____ drawing_utils.py
-      |____ data_utils.py
-      |____ model_utils.py
-      |____ training_utils.py
-|____ __init__.py
-|____ classifier.py
-|____ densenet.py
-|____ encoder.py
-|____ ops.py
-|____ mil.py
-|____ test_classifier.py
-|____ test_densenet.py
-|____ test_mil.py
-
-# Scripts to run our experiments
-scripts/
-|____ attention/
-      |____ attention_maps.py
-      |____ compare_attention.py
-
-|____ dataset/
-      |____ __init__.py
-      |____ remove_white_tiles.py
-      |____ slide_to_npy.py
-      |____ slide_to_tfrecord.py
-
-|____ debugging/
-      |____ test_classifier_class.py
-      |____ test_data_utils.py
-      |____ test_milk_class.py
-
-|____ deploy/
-      |____ deploy.py
-      |____ deploy.sh
-      |____ test_svs.py
-
-|____ pretraining/
-      |____ pretrained_reference.h5
-      |____ profile_tfrecord_dataset.py
-      |____ projection.py
-      |____ test_svs.py
-      |____ test.py
-      |____ train_graph.py
-      |____ train_tpu.py
-
-|____ experiment/
-      |____ batch_train.sh
-      |____ batch_test.sh
-      |____ train_tpu.py
-      |____ test_npy.py
-
-|____ usable_area/
-      |____ classify_folder.py
-      |____ create_tfhub_training.py
-      |____ deploy_retrained.py
-      |____ dump_fgimg.py
-      |____ retrain.py
-      |____ run_deploy.sh
-      |____ run_retrain.sh
-      |____ write_heatmap.py
-      
-|____ mnist/
-      |____ pretrain_mnist.py
-      |____ readme.md
-      |____ train_mnist.py
-
-|____ cifar10/
-      |____ data_util.py
-      |____ train.py
-      |____ cifar2tfrecord.py
+.
+├── milk
+│   ├── classifier.py
+│   ├── densenet.py
+│   ├── eager
+│   │   ├── classifier.py
+│   │   ├── densenet.py
+│   │   ├── encoder.py
+│   │   ├── __init__.py
+│   │   └── mil.py
+│   ├── encoder_config.py
+│   ├── encoder.py
+│   ├── __init__.py
+│   ├── mil.py
+│   ├── ops.py
+│   ├── test_classifier.py
+│   ├── test_densenet.py
+│   ├── test_mil.py
+│   └── utilities
+│       ├── classification_dataset.py
+│       ├── data_utils.py
+│       ├── drawing_utils.py
+│       ├── __init__.py
+│       ├── mil_dataset.py
+│       ├── model_utils.py
+│       └── training_utils.py
+├── README.md
+├── requirements.txt
+├── scripts
+│   ├── attention
+│   │   ├── attention_maps.py
+│   │   ├── attimg.py
+│   │   ├── batch_attention.sh
+│   │   └── compare_attention.py
+│   ├── cifar10
+│   │   ├── cifar2tfrecord.py
+│   │   ├── data_util.py
+│   │   └── train.py
+│   ├── dataset
+│   │   ├── combine_npy_by_case.py
+│   │   ├── __init__.py
+│   │   ├── reduce_and_obfuscate.py
+│   │   ├── remove_white_tiles.py
+│   │   ├── slide_to_npy.py
+│   │   └── slide_to_tfrecord.py
+│   ├── debugging
+│   │   ├── test_classifier_class.py
+│   │   ├── test_data_utils.py
+│   │   └── test_milk_class.py
+│   ├── deploy
+│   │   ├── attention_maps.py
+│   │   ├── attimg.py
+│   │   ├── deploy.py
+│   │   ├── deploy.sh
+│   │   ├── deploy_usable_area.py
+│   │   ├── notebooks
+│   │   │   └── km_plot.ipynb
+│   │   ├── prad_clinical_data.csv
+│   │   ├── README.md
+│   │   ├── run_usable_area.sh
+│   │   ├── test_svs.py
+│   │   └── workup_tcga_clinical_data.py
+│   ├── experiment
+│   │   ├── batch_hyperparams.sh
+│   │   ├── batch_test.py
+│   │   ├── batch_test.sh
+│   │   ├── batch_train.sh
+│   │   ├── encoder_config.py
+│   │   ├── gather_results.py
+│   │   ├── readme.md
+│   │   ├── searchargs.sh
+│   │   ├── test_eager.py
+│   │   ├── test_npy.py
+│   │   ├── test_svs.py
+│   │   ├── train_eager.py
+│   │   ├── train_tpu_inmemory.py
+│   │   ├── train_tpu.py
+│   │   └── train_v0.py
+│   ├── imagenet
+│   │   ├── build_imagenet_data.py
+│   │   ├── data_util.py
+│   │   ├── encoder_config.py
+│   │   ├── make_imagenet_tfrecords.py
+│   │   ├── preprocess_imagenet.py
+│   │   └── train.py
+│   ├── misc
+│   │   ├── image_cloud.ipynb
+│   │   └── image_cloud.py
+│   ├── mnist
+│   │   ├── encoder_config.py
+│   │   ├── pretrain_mnist.py
+│   │   ├── readme.md
+│   │   ├── train_mnist_eager.py
+│   │   └── train_mnist.py
+│   ├── pretraining
+│   │   ├── profile_tfrecord_dataset.py
+│   │   ├── projection.py
+│   │   ├── test.py
+│   │   ├── test_svs.py
+│   │   ├── train_eager.py
+│   │   ├── train_graph.py
+│   │   └── train_tpu.py
+│   ├── README.md
+│   ├── usable_area
+│   │   ├── classify_folder.py
+│   │   ├── compare_fg_classified.py
+│   │   ├── create_tfhub_training.py
+│   │   ├── deploy_retrained.py
+│   │   ├── dump_fgimg.py
+│   │   ├── retrain.py
+│   │   ├── run_deploy.sh
+│   │   ├── run_retrain.sh
+│   │   └── write_heatmap.py
+│   └── visualizations
+│       ├── attention_maps.py
+│       ├── imprint_high_attention.py
+│       ├── projections.py
+│       ├── recolor_projections.py
+│       └── z_space_projections.py
+└── setup.py
 
 ```
 
@@ -110,12 +155,13 @@ scripts/mnist/pretrain_mnist.py -o scripts/mnist/pretrained.h5
 scripts/mnist/train.py -o scripts/mnist/bagged_mnist.h5 --pretrained scripts/mnist/pretrained.h5
 ```
 
+See it run the bagged MNIST example on [Google Colab](https://colab.research.google.com/drive/1eOcZaqQG01fS16ckn9x94ivW-k12fbcg). 
 
 #### Milestones
 - **Make the whole thing run on TPU.** 
   - Progress: see branch `functional-api` for a version compatible with TPU execution. 
   - Update: reworked `master` to use the functional api. Branch `functional-api` is now defunct.
-  - See it run the bagged MNIST example on [Google Colab](https://colab.research.google.com/drive/1eOcZaqQG01fS16ckn9x94ivW-k12fbcg). 
+  - Feature: re-introduced `eager` mode as a module (`milk.eager`), allowing baches > 1 on single GPU.
 
  
-Contact: Nathan.Ing@cshs.org , ing.nathany@gmail.com
+Contact: ing.nathany@gmail.com

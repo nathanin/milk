@@ -20,7 +20,7 @@ from milk.utilities import ClassificationDataset
 from milk.classifier import Classifier
 
 sys.path.insert(0, '../experiment')
-from encoder_config import encoder_args
+from encoder_config import big_encoder_args as encoder_args
 
 def main(args):
   print(args) 
@@ -41,7 +41,9 @@ def main(args):
 
   # Test batch:
   model = Classifier(input_shape=(args.input_dim, args.input_dim, 3), 
-             n_classes=args.n_classes, encoder_args=encoder_args, deep_classifier=True)
+                     n_classes=args.n_classes, 
+                     encoder_args=encoder_args, 
+                     deep_classifier=True)
 
   ## Need tf.train for TPU's
   # optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
@@ -70,7 +72,7 @@ if __name__ == '__main__':
   parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.tfrecord')
   parser.add_argument('--n_classes', default=5, type=int)
   parser.add_argument('--save_path', default='./pretrained.h5')
-  parser.add_argument('--n_threads', default=8, type=int)
+  parser.add_argument('--n_threads', default=12, type=int)
   parser.add_argument('--input_dim', default=96, type=int)
   parser.add_argument('--downsample', default=0.25, type=float)
   parser.add_argument('--iterations', default=2500, type=int)

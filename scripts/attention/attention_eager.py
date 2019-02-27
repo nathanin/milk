@@ -37,21 +37,20 @@ import re
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from svs_reader import Slide
+from svs_reader import Slide, reinhard
 from attimg import draw_attention
 
 from milk.utilities import data_utils
 from milk.utilities import model_utils
 from milk.utilities import training_utils
 from milk.utilities import model_utils
-from milk import Milk, MilkEncode, MilkPredict, MilkAttention
+from milk.eager import MilkEager
 
 # uid2label = pickle.load(open('../dataset/case_dict_obfuscated.pkl', 'rb'))
 uid2label = pickle.load(open('../dataset/cases_md5.pkl', 'rb'))
 uid2slide = pickle.load(open('../dataset/uid2slide.pkl', 'rb'))
 
-sys.path.insert(0, '../experiment')
-from encoder_config import encoder_args
+from milk.encoder_config import deep_args
 
 def get_wrapped_fn(svs):
   def wrapped_fn(idx):
@@ -65,23 +64,23 @@ def get_img_idx(svs, batch_size, prefetch, generate_subset=False, sample=1.0):
   wrapped_fn = get_wrapped_fn(svs)
   def read_region_at_index(idx):
     return tf.py_func(func = wrapped_fn,
-                        inp  = [idx],
-                        Tout = [tf.float32, tf.int64],
-                        stateful = False)            
+                      inp  = [idx],
+                      Tout = [tf.float32, tf.int64],
+                      stateful = False)            
 
   # Replace svs.generate_index with a rolled-out generator that minimizes
   # the amount of unnecessary processing to do:
   # if generate_subset:
-
 
   dataset = tf.data.Dataset.from_generator(generator=svs.generate_index,
       output_types=tf.int64)
   dataset = dataset.map(read_region_at_index, num_parallel_calls=4)
   dataset = dataset.prefetch(prefetch)
   dataset = dataset.batch(batch_size)
-  iterator = dataset.make_one_shot_iterator()
-  img, idx = iterator.get_next()
-  return img, idx
+  # iterator = dataset.make_one_shot_iterator()
+
+  iterator = tf.contrib.eager.Iterator(dataset)
+  return iterator
         
 def transfer_to_ramdisk(src, ramdisk):
   """
@@ -136,42 +135,35 @@ def get_slidelist_from_uids(uids, process_all=True):
     print('{:03d} {}\t\t{}'.format(i, s, l))
   return slide_list_out, labels
 
-def process_slide(svs, encode_model, y_op, att_op, z_pl, args, return_z=False):
+def process_slide(svs, model, args, return_z=False):
   n_tiles = len(svs.tile_list)
   prefetch = min(256, n_tiles)
 
   # Get tensors for image and index -- spin up a new op 
   # that consumes from the iterator
-  img, idx = get_img_idx(svs, args.batch_size, prefetch)
-  z_op = encode_model(img)
+  iterator = get_img_idx(svs, args.batch_size, prefetch)
 
   batches = 0
   zs = []
   indices = []
   print('Processing {} tiles'.format(n_tiles))
-  while True:
-    try:
-      batches += 1
-      z, idx_ = sess.run([z_op, idx])
-      zs.append(z)
-      indices.append(idx_)
-      if batches % 25 == 0:
-          print('batch {:04d}\t{}\t{}'.format(
-                  batches, z.shape, batches*args.batch_size))
-    except tf.errors.OutOfRangeError:
-      print('Done')
-      break
+  for imgs, idx_ in iterator:
+    batches += 1
+    z = model.encode_bag(imgs, batch_size=args.batch_size, training=True, return_z=True)
+    zs.append(z)
+    indices.append(idx_)
+    if batches % 10 == 0:
+        print('batch {:04d}\t{}\t{}'.format( batches, z.shape, batches*args.batch_size ))
 
-  zs = np.concatenate(zs, axis=0)
+  zs = tf.concat(zs, axis=0)
   indices = np.concatenate(indices)
-  
-  if return_z:
-    return zs, indices
+  print('zs: ', zs.shape, zs.dtype)
+  print('indices: ', indices.shape)
 
-  yhat = sess.run(y_op, feed_dict={z_pl: zs})
+  z_att, att = model.mil_attention(zs, training=False, verbose=True, return_att=True)
+  yhat = model.apply_classifier(z_att, training=False, verbose=True)
   print('yhat:', yhat)
 
-  att = sess.run(att_op, feed_dict={z_pl: zs})
   att = np.squeeze(att)
   print('att:', att.shape)
 
@@ -181,48 +173,48 @@ def process_slide(svs, encode_model, y_op, att_op, z_pl, args, return_z=False):
 Track attention on an included/not-included basis.
 'sample' argument controls the % of the whole slide to use in each mcdropout iteration
 """
-def process_slide_mcdropout(svs, encode_model, y_op, att_op, z_pl, args):
-  yhats = []
-  atts = np.zeros((len(svs.tile_list), args.mcdropout_t))-1
-  zs, indices_all = process_slide(svs, encode_model, y_op, att_op, 
-                              z_pl, args, return_z=True)
+# def process_slide_mcdropout(svs, encode_model, args):
+#   yhats = []
+#   atts = np.zeros((len(svs.tile_list), args.mcdropout_t))-1
+#   zs, indices_all = process_slide(svs, encode_model, y_op, att_op, 
+#                               z_pl, args, return_z=True)
 
-  n_tiles = len(svs.tile_list)
-  n_sample = int(n_tiles * args.mcdropout_sample)
-  print('zs:', zs.shape)
-  print('indices:', indices_all.shape)
-  for t in range(args.mcdropout_t):
-    zs_sample = np.random.choice(range(n_tiles), n_sample)
-    zs_ = zs[zs_sample, :]
-    indices = indices_all[zs_sample]
-    print('sampled {} images from z ({})'.format(n_sample, zs_.shape))
+#   n_tiles = len(svs.tile_list)
+#   n_sample = int(n_tiles * args.mcdropout_sample)
+#   print('zs:', zs.shape)
+#   print('indices:', indices_all.shape)
+#   for t in range(args.mcdropout_t):
+#     zs_sample = np.random.choice(range(n_tiles), n_sample)
+#     zs_ = zs[zs_sample, :]
+#     indices = indices_all[zs_sample]
+#     print('sampled {} images from z ({})'.format(n_sample, zs_.shape))
 
-    yhat = sess.run(y_op, feed_dict={z_pl: zs_})
-    print('yhat:', yhat)
+#     yhat = sess.run(y_op, feed_dict={z_pl: zs_})
+#     print('yhat:', yhat)
 
-    att = sess.run(att_op, feed_dict={z_pl: zs_})
-    att = np.squeeze(att)
-    print('att:', att.shape)
+#     att = sess.run(att_op, feed_dict={z_pl: zs_})
+#     att = np.squeeze(att)
+#     print('att:', att.shape)
 
-    ## Use returned indices to map attentions back to the tiles
-    att_map = np.zeros(len(svs.tile_list))
-    att_map[indices] = att
-    atts[:,t] = att_map
+#     ## Use returned indices to map attentions back to the tiles
+#     att_map = np.zeros(len(svs.tile_list))
+#     att_map[indices] = att
+#     atts[:,t] = att_map
 
-    yhats.append(yhat)
+#     yhats.append(yhat)
 
-  yhats = np.concatenate(yhats, axis=0)
-  yhat_mean = np.mean(yhats, axis=0, keepdims=True)
-  yhat_std = np.std(yhats, axis=0, keepdims=True)
-  print('\tyhat_std:', yhat_std)
+#   yhats = np.concatenate(yhats, axis=0)
+#   yhat_mean = np.mean(yhats, axis=0, keepdims=True)
+#   yhat_std = np.std(yhats, axis=0, keepdims=True)
+#   print('\tyhat_std:', yhat_std)
 
-  atts[atts==-1] = np.nan
-  att_mean = np.nanmean(atts, axis=1, keepdims=True)
-  att_std  = np.nanstd(atts, axis=1, keepdims=True)
+#   atts[atts==-1] = np.nan
+#   att_mean = np.nanmean(atts, axis=1, keepdims=True)
+#   att_std  = np.nanstd(atts, axis=1, keepdims=True)
 
-  return yhat_mean, att_mean, yhat_std, att_std, indices_all
+#   return yhat_mean, att_mean, yhat_std, att_std, indices_all
 
-def main(args, sess):
+def main(args):
   # Translate obfuscated file names to paths if necessary
   test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
   test_list = read_test_list(test_list)
@@ -238,29 +230,14 @@ def main(args, sess):
   # if args.mcdropout:
   #   encoder_args['mcdropout'] = True
 
-  encode_model = MilkEncode(input_shape=(args.input_dim, args.input_dim, 3), 
-               encoder_args=encoder_args, deep_classifier=args.deep_classifier)
+  model = MilkEager( encoder_args=deep_args, mil_type=args.mil, deep_classifier=args.deep_classifier )
 
-  x_pl = tf.placeholder(shape=(None, args.input_dim, args.input_dim, 3), dtype=tf.float32)
-  z_op = encode_model(x_pl)
+  x_pl = np.zeros((1, args.batch_size, args.input_dim, args.input_dim, 3), dtype=np.float32)
+  yhat = model(tf.constant(x_pl), verbose=True)
+  print('yhat:', yhat.shape)
 
-  input_shape = z_op.shape[-1]
-  predict_model = MilkPredict(input_shape=[input_shape], mode=args.mil, use_gate=args.gated_attention,
-    deep_classifier=args.deep_classifier)
-  attention_model = MilkAttention(input_shape=[input_shape], use_gate=args.gated_attention)
-
-  print('setting encoder weights')
-  encode_model.load_weights(snapshot, by_name=True)
-  print('setting predict weights')
-  predict_model.load_weights(snapshot, by_name=True)
-  print('setting attention weights')
-  attention_model.load_weights(snapshot, by_name=True)
-
-  z_pl = tf.placeholder(shape=(None, input_shape), dtype=tf.float32)
-  y_op = predict_model(z_pl)
-  att_op = attention_model(z_pl)
-
-  # fig = plt.figure(figsize=(2,2), dpi=180)
+  print('setting model weights')
+  model.load_weights(snapshot, by_name=True)
 
   ## Loop over found slides:
   yhats = []
@@ -290,12 +267,10 @@ def main(args, sess):
     svs.initialize_output(name='attention', dim=1, mode='tile')
     n_tiles = len(svs.tile_list)
 
-    if not args.mcdropout:
-      yhat, att, indices = process_slide(svs, 
-          encode_model, y_op, att_op, z_pl, args)
-    else:
-      yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, 
-          encode_model, y_op, att_op, z_pl, args)
+    # if args.mcdropout:
+    #   yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, model, args)
+    # else:
+    yhat, att, indices = process_slide(svs, model, args)
 
     yhats.append(yhat)
     ytrues.append(lab)
@@ -341,7 +316,7 @@ if __name__ == '__main__':
   parser.add_argument('--n_classes',  default=2, type=int)
   parser.add_argument('--input_dim',  default=96, type=int)
   parser.add_argument('--randomize',  default=False, action='store_true')
-  parser.add_argument('--batch_size', default=64, type=int)
+  parser.add_argument('--batch_size', default=32, type=int)
   parser.add_argument('--oversample', default=1.25, type=float)
 
   parser.add_argument('--mil',        default='attention', type=str)
@@ -356,9 +331,9 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(args.odir, args.timestamp))
   assert args.timestamp is not None
 
-  config = tf.ConfigProto()
-  config.gpu_options.allow_growth = True
+  # config = tf.ConfigProto()
+  # config.gpu_options.allow_growth = True
+  tf.enable_eager_execution()
 
-  with tf.Session(config=config) as sess:
-    main(args, sess)
+  main(args)
     

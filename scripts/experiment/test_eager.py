@@ -18,14 +18,12 @@ from sklearn.metrics import (roc_auc_score, roc_curve,
 from milk.utilities import data_utils
 from milk.utilities import model_utils
 from milk.utilities import training_utils
-from milk import MilkEncode, MilkPredict
+from milk.eager import MilkEager
 
-# with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
-#with open('../dataset/cases_md5.pkl', 'rb') as f:
-with open('case_dict_obfuscated.pkl', 'rb') as f:
+with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
   case_dict = pickle.load(f)
 
-from milk.encoder_config import deep_args as encoder_args
+from milk.encoder_config import big_args as encoder_args
 
 def case_label_fn(data_path):
   case = os.path.splitext(os.path.basename(data_path))[0]
@@ -93,20 +91,20 @@ def test_eval(ytrue, yhat, savepath=None):
     print(cr)
     print(cm)
 
-def run_sample(case_x, encode_model, predict_model, mcdropout=False, 
-             batch_size=64):
+def run_sample(case_x, model, mcdropout=False, 
+               batch_size=64):
+  print('case x : ', case_x.shape)
+  case_x = np.expand_dims(case_x, axis=0)
   if mcdropout:
     yhats = []
     for _ in range(25):
-      zs = encode_model.predict(case_x, batch_size=batch_size)
-      yhat = predict_model.predict_on_batch(zs)
+      yhat = model(tf.constant(case_x), training=True, batch_size=batch_size)
       yhats.append(yhat)
     
     yhats = np.stack(yhats, axis=0)
-    yhat = np.mean(yhats, axis=0)
+    yhat  = np.mean( yhats, axis=0)
   else:
-    zs = encode_model.predict(case_x, batch_size=batch_size)
-    yhat = predict_model.predict_on_batch(zs)
+    yhat = model(tf.constant(case_x), training=True, batch_size=batch_size, verbose=False)
 
   return yhat
 
@@ -121,24 +119,14 @@ def main(args):
     encoder_args['mcdropout'] = True
 
   print('Model initializing')
-  encode_model = MilkEncode(input_shape=(args.crop_size, args.crop_size, 3), 
-                            encoder_args=encoder_args, deep_classifier=args.deep_classifier)
-  encode_shape = list(encode_model.output.shape)
-  x_pl = tf.placeholder(shape=(None, args.input_dim, args.input_dim, 3), dtype=tf.float32)
-  z_op = encode_model(x_pl)
+  model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=args.deep_classifier )
+  # model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=False )
+  xdummy = tf.zeros((1, args.batch_size, args.x_size, args.y_size, 3))
+  ydummy = model(xdummy)
 
-  input_shape = z_op.shape[-1]
-  predict_model = MilkPredict(input_shape=[input_shape], mode=args.mil)
+  print(xdummy.shape, ydummy.shape)
 
-  print('loading weights from {}'.format(snapshot))
-  encode_model.load_weights(snapshot, by_name=True)
-  predict_model.load_weights(snapshot, by_name=True)
-
-  # models = model_utils.make_inference_functions(encode_model,
-  #                                               predict_model,
-  #                                               trained_model, 
-  #                                               attention_model=None)
-  # encode_model, predict_model = models
+  model.load_weights(snapshot, by_name=True)
 
   test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
   test_list = read_test_list(test_list)
@@ -157,7 +145,7 @@ def main(args):
       case_x = np.squeeze(case_x, axis=0)
       print('Running case x: ', case_x.shape)
 
-      yhat = run_sample(case_x, encode_model, predict_model,
+      yhat = run_sample(case_x, model,
                         mcdropout=args.mcdropout,
                         batch_size=args.batch_size)
       ytrues.append(case_y)
@@ -197,6 +185,8 @@ if __name__ == '__main__':
   parser.add_argument('--testdir', default='test_lists', type=str)
   parser.add_argument('--odir', default=None, type=str)
 
+  parser.add_argument('--deep_classifier', default=True, action='store_false')
+
   parser.add_argument('--x_size', default=128, type=int)
   parser.add_argument('--y_size', default=128, type=int)
   parser.add_argument('--crop_size', default=96, type=int)
@@ -207,4 +197,8 @@ if __name__ == '__main__':
 
   args = parser.parse_args()
   assert args.timestamp is not None
+
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth = True
+  tf.enable_eager_execution(config=config)
   main(args)

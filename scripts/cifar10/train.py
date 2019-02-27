@@ -16,6 +16,10 @@ from data_util import CifarRecords
 from milk.classifier import Classifier
 
 #sys.path.insert(0, '../experiment')
+<<<<<<< HEAD
+#from encoder_config import encoder_args
+=======
+>>>>>>> 3eded8d16bd1be3a9a0aecaa9a9608dc3fcdf6be
 from cifar_encoder_config import encoder_args
 
 def main(args):
@@ -24,6 +28,10 @@ def main(args):
   assert args.dataset is not None
 
   dataset = CifarRecords(src=args.dataset, xsize=args.input_dim,
+    ysize=args.input_dim, batch=args.batch_size, buffer=args.prefetch_buffer,
+    parallel=args.threads)
+
+  val_dataset = CifarRecords(src=args.dataset_test, xsize=args.input_dim,
     ysize=args.input_dim, batch=args.batch_size, buffer=args.prefetch_buffer,
     parallel=args.threads)
 
@@ -46,10 +54,17 @@ def main(args):
 
   try:
     model.fit(dataset.make_one_shot_iterator(),
+<<<<<<< HEAD
+              steps_per_epoch=48000 // args.batch_size,
+              epochs=args.epochs,
+              validation_data=val_dataset.make_one_shot_iterator(),
+              validation_steps=12000 // args.batch_size)
+=======
               steps_per_epoch = 10000,
               epochs = args.epochs)
               # steps_per_epoch=60000 // args.batch_size,
               # epochs=args.epochs)
+>>>>>>> 3eded8d16bd1be3a9a0aecaa9a9608dc3fcdf6be
   except KeyboardInterrupt:
     print('Stop signal')
   except Exception as e:
@@ -63,7 +78,11 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--gpus', default=1, type=int)
   parser.add_argument('--epochs', default=50, type=int)
+<<<<<<< HEAD
+  parser.add_argument('--input_dim', default=96, type=int)
+=======
   parser.add_argument('--dataset', default='data/cifar-10-tfrecord', type=str)
+>>>>>>> 3eded8d16bd1be3a9a0aecaa9a9608dc3fcdf6be
   parser.add_argument('--threads', default=8, type=int)
   parser.add_argument('--input_dim', default=96, type=int)
   parser.add_argument('--save_path', default='./cifar_10_model.h5')
@@ -71,6 +90,9 @@ if __name__ == '__main__':
   parser.add_argument('--batch_size', default=64, type=int)
   parser.add_argument('--learning_rate', default=1e-4, type=float)
   parser.add_argument('--prefetch_buffer', default=4096, type=int)
+
+  parser.add_argument('--dataset',      default='data/cifar-10-train-tfrecord', type=str)
+  parser.add_argument('--dataset_test', default='data/cifar-10-test-tfrecord', type=str)
 
   args = parser.parse_args()
 

@@ -26,7 +26,7 @@ with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
 # with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
-from milk.encoder_config import big_args as encoder_args
+from milk.encoder_config import wide_args as encoder_args
 
 def filter_list_by_label(lst):
   lst_out = []

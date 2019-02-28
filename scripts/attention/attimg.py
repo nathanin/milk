@@ -5,10 +5,10 @@ import os
 
 import seaborn as sns
 
-
 def draw_attention(attimg, n_bins=100, backgroud=1):
   palette = sns.color_palette("RdBu", n_colors=n_bins)
-  bins = np.linspace(-10, 5, n_bins)
+  # bins = np.linspace(-10, 5, n_bins)
+  bins = np.linspace(0, 1, n_bins)
 
   attimg = cv2.resize(attimg, fx=3., fy=3., dsize=(0,0),
     interpolation=cv2.INTER_LINEAR)

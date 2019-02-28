@@ -60,8 +60,8 @@ def main(args):
     spec = specificity(y_true=ytrue_argmax, y_pred=yhat_argmax)
     f1 = f1_score(y_true=ytrue_argmax, y_pred=yhat_argmax)
 
-    print('acc={:3.3f}\tauc={:3.3f}\tprec={:3.3f}\trec={:3.3f}\tspec={:3.3f}\tf1={:3.3f}'.format(
-      acc, auc, prec, rec, spec, f1))
+    print('{} acc={:3.3f}\tauc={:3.3f}\tprec={:3.3f}\trec={:3.3f}\tspec={:3.3f}\tf1={:3.3f}'.format(
+      ts, acc, auc, prec, rec, spec, f1))
 
     accs.append(acc)
     aucs.append(auc)

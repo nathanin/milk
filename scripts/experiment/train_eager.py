@@ -26,7 +26,7 @@ with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
 # with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
-from milk.encoder_config import big_args as encoder_args
+from milk.encoder_config import get_encoder_args
 
 def filter_list_by_label(lst):
   lst_out = []
@@ -242,8 +242,10 @@ def main(args):
 
   #with tf.device('/gpu:0'): 
   print('Model initializing')
+  encoder_args = get_encoder_args(args.encoder)
   model = MilkEager(encoder_args=encoder_args, mil_type=args.mil,
-                    deep_classifier=args.deep_classifier)
+                    deep_classifier=args.deep_classifier,
+                    temperature=args.temperature)
   #model.build_encode_fn(training=True, verbose=False, batch_size=64)
   tstart = time.time()
   yhat = model(tf.constant(x), batch_size=32, training=True, verbose=True)
@@ -278,7 +280,7 @@ def main(args):
   model.summary()
 
   ## Replace randomly initialized weights after model is compiled and on the correct device.
-  if args.pretrained_model is not None and os.path.exists(args.pretrained_model) and not args.dont_use_pretrained:
+  if args.pretrained_model is not None and os.path.exists(args.pretrained_model):
     print('Replacing random weights with weights from {}'.format(args.pretrained_model))
     try:
       model.load_weights(args.pretrained_model, by_name=True)
@@ -352,6 +354,8 @@ if __name__ == '__main__':
   parser.add_argument('--batch_size',       default = 1, type=int)
   parser.add_argument('--freeze_encoder',   default = False, action='store_true')
   parser.add_argument('--gated_attention',  default = True, action='store_false')
+  parser.add_argument('--temperature',      default = 1, type=float)
+  parser.add_argument('--encoder',          default = 'big', type=str)
   parser.add_argument('--deep_classifier',  default = False, action='store_true')
 
   # Optimizer settings
@@ -367,6 +371,8 @@ if __name__ == '__main__':
   parser.add_argument('--data_patt',        default = '../dataset/tiles_reduced', type=str)
   parser.add_argument('--save_prefix',      default = 'save', type=str)
   parser.add_argument('--pretrained_model', default = None, type=str)
+
+  # old
   parser.add_argument('--dont_use_pretrained', default = False, action='store_true')
 
   parser.add_argument('--verbose',          default = False, action='store_true')

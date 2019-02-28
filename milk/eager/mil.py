@@ -12,7 +12,7 @@ from .encoder import make_encoder_eager
 from milk.utilities.model_utils import lr_mult
 
 class MilkEager(tf.keras.Model):
-  def __init__(self, z_dim=256, encoder_args=None, mil_type='attention', deep_classifier=True):
+  def __init__(self, z_dim=256, encoder_args=None, mil_type='attention', deep_classifier=True, temperature=1):
 
     super(MilkEager, self).__init__()
 
@@ -20,6 +20,8 @@ class MilkEager(tf.keras.Model):
     self.deep_classifier = deep_classifier
     self.mil_type = mil_type
     self.built_fn = False
+    self.temperature = temperature
+
     self.densenet = make_encoder_eager( encoder_args = encoder_args )
     self.drop2  = Dropout(rate=0.3)
 
@@ -62,11 +64,15 @@ class MilkEager(tf.keras.Model):
     if return_raw_att:
       att_ret = tf.identity(att)
 
+    # https://en.wikipedia.org/wiki/Softmax_function#Smooth_arg_max
+    att /= self.temperature
+
     # Question: WTF?
     # tensorflow.python.framework.errors_impl.InternalError: CUB segmented reduce errorinvalid configuration argument [Op:Softmax]
     # unless we put this op on CPU in eager mode.
     with tf.device('/cpu:0'):
       att = tf.nn.softmax(att, axis=1)
+
     if verbose:
       print('attention:', att.shape)
     z = tf.matmul(att, features)

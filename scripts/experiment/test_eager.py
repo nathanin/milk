@@ -91,14 +91,20 @@ def test_eval(ytrue, yhat, savepath=None):
     print(cr)
     print(cm)
 
-def run_sample(case_x, model, mcdropout=False, 
-               batch_size=64):
+def run_sample(case_x, model, mcdropout=False, batch_size=64, sample_mode='all'):
   print('case x : ', case_x.shape)
+  n_tiles = case_x.shape[0]
   case_x = np.expand_dims(case_x, axis=0)
   if mcdropout:
     yhats = []
-    for _ in range(25):
-      yhat = model(tf.constant(case_x), batch_size=batch_size, training=True)
+    for _ in range(5):
+      if sample_mode == 'sample':
+        indices = np.random.choice(range(n_tiles), 100)
+        case_x_in = case_x[:, indices, ...]
+      else:
+        case_x_in = case_x
+
+      yhat = model(tf.constant(case_x_in), batch_size=batch_size, training=True)
       yhats.append(yhat)
     
     yhats = np.stack(yhats, axis=0)
@@ -150,8 +156,9 @@ def main(args):
       print('Running case x: ', case_x.shape)
 
       yhat = run_sample(case_x, model,
-                        mcdropout=args.mcdropout,
-                        batch_size=args.batch_size)
+                        mcdropout = args.mcdropout,
+                        batch_size = args.batch_size,
+                        sample_mode = args.sample_mode)
       ytrues.append(case_y)
       yhats.append(yhat)
       print(test_case, case_y, case_x.shape, yhat)
@@ -198,6 +205,7 @@ if __name__ == '__main__':
   parser.add_argument('--batch_size', default=64, type=int)
 
   parser.add_argument('--mil', default='attention', type=str)
+  parser.add_argument('--sample_mode', default='all', type=str)
 
   args = parser.parse_args()
   assert args.timestamp is not None

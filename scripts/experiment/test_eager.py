@@ -98,13 +98,13 @@ def run_sample(case_x, model, mcdropout=False,
   if mcdropout:
     yhats = []
     for _ in range(25):
-      yhat = model(tf.constant(case_x), batch_size=32, training=True)
+      yhat = model(tf.constant(case_x), batch_size=batch_size, training=True)
       yhats.append(yhat)
     
     yhats = np.stack(yhats, axis=0)
     yhat  = np.mean( yhats, axis=0)
   else:
-    yhat = model(tf.constant(case_x), training=True, batch_size=32, verbose=False)
+    yhat = model(tf.constant(case_x), training=True, batch_size=batch_size, verbose=False)
 
   return yhat
 

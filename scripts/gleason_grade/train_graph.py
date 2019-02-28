@@ -19,8 +19,7 @@ import argparse
 from milk.utilities import ClassificationDataset
 from milk.classifier import Classifier
 
-sys.path.insert(0, '../experiment')
-from encoder_config import big_encoder_args as encoder_args
+from milk.encoder_config import big_args as encoder_args
 
 def main(args):
   print(args) 

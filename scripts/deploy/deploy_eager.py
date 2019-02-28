@@ -137,7 +137,7 @@ def get_slidelist_from_uids(uids, process_all=True):
 
 def process_slide(svs, model, args, return_z=False):
   n_tiles = len(svs.tile_list)
-  prefetch = min(256, n_tiles)
+  prefetch = min(512, n_tiles)
 
   # Get tensors for image and index -- spin up a new op 
   # that consumes from the iterator
@@ -160,32 +160,82 @@ def process_slide(svs, model, args, return_z=False):
   print('zs: ', zs.shape, zs.dtype)
   print('indices: ', indices.shape)
 
-  z_att, att = model.mil_attention(zs, training=True, verbose=True, return_att=True)
-  yhat = model.apply_classifier(z_att, training=True, verbose=True)
+  if args.mil == 'average':
+    z_mil = tf.reduce_mean(zs, axis=0, keep_dims=True)
+    att = None
+  elif args.mil == 'attention':
+    z_mil, att = model.mil_attention(zs, training=False, verbose=True, return_att=True)
+    att = np.squeeze(att)
+    print('att:', att.shape)
+
+  yhat = model.apply_classifier(z_mil, training=False, verbose=True)
   print('yhat:', yhat)
 
-  att = np.squeeze(att)
-  print('att:', att.shape)
+  # de-reference the iterator maybe?
+  iterator = []
+  del iterator
 
   return yhat, att, indices
 
+"""
+Track attention on an included/not-included basis.
+'sample' argument controls the % of the whole slide to use in each mcdropout iteration
+"""
+# def process_slide_mcdropout(svs, encode_model, args):
+#   yhats = []
+#   atts = np.zeros((len(svs.tile_list), args.mcdropout_t))-1
+#   zs, indices_all = process_slide(svs, encode_model, y_op, att_op, 
+#                               z_pl, args, return_z=True)
+
+#   n_tiles = len(svs.tile_list)
+#   n_sample = int(n_tiles * args.mcdropout_sample)
+#   print('zs:', zs.shape)
+#   print('indices:', indices_all.shape)
+#   for t in range(args.mcdropout_t):
+#     zs_sample = np.random.choice(range(n_tiles), n_sample)
+#     zs_ = zs[zs_sample, :]
+#     indices = indices_all[zs_sample]
+#     print('sampled {} images from z ({})'.format(n_sample, zs_.shape))
+
+#     yhat = sess.run(y_op, feed_dict={z_pl: zs_})
+#     print('yhat:', yhat)
+
+#     att = sess.run(att_op, feed_dict={z_pl: zs_})
+#     att = np.squeeze(att)
+#     print('att:', att.shape)
+
+#     ## Use returned indices to map attentions back to the tiles
+#     att_map = np.zeros(len(svs.tile_list))
+#     att_map[indices] = att
+#     atts[:,t] = att_map
+
+#     yhats.append(yhat)
+
+#   yhats = np.concatenate(yhats, axis=0)
+#   yhat_mean = np.mean(yhats, axis=0, keepdims=True)
+#   yhat_std = np.std(yhats, axis=0, keepdims=True)
+#   print('\tyhat_std:', yhat_std)
+
+#   atts[atts==-1] = np.nan
+#   att_mean = np.nanmean(atts, axis=1, keepdims=True)
+#   att_std  = np.nanstd(atts, axis=1, keepdims=True)
+
+#   return yhat_mean, att_mean, yhat_std, att_std, indices_all
+
+def read_list(test_file):
+  test_list = []
+  with open(test_file, 'r') as f:
+    for l in f:
+      test_list.append(l.replace('\n', ''))
+  
+  return test_list
 
 def main(args):
   # Translate obfuscated file names to paths if necessary
-  test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
-  test_list = read_test_list(test_list)
-  test_unique_ids = [os.path.basename(x).replace('.npy', '') for x in test_list]
-  if args.randomize:
-    np.random.shuffle(test_unique_ids)
-
-  if args.max_slides:
-    test_unique_ids = test_unique_ids[:args.max_slides]
-
-  slide_list, slide_labels = get_slidelist_from_uids(test_unique_ids)
-
+  slide_list = read_list(args.test_list)
   print('Found {} slides'.format(len(slide_list)))
 
-  snapshot = os.path.join(args.savedir, '{}.h5'.format(args.timestamp))
+  # snapshot = os.path.join(args.savedir, '{}.h5'.format(args.timestamp))
   # trained_model = load_model(snapshot)
   # if args.mcdropout:
   #   encoder_args['mcdropout'] = True
@@ -197,12 +247,11 @@ def main(args):
   print('yhat:', yhat.shape)
 
   print('setting model weights')
-  model.load_weights(snapshot, by_name=True)
+  model.load_weights(args.snapshot, by_name=True)
 
   ## Loop over found slides:
   yhats = []
-  ytrues = []
-  for i, (src, lab) in enumerate(zip(slide_list, slide_labels)):
+  for i, src in enumerate(slide_list):
     print('\nSlide {}'.format(i))
     basename = os.path.basename(src).replace('.svs', '')
     fgpth = os.path.join(args.fgdir, '{}_fg.png'.format(basename))
@@ -214,7 +263,7 @@ def main(args):
                   # background_speed  = 'accurate',
                   background_speed  = 'image',
                   background_image  = fgimg,
-                  preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32),
+                  preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32) ,
                   process_mag       = args.mag,
                   process_size      = args.input_dim,
                   oversample_factor = args.oversample,
@@ -225,84 +274,79 @@ def main(args):
       continue
     
     svs.initialize_output(name='attention', dim=1, mode='tile')
-    n_tiles = len(svs.tile_list)
 
+    # if args.mcdropout:
+    #   yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, model, args)
+    # else:
     yhat, att, indices = process_slide(svs, model, args)
-    print('returned attention:', np.min(att), np.max(att), att.shape)
 
-    yhat = yhat.numpy()
     yhats.append(yhat)
-    ytrues.append(lab)
-    print('\tSlide label: {} predicted: {}'.format(lab, yhat))
+    print('\tSlide predicted: {}'.format(yhat))
 
-    svs.place_batch(att, indices, 'attention', mode='tile')
-    attention_img = np.squeeze(svs.output_imgs['attention'])
-    attention_img = attention_img * (1. / attention_img.max())
-    attention_img = draw_attention(attention_img, n_bins=25)
-    print('attention image:', attention_img.shape, 
-          attention_img.dtype, attention_img.min(),
-          attention_img.max())
+    if args.mil == 'average':
+      print('Average MIL; continuing')
+    elif args.mil == 'attention':
+      svs.place_batch(att, indices, 'attention', mode='tile')
+      attention_img = np.squeeze(svs.output_imgs['attention'])
+      attention_img = attention_img * (1. / attention_img.max())
+      attention_img = draw_attention(attention_img, n_bins=50)
+      print('attention image:', attention_img.shape, 
+            attention_img.dtype, attention_img.min(),
+            attention_img.max())
 
-    # dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_att.npy'.format(basename, yhat[0,1]))
-    # np.save(dst, att)
+      dst = os.path.join(args.odir, '{}_att.npy'.format(basename))
+      np.save(dst, att)
 
-    # dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_img.png'.format(basename, yhat[0,1]))
-    # cv2.imwrite(dst, attention_img)
+      dst = os.path.join(args.odir, '{}_img.png'.format(basename))
+      cv2.imwrite(dst, attention_img)
 
-    # dst = os.path.join(args.odir, args.timestamp, '{}_hist.png'.format(basename))
-    # fig.clf()
-    # plt.hist(att, bins=100); 
-    # plt.title('Attention distribution\n{} ({} tiles)'.format(basename, n_tiles))
-    # plt.xlabel('Attention score')
-    # plt.ylabel('Tile count')
-    # plt.savefig(dst, bbox_inches='tight')
+    yhat_dst = os.path.join(args.odir, '{}_ypred.npy'.format(basename))
+    np.save(yhat_dst, yhat)
 
     try:
       svs.close()
       os.remove(ramdisk_path)
+      del svs
     except:
       print('{} already removed'.format(ramdisk_path))
 
-  yhats = np.concatenate(yhats, axis=0)
-  ytrues = np.array(ytrues)
-  acc = (np.argmax(yhats, axis=-1) == ytrues).mean()
-  print(acc)
-
 if __name__ == '__main__':
-  parser = argparse.ArgumentParser()
-  # Required -- no default  
-  parser.add_argument('--timestamp',  default=None, type=str)
+  """
+  for instance:
 
-  # Changed often -- with defaults
+  python deploy_eager.py \
+    --odir tcga-prad \
+    --test_list ./tcga_prad_slides.txt \
+    --snapshot <path> \
+    --fgdir ./tcga-prad-fg
+  """
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--odir',       default=None, type=str)  # Required
+  parser.add_argument('--test_list',  default=None, type=str)  # Required
+  parser.add_argument('--snapshot',   default=None, type=str)  # Required
+  
   parser.add_argument('--mag',        default=5, type=int)
-  parser.add_argument('--odir',       default='attention_images', type=str)
-  parser.add_argument('--fgdir',      default='../usable_area/inference', type=str)
-  parser.add_argument('--savedir',    default='../experiment/save', type=str)
-  parser.add_argument('--testdir',    default='../experiment/test_lists', type=str)
+  parser.add_argument('--fgdir',      default='tcga-prad-fg', type=str)
   parser.add_argument('--ramdisk',    default='/dev/shm', type=str)
   parser.add_argument('--n_classes',  default=2, type=int)
   parser.add_argument('--input_dim',  default=96, type=int)
-  parser.add_argument('--batch_size', default=32, type=int)
-  parser.add_argument('--oversample', default=1.25, type=float)
-
+  parser.add_argument('--batch_size', default=64, type=int)
+  parser.add_argument('--oversample', default=1.1, type=float)
   parser.add_argument('--randomize',  default=False, action='store_true')
-  parser.add_argument('--max_slides',  default=None, type=int)
+  parser.add_argument('--overwrite',  default=False, action='store_true')
 
   parser.add_argument('--mil',        default='attention', type=str)
-  # parser.add_argument('--mcdropout',  default=False, action='store_true')
-  # parser.add_argument('--mcdropout_t', default=25, type=int)
-  parser.add_argument('--deep_classifier', default=True, action='store_true')
-  parser.add_argument('--gated_attention', default=True, action='store_false')
+  parser.add_argument('--mcdropout',  default=False, action='store_true')
+  parser.add_argument('--mcdropout_t', default=25, type=int)
+  parser.add_argument('--deep_classifier', default=True, action='store_false') ## almost-always True
+  parser.add_argument('--gated_attention', default=True, action='store_false') ## almost-always True
   parser.add_argument('--mcdropout_sample', default=0.25, type=int)
   args = parser.parse_args()
 
-  if not os.path.exists(os.path.join(args.odir, args.timestamp)):
-    os.makedirs(os.path.join(args.odir, args.timestamp))
-  assert args.timestamp is not None
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth = True
+  tf.enable_eager_execution(config=config)
 
-  # config = tf.ConfigProto()
-  # config.gpu_options.allow_growth = True
-  tf.enable_eager_execution()
-
+  # with tf.Session(config=config) as sess:
   main(args)
     

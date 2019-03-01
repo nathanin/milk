@@ -18,7 +18,7 @@ from sklearn.metrics import (roc_auc_score, roc_curve,
 from milk.utilities import data_utils
 from milk.utilities import model_utils
 from milk.utilities import training_utils
-from milk.utilities.evaluate import eval_suite
+#from milk.utilities import evaluate
 from milk.eager import MilkEager
 
 with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
@@ -106,6 +106,7 @@ def run_sample(case_x, model, mcdropout=False,
     yhat  = np.mean( yhats, axis=0)
   else:
     yhat = model(tf.constant(case_x), training=True, batch_size=batch_size, verbose=False)
+    yhat = yhat.numpy()
 
   return yhat
 

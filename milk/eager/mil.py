@@ -40,9 +40,9 @@ class MilkEager(tf.keras.Model):
     else:
       depth=1
 
-    # self.classifier_dropout_0 = Dropout(rate = 0.3)
+    self.classifier_dropout_0 = Dropout(rate = 0.3)
     # self.classifier_dropout_1 = Dropout(rate = 0.3)
-    # self.classifier_bn = BatchNormalization(trainable=True) # Is this how we make it invariant to bag size?
+    self.classifier_bn = BatchNormalization(trainable=True, axis=-1) # Is this how we make it invariant to bag size?
     for i in range(depth):
       self.classifier_layers.append(
         Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
@@ -125,17 +125,13 @@ class MilkEager(tf.keras.Model):
       return z
 
   def apply_classifier(self, features, verbose=False, training=True):
-    # features = self.classifier_bn(features, training=training)
-    # features = self.classifier_dropout_0(features, training=training)
+    features = self.classifier_bn(features, training=training)
+    features = self.classifier_dropout_0(features, training=training)
     for layer in self.classifier_layers:
       features = layer(features)
 
     # features = self.classifier_dropout_1(features, training=training)
-    if verbose:
-      print('features - ff:', features.shape)
     yhat = self.classifier(features)
-    if verbose:
-      print('yhat:', yhat.shape)
     return yhat
 
   #@tf.contrib.eager.defun

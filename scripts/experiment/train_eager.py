@@ -230,9 +230,9 @@ def main(args):
       pad_first_dim=False)
 
   train_dataset = data_utils.tf_dataset(train_generator, batch_size=args.batch_size, 
-    preprocess_fn=transform_fn, buffer_size=100, iterator=True)
+    preprocess_fn=transform_fn, buffer_size=512, threads=8, iterator=True)
   val_dataset = data_utils.tf_dataset(val_generator, batch_size=args.batch_size, 
-    preprocess_fn=transform_fn, buffer_size=100, iterator=True)
+    preprocess_fn=transform_fn, buffer_size=512, threads=8, iterator=True)
 
   print('Testing batch generator')
   ## Some api change between nightly built TF and R1.5
@@ -275,7 +275,7 @@ def main(args):
     for a in vars(args):
       f.write('{}\t{}\n'.format(a, getattr(args, a)))
 
-  # API BUG Keras optimizer has no attribute `apply_gradients`
+  # API Keras optimizer has no attribute `apply_gradients`
   # optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
   model.summary()
 
@@ -294,14 +294,15 @@ def main(args):
 
   accumulator = GradientAccumulator(n = args.accumulate)
 
-  avglosses = []
+  avglosses, steptimes = [], []
   # trainable_variables = [v for v in model.variables if 'batch_normalization' not in v.name]
-  trainable_variables = model.variables
+  trainable_variables = model.trainable_variables
   try:
     for epc in range(args.epochs):
       optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate/(epc+1))
       # accumulator_n = 0
       for k in range(args.steps_per_epoch):
+        tstart = time.time()
         with tf.GradientTape() as tape:
           x, y = next(train_dataset)
           yhat = model(tf.constant(x), batch_size=32, training=True)
@@ -310,13 +311,16 @@ def main(args):
 
         grads = tape.gradient(loss, trainable_variables)
         should_update = accumulator.track(grads, trainable_variables)
+
+        tend = time.time()
+        steptimes.append(tend - tstart)
         if should_update:
           grads = accumulator.accumualte()
           optimizer.apply_gradients(zip(grads, trainable_variables))
 
         if k % 100 == 0:
-          print('{:06d}: loss={:3.5f}'.format(k, np.mean(avglosses)))
-          avglosses = []
+          print('{:06d}: loss={:3.5f} dt={:3.3f}s'.format(k, np.mean(avglosses), np.mean(steptimes)))
+          avglosses, steptimes = [], []
           for y_, yh_ in zip(y, yhat):
             print('\t{} {}'.format(y_, yh_))
 

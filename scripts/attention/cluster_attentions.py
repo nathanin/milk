@@ -46,8 +46,8 @@ def read_test_list(test_file):
 def get_attention_extremes(attention, case_x, n=5):
   attention = np.squeeze(attention)
   att_sorted_idx = np.argsort(attention)
-  top_att = np.random.choice(att_sorted_idx[-7*n:], n)
-  low_att = np.random.choice(att_sorted_idx[:7*n], n)
+  top_att = np.random.choice(att_sorted_idx[-2*n:], n)
+  low_att = np.random.choice(att_sorted_idx[:2*n], n)
   # top_att = np.random.choice(att_sorted_idx, n)
   high_att_idx = np.zeros_like(attention, dtype=np.bool)
   high_att_idx[top_att] = 1
@@ -100,11 +100,8 @@ def inset_images(ax, z, att_index, images, edgecolor='k', rho_delta = 10):
     ax.add_artist(ab)
   return ax
 
-def draw_projection_with_images(z, attentions, 
-    high_attention,
-    high_attention_images,
-    low_attention,
-    low_attention_images,
+def draw_projection_with_images(z, attentions, high_attention,
+    high_attention_images, low_attention, low_attention_images,
     savepath=None):
 
   ofs_radius = 10
@@ -219,8 +216,8 @@ def draw_class_projection(features, ytrue, yhat, savepath=None):
 def main(args):
   transform_fn = data_utils.make_transform_fn(128, 128, args.input_dim, 1.0, normalize=True)
 
-  snapshot = os.path.join('../experiment/save', '{}.h5'.format(args.timestamp))
-  test_list = os.path.join('../experiment/test_lists', '{}.txt'.format(args.timestamp))
+  snapshot = os.path.join(args.snapshot_dir, '{}.h5'.format(args.timestamp))
+  test_list = os.path.join(args.test_list_dir, '{}.txt'.format(args.timestamp))
 
   encoder_args = get_encoder_args(args.encoder)
   model = MilkEager(encoder_args=encoder_args, 
@@ -254,9 +251,9 @@ def main(args):
       case_x = case_x[np.random.choice(range(case_x.shape[0]), args.sample), ...]
       print(case_x.shape)
 
-    features = model.encode_bag(case_x, batch_size=args.batch_size, training=True, return_z=True)
+    features = model.encode_bag(case_x, batch_size=args.batch_size, training=False, return_z=True)
     print('features:', features.shape)
-    features_att, attention = model.mil_attention(features, return_raw_att=True, training=False)
+    features_att, attention = model.mil_attention(features, return_att=True, training=False)
     print('features:', features_att.shape, 'attention:', attention.shape)
 
     features_avg = np.mean(features, axis=0, keepdims=True)
@@ -282,7 +279,7 @@ def main(args):
 
     savepath = os.path.join(savebase, '{}_{:3.2f}_ys.png'.format(case_name, yhat[0,1]))
     print('Saving figure {}'.format(savepath))
-    draw_projection_with_images(z, yhat_instances[:,1], 
+    draw_projection_with_images(z, yhat_instances[:,1].numpy(), 
       high_att_idx, high_att_imgs, 
       low_att_idx, low_att_imgs, 
       savepath=savepath)
@@ -313,6 +310,9 @@ if __name__ == '__main__':
   parser.add_argument('--timestamp', type=str)
   parser.add_argument('--encoder', default='big', type=str)
   parser.add_argument('--temperature', default=1., type=float)
+
+  parser.add_argument('--snapshot_dir', default='../experiment/save', type=str)
+  parser.add_argument('--test_list_dir', default='../experiment/test_lists', type=str)
 
   parser.add_argument('--repeats', default=1, type=int)
   parser.add_argument('--feature_base', default='features/milk', type=str)

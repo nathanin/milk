@@ -18,12 +18,13 @@ from sklearn.metrics import (roc_auc_score, roc_curve,
 from milk.utilities import data_utils
 from milk.utilities import model_utils
 from milk.utilities import training_utils
+from milk.utilities.evaluate import eval_suite
 from milk.eager import MilkEager
 
 with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
   case_dict = pickle.load(f)
 
-from milk.encoder_config import big_args as encoder_args
+from milk.encoder_config import get_encoder_args
 
 def case_label_fn(data_path):
   case = os.path.splitext(os.path.basename(data_path))[0]
@@ -119,11 +120,15 @@ def main(args):
   snapshot = 'save/{}.h5'.format(args.timestamp)
   # trained_model = load_model(snapshot)
 
+  encoder_args = get_encoder_args(args.encoder)
   if args.mcdropout:
     encoder_args['mcdropout'] = True
 
   print('Model initializing')
-  model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=args.deep_classifier )
+  model = MilkEager(encoder_args = encoder_args, 
+                    mil_type = args.mil, 
+                    deep_classifier = args.deep_classifier,
+                    temperature = args.temperature)
   # model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=False )
   xdummy = tf.zeros((1, args.batch_size, args.x_size, args.y_size, 3))
   ydummy = model(xdummy)
@@ -190,6 +195,8 @@ if __name__ == '__main__':
   parser.add_argument('--odir', default=None, type=str)
 
   parser.add_argument('--deep_classifier', default=True, action='store_false')
+  parser.add_argument('--temperature', default=1., type=float)
+  parser.add_argument('--encoder', default='big', type=str)
 
   parser.add_argument('--x_size', default=128, type=int)
   parser.add_argument('--y_size', default=128, type=int)

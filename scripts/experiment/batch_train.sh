@@ -7,7 +7,7 @@ epochs=100
 bag=50
 lr=0.0001
 pretrained=../gleason_grade/gleason_grade_big_model.h5
-batch=1
+batch=4
 encoder=shallow
 
 # Without pretraining; with attention
@@ -23,7 +23,7 @@ for i in `seq 1 3`; do
         --dont_use_pretrained \
         --early_stop \
         --seed $i \
-        --accumulate 10 \
-        --temperature 0.1 \
+        --accumulate 5 \
+        --temperature 0.5 \
         --encoder $encoder
 done

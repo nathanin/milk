@@ -30,7 +30,7 @@ from milk.utilities import model_utils
 from milk.utilities import training_utils
 
 from milk.eager import MilkEager
-from milk.encoder_config import big_args as encoder_args
+from milk.encoder_config import get_encoder_args
 
 with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
   case_dict = pickle.load(f)
@@ -222,7 +222,11 @@ def main(args):
   snapshot = os.path.join('../experiment/save', '{}.h5'.format(args.timestamp))
   test_list = os.path.join('../experiment/test_lists', '{}.txt'.format(args.timestamp))
 
-  model = MilkEager( encoder_args=encoder_args , deep_classifier=True)
+  encoder_args = get_encoder_args(args.encoder)
+  model = MilkEager(encoder_args=encoder_args, 
+                    deep_classifier=True, 
+                    temperature=args.temperature)
+
   x_dummy = tf.zeros(shape=[1, args.batch_size, args.input_dim, args.input_dim, 3], dtype=tf.float32)
   retvals = model(x_dummy, verbose=True)
   model.load_weights(snapshot, by_name=True)
@@ -307,6 +311,9 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   
   parser.add_argument('--timestamp', type=str)
+  parser.add_argument('--encoder', default='big', type=str)
+  parser.add_argument('--temperature', default=1., type=float)
+
   parser.add_argument('--repeats', default=1, type=int)
   parser.add_argument('--feature_base', default='features/milk', type=str)
   parser.add_argument('--odir', default='projection', type=str)

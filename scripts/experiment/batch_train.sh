@@ -7,7 +7,7 @@ epochs=100
 bag=50
 lr=0.0001
 pretrained=../gleason_grade/gleason_grade_big_model.h5
-batch=3
+batch=4
 encoder=shallow
 
 # Without pretraining; with attention

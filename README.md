@@ -130,7 +130,15 @@ Structure
 ```
 
 #### Requirements
-Please refer to `requirements.txt`
+In particular,
+```
+opencv-python
+numpy
+scipy
+tensorflow-gpu >= 1.12
+MulticoreTSNE
+```
+Please refer to `requirements.txt` for the full environment specification.
 
 #### Setup
 ```

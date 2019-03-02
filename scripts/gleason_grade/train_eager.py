@@ -14,7 +14,7 @@ from milk.utilities import training_utils
 
 from tensorflow.keras.layers import Input
 
-from milk.encoder_config import deep_args as encoder_args
+from milk.encoder_config import get_encoder_args
 
 def main(args):
   print(args) 
@@ -46,6 +46,7 @@ def main(args):
   # logits = ClassifierEager(encoder_args=encoder_args, n_classes=args.n_classes)(input_tensor)
   # model = tf.keras.Model(inputs=input_tensor, outputs=logits)
 
+  encoder_args = get_encoder_args(args.encoder)
   model = ClassifierEager(encoder_args=encoder_args, n_classes=args.n_classes)
   yhat = model(batchx, training=True, verbose=True)
   print('yhat: ', yhat.get_shape())
@@ -93,8 +94,8 @@ def main(args):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--batch_size', default=64, type=int)
-  parser.add_argument('--epochs', default=200, type=int)
-  parser.add_argument('--steps_per_epoch', default=2000, type=int)
+  parser.add_argument('--epochs', default=50, type=int)
+  parser.add_argument('--steps_per_epoch', default=1000, type=int)
   parser.add_argument('--learning_rate', default=1e-4, type=float)
   parser.add_argument('--saveto', default='eager_classifier.h5')
 
@@ -106,12 +107,12 @@ if __name__ == '__main__':
   parser.add_argument('--downsample', default=0.25, type=float)
   parser.add_argument('--image_channels', default=3, type=int)
   parser.add_argument('--shuffle_buffer', default=512, type=int)
-  parser.add_argument('--prefetch_buffer', default=1024, type=int)
+  parser.add_argument('--prefetch_buffer', default=2048, type=int)
   parser.add_argument('--device', default='/gpu:0', type=str)
   parser.add_argument('--device_buffer', default=64, type=int)
 
   parser.add_argument('--snapshot', default=None, type=str)
-
+  parser.add_argument('--encoder', default='big', type=str)
 
   args = parser.parse_args()
 

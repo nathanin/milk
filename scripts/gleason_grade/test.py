@@ -106,7 +106,9 @@ def main(args, sess):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--test_data', default='../dataset/gleason_grade_val_ext.tfrecord', type=str)
-  parser.add_argument('--snapshot', default='./gleason_classifier_deep.h5', type=str)
+  parser.add_argument('--snapshot', default='./gleason_grade_big/gleason_classifier_big.h5', type=str)
+  parser.add_argument('--encoder', default='big', type=str)
+
   parser.add_argument('--n_classes', default=5, type=int)
   parser.add_argument('--input_dim', default=96, type=int)
   parser.add_argument('--downsample', default=0.25, type=float)

@@ -12,7 +12,7 @@ from .encoder import make_encoder_eager
 from milk.utilities.model_utils import lr_mult
 
 class MilkEager(tf.keras.Model):
-  def __init__(self, z_dim=256, encoder_args=None, mil_type='attention', deep_classifier=True, temperature=1):
+  def __init__(self, z_dim=256, encoder_args=None, cls_normalize=True, mil_type='attention', deep_classifier=True, temperature=1):
 
     super(MilkEager, self).__init__()
 
@@ -21,6 +21,7 @@ class MilkEager(tf.keras.Model):
     self.mil_type = mil_type
     self.built_fn = False
     self.temperature = temperature
+    self.cls_normalize = cls_normalize
 
     self.densenet = make_encoder_eager( encoder_args = encoder_args )
     self.drop2  = Dropout(rate=0.3)
@@ -40,9 +41,11 @@ class MilkEager(tf.keras.Model):
     else:
       depth=1
 
-    self.classifier_dropout_0 = Dropout(rate = 0.3)
-    # self.classifier_dropout_1 = Dropout(rate = 0.3)
-    self.classifier_bn = BatchNormalization(trainable=True, axis=-1) # Is this how we make it invariant to bag size?
+    if self.cls_normalize:
+      self.classifier_dropout_0 = Dropout(rate = 0.3)
+      # self.classifier_dropout_1 = Dropout(rate = 0.3)
+      self.classifier_bn = BatchNormalization(trainable=True, axis=-1) # Is this how we make it invariant to bag size?
+
     for i in range(depth):
       self.classifier_layers.append(
         Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
@@ -125,8 +128,9 @@ class MilkEager(tf.keras.Model):
       return z
 
   def apply_classifier(self, features, verbose=False, training=True):
-    features = self.classifier_bn(features, training=training)
-    features = self.classifier_dropout_0(features, training=training)
+    if self.cls_normalize:
+      features = self.classifier_bn(features, training=training)
+      features = self.classifier_dropout_0(features, training=training)
     for layer in self.classifier_layers:
       features = layer(features)
 

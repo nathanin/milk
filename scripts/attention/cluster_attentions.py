@@ -222,7 +222,8 @@ def main(args):
   encoder_args = get_encoder_args(args.encoder)
   model = MilkEager(encoder_args=encoder_args, 
                     deep_classifier=True, 
-                    temperature=args.temperature)
+                    temperature=args.temperature,
+                    cls_normalize=args.cls_normalize)
 
   x_dummy = tf.zeros(shape=[1, args.batch_size, args.input_dim, args.input_dim, 3], dtype=tf.float32)
   retvals = model(x_dummy, verbose=True)
@@ -251,7 +252,7 @@ def main(args):
       case_x = case_x[np.random.choice(range(case_x.shape[0]), args.sample), ...]
       print(case_x.shape)
 
-    features = model.encode_bag(case_x, batch_size=args.batch_size, training=False, return_z=True)
+    features = model.encode_bag(case_x, batch_size=args.batch_size, training=True, return_z=True)
     print('features:', features.shape)
     features_att, attention = model.mil_attention(features, return_att=True, training=False)
     print('features:', features_att.shape, 'attention:', attention.shape)
@@ -277,12 +278,12 @@ def main(args):
     print('Saving figure {}'.format(savepath))
     z = draw_projection(features, features_avg, features_att, attention, savepath=savepath)
 
-    savepath = os.path.join(savebase, '{}_{:3.2f}_ys.png'.format(case_name, yhat[0,1]))
-    print('Saving figure {}'.format(savepath))
-    draw_projection_with_images(z, yhat_instances[:,1].numpy(), 
-      high_att_idx, high_att_imgs, 
-      low_att_idx, low_att_imgs, 
-      savepath=savepath)
+    # savepath = os.path.join(savebase, '{}_{:3.2f}_ys.png'.format(case_name, yhat[0,1]))
+    # print('Saving figure {}'.format(savepath))
+    # draw_projection_with_images(z, yhat_instances[:,1].numpy(), 
+    #   high_att_idx, high_att_imgs, 
+    #   low_att_idx, low_att_imgs, 
+    #   savepath=savepath)
 
     savepath = os.path.join(savebase, '{}_{:3.2f}_imgs.png'.format(case_name, yhat[0,1]))
     print('Saving figure {}'.format(savepath))
@@ -310,6 +311,7 @@ if __name__ == '__main__':
   parser.add_argument('--timestamp', type=str)
   parser.add_argument('--encoder', default='big', type=str)
   parser.add_argument('--temperature', default=1., type=float)
+  parser.add_argument('--cls_normalize', default=True, type=bool)
 
   parser.add_argument('--snapshot_dir', default='../experiment/save', type=str)
   parser.add_argument('--test_list_dir', default='../experiment/test_lists', type=str)

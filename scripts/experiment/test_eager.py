@@ -129,6 +129,7 @@ def main(args):
   model = MilkEager(encoder_args = encoder_args, 
                     mil_type = args.mil, 
                     deep_classifier = args.deep_classifier,
+                    cls_normalize = args.cls_normalize, 
                     temperature = args.temperature)
   # model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=False )
   xdummy = tf.zeros((1, args.batch_size, args.x_size, args.y_size, 3))
@@ -190,12 +191,13 @@ if __name__ == '__main__':
   # mcdropout is a flag for doing mcdropout to approximate posterior probability
   parser = argparse.ArgumentParser()
   parser.add_argument('--timestamp', default=None, type=str)
-  parser.add_argument('--n_repeat', default=1, type=int)
   parser.add_argument('--mcdropout', default=False, action='store_true')
+  parser.add_argument('--n_repeat', default=1, type=int)
   parser.add_argument('--testdir', default='test_lists', type=str)
   parser.add_argument('--odir', default=None, type=str)
 
   parser.add_argument('--deep_classifier', default=True, action='store_false')
+  parser.add_argument('--cls_normalize', default=True, type=bool)
   parser.add_argument('--temperature', default=1., type=float)
   parser.add_argument('--encoder', default='big', type=str)
 

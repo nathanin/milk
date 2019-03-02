@@ -149,7 +149,7 @@ def process_slide(svs, model, args, return_z=False):
   print('Processing {} tiles'.format(n_tiles))
   for imgs, idx_ in iterator:
     batches += 1
-    z = model.encode_bag(imgs, batch_size=args.batch_size, training=True, return_z=True)
+    z = model.encode_bag(imgs, batch_size=args.batch_size, training=False, return_z=True)
     zs.append(z)
     indices.append(idx_)
     if batches % 10 == 0:
@@ -160,8 +160,8 @@ def process_slide(svs, model, args, return_z=False):
   print('zs: ', zs.shape, zs.dtype)
   print('indices: ', indices.shape)
 
-  z_att, att = model.mil_attention(zs, training=True, verbose=True, return_att=True)
-  yhat = model.apply_classifier(z_att, training=True, verbose=True)
+  z_att, att = model.mil_attention(zs, training=False, verbose=True, return_att=True)
+  yhat = model.apply_classifier(z_att, training=False, verbose=True)
   print('yhat:', yhat)
 
   att = np.squeeze(att)
@@ -290,6 +290,7 @@ if __name__ == '__main__':
   parser.add_argument('--deep_classifier', default=True, action='store_true')
   parser.add_argument('--encoder', default='big', type=str)
   parser.add_argument('--temperature', default=1., type=float)
+  parser.add_argument('--cls_normalize', default=True, type=bool)
   parser.add_argument('--gated_attention', default=True, action='store_false')
   parser.add_argument('--mcdropout_sample', default=0.25, type=int)
   args = parser.parse_args()

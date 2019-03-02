@@ -14,7 +14,7 @@ from milk.utilities import training_utils
 
 from tensorflow.keras.layers import Input
 
-from milk.encoder_config import deep_args as encoder_args
+from milk.encoder_config import get_encoder_args
 
 def main(args):
   print(args) 
@@ -46,6 +46,7 @@ def main(args):
   # logits = ClassifierEager(encoder_args=encoder_args, n_classes=args.n_classes)(input_tensor)
   # model = tf.keras.Model(inputs=input_tensor, outputs=logits)
 
+  encoder_args = get_encoder_args(args.encoder)
   model = ClassifierEager(encoder_args=encoder_args, n_classes=args.n_classes)
   yhat = model(batchx, training=True, verbose=True)
   print('yhat: ', yhat.get_shape())
@@ -97,6 +98,7 @@ if __name__ == '__main__':
   parser.add_argument('--steps_per_epoch', default=2000, type=int)
   parser.add_argument('--learning_rate', default=1e-4, type=float)
   parser.add_argument('--saveto', default='eager_classifier.h5')
+  parser.add_argument('--encoder', default='big', type=str)
 
   # Usually don't change these
   parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.75pct.tfrecord')

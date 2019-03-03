@@ -5,6 +5,7 @@ from __future__ import print_function
 import tensorflow as tf
 
 from tensorflow.keras.layers import (Dense, Dropout, BatchNormalization)
+# from tensorflow.layers import BatchNormalization
 
 from .densenet import DenseNetEager
 from .encoder import make_encoder_eager
@@ -42,9 +43,10 @@ class MilkEager(tf.keras.Model):
       depth=1
 
     if self.cls_normalize:
+      print('Setting up classifier normalizing layers')
       self.classifier_dropout_0 = Dropout(rate = 0.3)
       # self.classifier_dropout_1 = Dropout(rate = 0.3)
-      #self.classifier_bn = BatchNormalization(trainable=True, axis=-1) # Is this how we make it invariant to bag size?
+      # self.classifier_bn = BatchNormalization(momentum=0.99, axis=-1) # Is this how we make it invariant to bag size?
 
     for i in range(depth):
       self.classifier_layers.append(
@@ -129,7 +131,7 @@ class MilkEager(tf.keras.Model):
 
   def apply_classifier(self, features, verbose=False, training=True):
     if self.cls_normalize:
-      #features = self.classifier_bn(features, training=training)
+      # features = self.classifier_bn(features, training=training)
       features = self.classifier_dropout_0(features, training=training)
     for layer in self.classifier_layers:
       features = layer(features)

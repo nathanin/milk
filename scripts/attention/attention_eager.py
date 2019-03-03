@@ -50,7 +50,7 @@ from milk.eager import MilkEager
 uid2label = pickle.load(open('../dataset/cases_md5.pkl', 'rb'))
 uid2slide = pickle.load(open('../dataset/uid2slide.pkl', 'rb'))
 
-from milk.encoder_config import big_args as encoder_args
+from milk.encoder_config import get_encoder_args
 
 def get_wrapped_fn(svs):
   def wrapped_fn(idx):
@@ -149,7 +149,7 @@ def process_slide(svs, model, args, return_z=False):
   print('Processing {} tiles'.format(n_tiles))
   for imgs, idx_ in iterator:
     batches += 1
-    z = model.encode_bag(imgs, batch_size=args.batch_size, training=True, return_z=True)
+    z = model.encode_bag(imgs, batch_size=args.batch_size, training=False, return_z=True)
     zs.append(z)
     indices.append(idx_)
     if batches % 10 == 0:
@@ -160,8 +160,8 @@ def process_slide(svs, model, args, return_z=False):
   print('zs: ', zs.shape, zs.dtype)
   print('indices: ', indices.shape)
 
-  z_att, att = model.mil_attention(zs, training=True, verbose=True, return_att=True)
-  yhat = model.apply_classifier(z_att, training=True, verbose=True)
+  z_att, att = model.mil_attention(zs, training=False, verbose=True, return_att=True)
+  yhat = model.apply_classifier(z_att, training=False, verbose=True)
   print('yhat:', yhat)
 
   att = np.squeeze(att)
@@ -190,7 +190,11 @@ def main(args):
   # if args.mcdropout:
   #   encoder_args['mcdropout'] = True
 
-  model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=args.deep_classifier )
+  encoder_args = get_encoder_args(args.encoder)
+  model = MilkEager(encoder_args=encoder_args,
+                    mil_type=args.mil, 
+                    deep_classifier=args.deep_classifier,
+                    temperature=args.temperature)
 
   x_pl = np.zeros((1, args.batch_size, args.input_dim, args.input_dim, 3), dtype=np.float32)
   yhat = model(tf.constant(x_pl), verbose=True)
@@ -243,19 +247,11 @@ def main(args):
           attention_img.dtype, attention_img.min(),
           attention_img.max())
 
-    # dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_att.npy'.format(basename, yhat[0,1]))
-    # np.save(dst, att)
+    dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_att.npy'.format(basename, yhat[0,1]))
+    np.save(dst, att)
 
-    # dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_img.png'.format(basename, yhat[0,1]))
-    # cv2.imwrite(dst, attention_img)
-
-    # dst = os.path.join(args.odir, args.timestamp, '{}_hist.png'.format(basename))
-    # fig.clf()
-    # plt.hist(att, bins=100); 
-    # plt.title('Attention distribution\n{} ({} tiles)'.format(basename, n_tiles))
-    # plt.xlabel('Attention score')
-    # plt.ylabel('Tile count')
-    # plt.savefig(dst, bbox_inches='tight')
+    dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_img.png'.format(basename, yhat[0,1]))
+    cv2.imwrite(dst, attention_img)
 
     try:
       svs.close()
@@ -292,6 +288,9 @@ if __name__ == '__main__':
   # parser.add_argument('--mcdropout',  default=False, action='store_true')
   # parser.add_argument('--mcdropout_t', default=25, type=int)
   parser.add_argument('--deep_classifier', default=True, action='store_true')
+  parser.add_argument('--encoder', default='big', type=str)
+  parser.add_argument('--temperature', default=1., type=float)
+  parser.add_argument('--cls_normalize', default=True, type=bool)
   parser.add_argument('--gated_attention', default=True, action='store_false')
   parser.add_argument('--mcdropout_sample', default=0.25, type=int)
   args = parser.parse_args()

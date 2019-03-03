@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Run all of the experiments, one at a time.
 set -e
 steps=2500
@@ -34,7 +32,7 @@ for i in `seq 1 3`; do
         --batch_size $batch \
         --epochs $epochs \
         --bag_size $bag \
-        --mil attention \
+        --mil average \
         --deep_classifier \
         --learning_rate $lr \
         --pretrained $pretrained \
@@ -42,6 +40,22 @@ for i in `seq 1 3`; do
         --seed $i \
         --accumulate 10 \
         --temperature 0.5 \
-        --encoder $encoder \
-        --freeze_encoder
+        --encoder $encoder
+done
+
+for i in `seq 1 3`; do
+    python train_eager.py \
+        --steps_per_epoch $steps \
+        --batch_size $batch \
+        --epochs $epochs \
+        --bag_size $bag \
+        --mil instance \
+        --deep_classifier \
+        --learning_rate $lr \
+        --pretrained $pretrained \
+        --early_stop \
+        --seed $i \
+        --accumulate 10 \
+        --temperature 0.5 \
+        --encoder $encoder
 done

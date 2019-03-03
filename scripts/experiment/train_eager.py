@@ -68,7 +68,7 @@ def val_step(model, val_generator, batch_size=8, steps=50):
   losses = np.zeros(steps)
   for k in range(steps):
     x, y = next(val_generator)
-    yhat = model(x, batch_size=batch_size, training=True)
+    yhat = model(x, batch_size=batch_size, training=False)
     loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, tf.float32), y_pred=yhat)
     losses[k] = np.mean(loss)
 
@@ -167,6 +167,12 @@ class GradientAccumulator():
     self.grads_and_vars = collections.defaultdict(list)
     self.grad_counter = 0
 
+def eval_acc(ytrue, yhat):
+  ytrue_max = np.argmax(ytrue, axis=-1)
+  yhat_max = np.argmax(yhat, axis=-1)
+  acc = (ytrue_max == yhat_max).mean()
+  return acc
+
 def main(args):
   """ 
   1. Create generator datasets from the provided lists
@@ -230,9 +236,9 @@ def main(args):
       pad_first_dim=False)
 
   train_dataset = data_utils.tf_dataset(train_generator, batch_size=args.batch_size, 
-    preprocess_fn=transform_fn, buffer_size=100, iterator=True)
+    preprocess_fn=transform_fn, buffer_size=512, threads=8, iterator=True)
   val_dataset = data_utils.tf_dataset(val_generator, batch_size=args.batch_size, 
-    preprocess_fn=transform_fn, buffer_size=100, iterator=True)
+    preprocess_fn=transform_fn, buffer_size=512, threads=8, iterator=True)
 
   print('Testing batch generator')
   ## Some api change between nightly built TF and R1.5
@@ -243,7 +249,8 @@ def main(args):
   #with tf.device('/gpu:0'): 
   print('Model initializing')
   encoder_args = get_encoder_args(args.encoder)
-  model = MilkEager(encoder_args=encoder_args, mil_type=args.mil,
+  model = MilkEager(encoder_args=encoder_args, 
+                    mil_type=args.mil,
                     deep_classifier=args.deep_classifier,
                     temperature=args.temperature)
   #model.build_encode_fn(training=True, verbose=False, batch_size=64)
@@ -275,7 +282,7 @@ def main(args):
     for a in vars(args):
       f.write('{}\t{}\n'.format(a, getattr(args, a)))
 
-  # API BUG Keras optimizer has no attribute `apply_gradients`
+  # API Keras optimizer has no attribute `apply_gradients`
   # optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
   model.summary()
 
@@ -294,29 +301,40 @@ def main(args):
 
   accumulator = GradientAccumulator(n = args.accumulate)
 
-  avglosses = []
+  losstracker, acctracker, steptracker, avglosses, steptimes = [], [], [], [], []
   # trainable_variables = [v for v in model.variables if 'batch_normalization' not in v.name]
-  trainable_variables = model.variables
+  trainable_variables = model.trainable_variables
+  totalsteps = 0
   try:
     for epc in range(args.epochs):
       optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate/(epc+1))
-      # accumulator_n = 0
       for k in range(args.steps_per_epoch):
+        totalsteps += 1
+        tstart = time.time()
         with tf.GradientTape() as tape:
           x, y = next(train_dataset)
           yhat = model(tf.constant(x), batch_size=32, training=True)
           loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
-          avglosses.append(np.mean(loss))
+
+        loss_mn = np.mean(loss)
+        acc = eval_acc(y, yhat)
+        avglosses.append(loss_mn)
+        losstracker.append(loss_mn)
+        acctracker.append(acc)
+        steptracker.append(totalsteps)
 
         grads = tape.gradient(loss, trainable_variables)
         should_update = accumulator.track(grads, trainable_variables)
+
+        tend = time.time()
+        steptimes.append(tend - tstart)
         if should_update:
           grads = accumulator.accumualte()
           optimizer.apply_gradients(zip(grads, trainable_variables))
 
         if k % 100 == 0:
-          print('{:06d}: loss={:3.5f}'.format(k, np.mean(avglosses)))
-          avglosses = []
+          print('{:06d}: loss={:3.5f} dt={:3.3f}s'.format(k, np.mean(avglosses), np.mean(steptimes)))
+          avglosses, steptimes = [], []
           for y_, yh_ in zip(y, yhat):
             print('\t{} {}'.format(y_, yh_))
 
@@ -340,6 +358,12 @@ def main(args):
     print('Training done. Find val and test datasets at')
     print(val_list_file)
     print(test_list_file)
+
+    # Save the loss profile
+    training_stats = os.path.join('save', '{}_training_curves.txt'.format(exptime_str))
+    with open(training_stats, 'w+') as f:
+      for l, a, s in zip(losstracker, acctracker, steptracker):
+        f.write('{:06d}\t{:3.5f}\t{:3.5f}\n'.format(s, l, a))
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()

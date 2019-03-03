@@ -228,10 +228,11 @@ def tf_dataset(generator, preprocess_fn=lambda x: x, batch_size=1, buffer_size=2
     return x, y
 
   dataset = tf.data.Dataset.from_generator(generator, output_types=(tf.float32, tf.float32))
-  dataset = dataset.map(map_fn, num_parallel_calls=threads)
-  dataset = dataset.prefetch(buffer_size)
-  dataset = dataset.batch(batch_size)
-  dataset = dataset.apply(tf.data.experimental.prefetch_to_device('/gpu:0'))
+  dataset = dataset.apply(tf.data.experimental.map_and_batch(map_func=map_fn, batch_size=batch_size))
+  #dataset = dataset.map(map_fn, num_parallel_calls=threads)
+  #dataset = dataset.batch(batch_size)
+  dataset = dataset.prefetch(1)
+  #dataset = dataset.apply(tf.data.experimental.prefetch_to_device('/gpu:0', buffer_size=16))
 
   if iterator:
     #dataset = tf.contrib.eager.Iterator(dataset)

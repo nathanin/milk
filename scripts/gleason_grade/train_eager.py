@@ -98,6 +98,7 @@ if __name__ == '__main__':
   parser.add_argument('--steps_per_epoch', default=1000, type=int)
   parser.add_argument('--learning_rate', default=1e-4, type=float)
   parser.add_argument('--saveto', default='eager_classifier.h5')
+  parser.add_argument('--encoder', default='big', type=str)
 
   # Usually don't change these
   parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.75pct.tfrecord')

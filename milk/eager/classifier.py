@@ -9,7 +9,7 @@ from .encoder import make_encoder_eager
 
 class ClassifierEager(tf.keras.Model):
   def __init__(self, n_classes = 5, deep_classifier=True, hidden_dim=256, 
-               encoder_args=None, drop_rate=0.2):
+               encoder_args=None, drop_rate=0.3):
 
     super(ClassifierEager, self).__init__()
 
@@ -38,8 +38,8 @@ class ClassifierEager(tf.keras.Model):
 
   def call(self, x_in, verbose=False, training=True):
     features = self.encoder(x_in, training=training)
-    features = self.dropout(features, training=training)
     features = self.batchnorm1(features)
+    features = self.dropout(features, training=training)
 
     for layer in self.classifier_layers:
       features = layer(features) 

@@ -103,7 +103,8 @@ def main(args):
   transform_fn = data_utils.make_transform_fn(args.x_size, 
                                               args.y_size, 
                                               args.crop_size, 
-                                              args.scale)
+                                              args.scale, 
+                                              normalize=True)
   train_x, train_y = data_utils.load_list_to_memory(train_list, case_label_fn)
   val_x, val_y = data_utils.load_list_to_memory(val_list, case_label_fn)
 
@@ -191,11 +192,11 @@ def main(args):
 
   if args.early_stop:
     callbacks = [
-        tf.keras.callbacks.EarlyStopping(monitor='val_loss', 
-                                         min_delta=0.00001, 
-                                         patience=10, 
-                                         verbose=1, 
-                                         mode='auto',)
+        tf.keras.callbacks.EarlyStopping(monitor = 'val_loss', 
+                                         min_delta = 0.00001, 
+                                         patience = 5, 
+                                         verbose = 1, 
+                                         mode = 'auto',)
     ]
   else:
     callbacks = []

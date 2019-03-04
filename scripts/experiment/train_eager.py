@@ -68,7 +68,7 @@ def val_step(model, val_generator, batch_size=8, steps=50):
   losses = np.zeros(steps)
   for k in range(steps):
     x, y = next(val_generator)
-    yhat = model(x, batch_size=batch_size, training=True)
+    yhat = model(x, batch_size=batch_size)
     loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, tf.float32), y_pred=yhat)
     losses[k] = np.mean(loss)
 
@@ -77,7 +77,6 @@ def val_step(model, val_generator, batch_size=8, steps=50):
 
 class ShouldStop():
   """ Track the validation loss
-
   send a stop signal if we haven't improved within a patience window
   """
   def __init__(self, min_calls = 10, patience = 5):

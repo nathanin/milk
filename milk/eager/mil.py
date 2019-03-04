@@ -28,7 +28,7 @@ class MilkEager(tf.keras.Model):
     self.drop2  = Dropout(rate=0.3)
 
     if mil_type == 'attention':
-      #self.att_batchnorm = BatchNormalization(trainable=True)
+      # self.att_batchnorm = BatchNormalization(trainable=True)
       self.attention = Dense(units=256, 
         activation=tf.nn.tanh, use_bias=False, name='attention')
       self.attention_gate = Dense(units=256, 

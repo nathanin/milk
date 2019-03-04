@@ -105,9 +105,8 @@ def run_sample(case_x, model, mcdropout=False,
     yhats = np.stack(yhats, axis=0)
     yhat  = np.mean( yhats, axis=0)
   else:
-    yhat = model(tf.constant(case_x), training=True, batch_size=batch_size, verbose=False)
+    yhat = model(tf.constant(case_x), training=False, batch_size=batch_size, verbose=False)
     yhat = yhat.numpy()
-
   return yhat
 
 def main(args):

@@ -26,7 +26,7 @@ def squish_mean(features):
 def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
   for k in range(n_layers):
     features = Dense(width, activation=tf.nn.relu, name='deep_mil_{}'.format(k))(features)
-    features = Dropout(dropout_rate, name='deep_mil_drop_{}'.format(k))(features)
+    # features = Dropout(dropout_rate, name='deep_mil_drop_{}'.format(k))(features)
 
   return features
 
@@ -52,7 +52,8 @@ def mil_features(features, n_classes, z_dim, dropout_rate):
 
 def average_pooling(features, n_classes, z_dim, dropout_rate, deep_classifier=True):
   print('Setting up average pooling MIL')
-  features = mil_features(features, n_classes, z_dim, dropout_rate)
+  # features = mil_features(features, n_classes, z_dim, dropout_rate)
+  features = squish_mean(features)
 
   if deep_classifier:
     features = deep_feedforward(features)
@@ -91,7 +92,7 @@ def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True,
   # features = Dot(axes=1, name='feat_att')([attention, features])
   print('Scaled features:', features.shape)
 
-  features = mil_features(features, n_classes, z_dim, dropout_rate)
+  # features = mil_features(features, n_classes, z_dim, dropout_rate)
 
   if deep_classifier:
     features = deep_feedforward(features)

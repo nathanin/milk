@@ -114,7 +114,6 @@ if __name__ == '__main__':
 
   parser.add_argument('--snapshot', default=None, type=str)
 
-
   args = parser.parse_args()
 
   config = tf.ConfigProto()

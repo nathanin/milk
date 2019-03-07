@@ -36,7 +36,7 @@ class ClassifierEager(tf.keras.Model):
     self.output_names = ['classifier']
     # self.output_shapes = [self.classifier.get_shape()]
 
-  def call(self, x_in, verbose=False, training=True):
+  def call(self, x_in, verbose=False, return_features=False, training=True):
     features = self.encoder(x_in, training=training)
     features = self.batchnorm1(features)
     features = self.dropout(features, training=training)
@@ -46,4 +46,7 @@ class ClassifierEager(tf.keras.Model):
 
     prediction = self.classifier(features)
 
-    return prediction
+    if return_features:
+      return prediction, features
+    else:
+      return prediction

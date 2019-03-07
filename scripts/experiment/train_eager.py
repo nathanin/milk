@@ -79,7 +79,7 @@ class ShouldStop():
   """ Track the validation loss
   send a stop signal if we haven't improved within a patience window
   """
-  def __init__(self, min_calls = 10, patience = 5):
+  def __init__(self, min_calls = 5, patience = 5):
     self.min_calls = min_calls
     self.val_loss = np.inf
     self.n_calls = 0
@@ -88,8 +88,11 @@ class ShouldStop():
 
   def should_stop(self, new_loss):
     self.n_calls += 1
-    self.since_last_improvement += 1
+    # min_calls trumps the loss; also don't increment the loss counter
+    if self.n_calls < self.min_calls:
+      return False
 
+    self.since_last_improvement += 1
     print('checking loss = {:3.5f} vs {:3.5f}'.format(new_loss,
       self.val_loss))
 

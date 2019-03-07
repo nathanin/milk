@@ -136,7 +136,8 @@ def main(args):
   print('Model initializing')
   model = Milk(input_shape=(args.bag_size, args.crop_size, args.crop_size, 3), 
                encoder_args=encoder_args, mode=args.mil, use_gate=args.gated_attention,
-               freeze_encoder=args.freeze_encoder, deep_classifier=args.deep_classifier)
+               temperature=args.temperature, freeze_encoder=args.freeze_encoder, 
+               deep_classifier=args.deep_classifier)
   
   if args.tpu:
     # Need to use tensorflow optimizer
@@ -182,11 +183,10 @@ def main(args):
   model.compile(optimizer=optimizer,
                 loss=tf.keras.losses.categorical_crossentropy,
                 metrics=['categorical_accuracy'])
-
   model.summary()
 
   ## Replace randomly initialized weights after model is compiled and on the correct device.
-  if os.path.exists(args.pretrained_model) and not args.dont_use_pretrained:
+  if args.pretrained_model is not None and os.path.exists(args.pretrained_model):
     print('Replacing random weights with weights from {}'.format(args.pretrained_model))
     model.load_weights(args.pretrained_model, by_name=True)
 
@@ -221,36 +221,43 @@ def main(args):
     print(val_list_file)
     print(test_list_file)
 
-
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--mil',              default = 'attention', type=str)
   parser.add_argument('--scale',            default = 1.0, type=float)
   parser.add_argument('--x_size',           default = 128, type=int)
   parser.add_argument('--y_size',           default = 128, type=int)
-  parser.add_argument('--epochs',           default = 20, type=int)
-  parser.add_argument('--bag_size',         default = 150, type=int)
+  parser.add_argument('--bag_size',         default = 50, type=int)
   parser.add_argument('--crop_size',        default = 96, type=int)
-  parser.add_argument('--batch_size',       default = 1, type=int)
-  parser.add_argument('--learning_rate',    default = 1e-4, type=float)
+  parser.add_argument('--batch_size',       default = 1,  type=int)
   parser.add_argument('--freeze_encoder',   default = False, action='store_true')
   parser.add_argument('--gated_attention',  default = True, action='store_false')
+  parser.add_argument('--temperature',      default = 1, type=float)
+  parser.add_argument('--encoder',          default = 'big', type=str)
   parser.add_argument('--deep_classifier',  default = False, action='store_true')
-  parser.add_argument('--steps_per_epoch',  default = 5000, type=int)
 
-  parser.add_argument('--tpu',              default = False, action='store_true')
+  # Optimizer settings
+  parser.add_argument('--learning_rate',    default = 1e-4, type=float)
+  parser.add_argument('--accumulate',       default = 1, type=float)
+  parser.add_argument('--steps_per_epoch',  default = 500, type=int)
+  parser.add_argument('--epochs',           default = 50, type=int)
+
+  # Experiment / data settings
   parser.add_argument('--seed',             default = None, type=int)
   parser.add_argument('--val_pct',          default = 0.2, type=float)
   parser.add_argument('--test_pct',         default = 0.2, type=float)
   parser.add_argument('--data_patt',        default = '../dataset/tiles_reduced', type=str)
   parser.add_argument('--save_prefix',      default = 'save', type=str)
-  parser.add_argument('--pretrained_model', default = '../pretraining/pretrained.h5', type=str)
+  parser.add_argument('--pretrained_model', default = None, type=str)
+
+  # old
   parser.add_argument('--dont_use_pretrained', default = False, action='store_true')
 
   parser.add_argument('--verbose',          default = False, action='store_true')
   parser.add_argument('--val_list',         default = None, type=str)
   parser.add_argument('--test_list',        default = None, type=str)
   parser.add_argument('--early_stop',       default = False, action='store_true')
+  parser.add_argument('--tpu',              default = False, action='store_true')
   args = parser.parse_args()
 
   main(args)

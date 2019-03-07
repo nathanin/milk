@@ -61,7 +61,7 @@ def average_pooling(features, n_classes, z_dim, dropout_rate, deep_classifier=Tr
   return logits
 
 def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True, 
-                    return_attention=False, deep_classifier=True):
+                      temperature = 1.0, return_attention=False, deep_classifier=True):
   """ Calculate attention then modulate the magnitude of the features
 
   Squish the attention-modulated features and return logits
@@ -79,7 +79,7 @@ def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True,
   attention = Dense(1, activation=None, use_bias=False, name='att_2')(attention)
   print('Calculated attention:', attention.shape)
 
-  attention = Lambda(lambda x: tf.transpose(x, perm=(1,0)))(attention)
+  attention = Lambda(lambda x: tf.transpose(x / temperature, perm=(1,0)))(attention)
   print('Transposed attention:', attention.shape)
 
   attention = Softmax(axis=1, name='att_sm')(attention)
@@ -99,10 +99,9 @@ def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True,
   logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
   return logits
 
-
-def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3, 
-         encoder_args=None, mode="instance", use_gate=True, deep_classifier=False,
-         freeze_encoder=False):
+def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropout_rate=0.3, 
+         encoder_args=None, mode="instance", use_gate=True, temperature = 1.0,
+         deep_classifier=False, freeze_encoder=False):
 
   """ Build the Multiple Instance Learning model
 
@@ -136,44 +135,54 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3,
     shape = shape[1:]
     return tuple(shape)
 
-  image_squeezed = Lambda(lambda x: tf.squeeze(x, axis=0), 
-                          output_shape=squeeze_output_shape)(image)
-  print('image squeezed', image_squeezed.shape)
-  if encoder is None:
-    if freeze_encoder:
-      print('NOTE: Initializing encoder with trainable = False')
-      trainable = False
+  # image_squeezed = Lambda(lambda x: tf.squeeze(x, axis=0), 
+  #                         output_shape=squeeze_output_shape)(image)
+
+  def _milk_internal(image):
+    print('_milk_internal', image.shape)
+    if encoder is None:
+      if freeze_encoder:
+        print('NOTE: Initializing encoder with trainable = False')
+        trainable = False
+      else:
+        trainable = True
+
+      print('Making encoder')
+      features = make_encoder(image=image, 
+                              input_shape=input_shape,  ## Unused
+                              encoder_args=encoder_args,
+                              trainable=trainable)
     else:
-      trainable = True
+      features = encoder(image)
 
-    features = make_encoder(image=image_squeezed, 
-                            input_shape=input_shape,  ## Unused
-                            encoder_args=encoder_args,
-                            trainable=trainable)
-  else:
-    features = encoder(image_squeezed)
+    print('features after encoder', features.shape)
 
-  print('features after encoder', features.shape)
+    print('MIL mode {}'.format(mode))
+    if mode == "instance":
+      logits = instance_classifier(features, n_classes, 
+        deep_classifier=deep_classifier)
+    elif mode == "average":
+      logits = average_pooling(features, n_classes, z_dim, dropout_rate,
+        deep_classifier=deep_classifier)
+    elif mode == "attention":
+      logits = attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=use_gate,
+        temperature=temperature, deep_classifier=deep_classifier)
+    else:
+      print('Multiple-Instance mode {} not recognized'.format(mode))
+      raise NotImplementedError
 
-  # if deep_classifier:
-  #   features = deep_feedforward(features, n_layers=5)
+    print('_milk_internal returning', logits.shape)
+    return logits
+  
+  def logits_shape(input_shape):
+    return tuple(batch_size, 1, 2)
 
-  if mode == "instance":
-    logits = instance_classifier(features, n_classes, 
-      deep_classifier=deep_classifier)
-  elif mode == "average":
-    logits = average_pooling(features, n_classes, z_dim, dropout_rate,
-      deep_classifier=deep_classifier)
-  elif mode == "attention":
-    logits = attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=use_gate,
-      deep_classifier=deep_classifier)
-  else:
-    print('Multiple-Instance mode {} not recognized'.format(mode))
-    raise NotImplementedError
-
+  logits = Lambda(lambda x: tf.map_fn(_milk_internal, x), output_shape=logits_shape)(image)
+  print('logits mapped', logits.shape)
+  logits = Lambda(lambda x: tf.squeeze(x, axis=1), output_shape=squeeze_output_shape)(logits)
+  print('logits squeezed', logits.shape)
   model = tf.keras.Model(inputs=[image], outputs=[logits])
   return model
-
 
 def MilkEncode(input_shape, encoder=None, dropout_rate=0.3, 
              encoder_args=None, deep_classifier=False):
@@ -203,10 +212,11 @@ def MilkPredict(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3,
       deep_classifier=deep_classifier)
   elif mode == "average":
     logits = average_pooling(features, n_classes, z_dim, dropout_rate,
-      deep_classifier=deep_classifier)
+                             deep_classifier=deep_classifier)
   elif mode == "attention":
     logits = attention_pooling(features, n_classes, z_dim, dropout_rate, 
-      use_gate=use_gate, deep_classifier=deep_classifier)
+                               temperature=temperature, use_gate=use_gate, 
+                               deep_classifier=deep_classifier)
   else:
     print('Multiple-Instance mode {} not recognized'.format(mode))
     raise NotImplementedError
@@ -215,10 +225,11 @@ def MilkPredict(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3,
 
 
 def MilkAttention(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3, 
-                use_gate=True):
+                  temperature = 1.0, use_gate=True):
   
   features = Input(shape=input_shape, name='feat_in')
   attention = attention_pooling(features, n_classes, z_dim, dropout_rate, 
-                              use_gate=use_gate, return_attention=True)
+                                use_gate=use_gate, temperature=temperature,
+                                return_attention=True)
 
   return tf.keras.Model(inputs=[features], outputs=[attention])

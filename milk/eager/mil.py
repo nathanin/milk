@@ -13,7 +13,8 @@ from .encoder import make_encoder_eager
 from milk.utilities.model_utils import lr_mult
 
 class MilkEager(tf.keras.Model):
-  def __init__(self, z_dim=256, encoder_args=None, cls_normalize=True, mil_type='attention', deep_classifier=True, temperature=1):
+  def __init__(self, z_dim=256, encoder_args=None, cls_normalize=True, mil_type='attention', 
+               deep_classifier=True, temperature=1):
 
     super(MilkEager, self).__init__()
 

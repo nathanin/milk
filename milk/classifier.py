@@ -2,7 +2,7 @@ from __future__ import print_function
 import numpy as np
 
 import tensorflow as tf
-from tensorflow.keras.layers import (Dropout, Dense, Input)
+from tensorflow.keras.layers import (Dropout, Dense, Input, BatchNormalization)
 from .encoder import make_encoder
 
 """ Same fn as in mil.py """
@@ -19,6 +19,7 @@ def Classifier(input_shape, n_classes=5, encoder_args=None, deep_classifier=True
   features = make_encoder(image=image, 
                           input_shape=input_shape, 
                           encoder_args=encoder_args)
+  features = BatchNormalization(momentum=0.99, trainable=True, axis=-1, name='classifier_bn')(features)
   features = Dropout(0.3, name='classifier_dropout')(features)
 
   if deep_classifier:

@@ -1,11 +1,11 @@
 # Run all of the experiments, one at a time.
 set -e
-steps=2500
+steps=1000
 epochs=100
 bag=50
 lr=0.0001
 pretrained=../gleason_grade/gleason_classifier_shallow/gleason_classifier.h5
-batch=4
+batch=2
 encoder=shallow
 
 # with pretraining; with attention
@@ -18,10 +18,10 @@ for i in `seq 1 3`; do
         --mil attention \
         --deep_classifier \
         --learning_rate $lr \
-        --pretrained $pretrained \
         --early_stop \
         --seed $i \
-        --accumulate 10 \
+        --pretrained $pretrained \
+        --accumulate 5 \
         --temperature 0.5 \
         --encoder $encoder
 done
@@ -38,7 +38,8 @@ for i in `seq 1 3`; do
         --pretrained $pretrained \
         --early_stop \
         --seed $i \
-        --accumulate 10 \
+        --pretrained $pretrained \
+        --accumulate 5 \
         --temperature 0.5 \
         --encoder $encoder
 done
@@ -55,7 +56,7 @@ for i in `seq 1 3`; do
         --pretrained $pretrained \
         --early_stop \
         --seed $i \
-        --accumulate 10 \
+        --accumulate 5 \
         --temperature 0.5 \
         --encoder $encoder
 done

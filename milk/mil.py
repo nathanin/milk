@@ -99,7 +99,6 @@ def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True,
   logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
   return logits
 
-
 def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3, 
          encoder_args=None, mode="instance", use_gate=True, deep_classifier=False,
          freeze_encoder=False):
@@ -173,7 +172,6 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, dropout_rate=0.3,
 
   model = tf.keras.Model(inputs=[image], outputs=[logits])
   return model
-
 
 def MilkEncode(input_shape, encoder=None, dropout_rate=0.3, 
              encoder_args=None, deep_classifier=False):

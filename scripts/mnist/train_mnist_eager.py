@@ -22,8 +22,7 @@ import argparse
 import os 
 
 from milk.eager import MilkEager
-
-from milk.encoder_config import mnist_args
+from milk.encoder_config import get_encoder_args
 
 def rearrange_bagged_mnist(x, y, positive_label):
   """
@@ -129,7 +128,8 @@ def main(args):
   batch_x, batch_y = next(generator)
   print('batch_x:', batch_x.shape, 'batch_y:', batch_y.shape)
 
-  model = MilkEager(encoder_args=mnist_args, 
+  encoder_args = get_encoder_args('mnist')
+  model = MilkEager(encoder_args=encoder_args, 
                mil_type=args.mil,
                deep_classifier=True,
   )
@@ -156,7 +156,7 @@ def main(args):
       grads = tape.gradient(loss, model.variables)
       optimizer.apply_gradients(zip(grads, model.variables))
 
-      if k % 100 == 0:
+      if k % 50 == 0:
         print('{:06d}: loss={:3.5f}'.format(k, np.mean(loss)))
         for y_, yh_ in zip(y, yhat):
           print('\t{} {}'.format(y_, yh_))

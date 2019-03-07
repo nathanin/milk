@@ -153,11 +153,19 @@ def main(args):
           loss = tf.keras.losses.categorical_crossentropy,
           metrics = ['categorical_accuracy'])
 
-  model.fit_generator(generator=generator, 
-            validation_data=val_generator,
-            validation_steps=100,
-            steps_per_epoch=args.epoch_steps, 
-            epochs=args.epochs)
+  for epc in range(args.epochs):
+    for k in range(int(args.epoch_steps)):
+      batch_x, batch_y = next(generator)
+      model.train_on_batch(batch_x, batch_y)
+
+      y_pred = model.predict(batch_x)
+      print(y_pred)
+
+  #model.fit_generator(generator=generator, 
+  #          validation_data=val_generator,
+  #          validation_steps=100,
+  #          steps_per_epoch=args.epoch_steps, 
+  #          epochs=args.epochs)
   
   model.save(args.o)
   

@@ -186,7 +186,7 @@ def main(args):
   model.summary()
 
   ## Replace randomly initialized weights after model is compiled and on the correct device.
-  if os.path.exists(args.pretrained_model):
+  if args.pretrained_model is not None and os.path.exists(args.pretrained_model):
     print('Replacing random weights with weights from {}'.format(args.pretrained_model))
     model.load_weights(args.pretrained_model, by_name=True)
 
@@ -220,7 +220,6 @@ def main(args):
     print('Training done. Find val and test datasets at')
     print(val_list_file)
     print(test_list_file)
-
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -258,6 +257,7 @@ if __name__ == '__main__':
   parser.add_argument('--val_list',         default = None, type=str)
   parser.add_argument('--test_list',        default = None, type=str)
   parser.add_argument('--early_stop',       default = False, action='store_true')
+  parser.add_argument('--tpu',              default = False, action='store_true')
   args = parser.parse_args()
 
   main(args)

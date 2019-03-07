@@ -24,8 +24,7 @@ import argparse
 import os 
 
 from milk import Milk
-
-from encoder_config import encoder_args
+from milk.encoder_config import get_encoder_args
 
 def rearrange_bagged_mnist(x, y, positive_label):
   """
@@ -126,15 +125,17 @@ def main(args):
   print('\ttest_x_pos:', test_x_pos.shape)
   print('\ttest_x_neg:', test_x_neg.shape)
 
-  generator = generate_bagged_mnist(train_x_pos, train_x_neg, args.n, 1)
-  val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.n, 1)
+  generator = generate_bagged_mnist(train_x_pos, train_x_neg, args.n, args.batch_size)
+  val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.n, args.batch_size)
   batch_x, batch_y = next(generator)
   print('batch_x:', batch_x.shape, 'batch_y:', batch_y.shape)
 
+  encoder_args = get_encoder_args('mnist')
   model = Milk(input_shape=(args.n, 28, 28, 1), 
          encoder_args=encoder_args, 
          mode=args.mil,
-         deep_classifier=True,
+         batch_size = args.batch_size,
+         deep_classifier=True
   )
 
   if args.pretrained is not None and os.path.exists(args.pretrained):
@@ -173,6 +174,7 @@ if __name__ == '__main__':
   parser.add_argument('--decay', default=1e-5, type=float)
   parser.add_argument('--epochs', default=10, type=int)
   parser.add_argument('--pretrained', default=None)
+  parser.add_argument('--batch_size', default=1, type=int)
   parser.add_argument('--epoch_steps', default=1e3, type=int)
   parser.add_argument('--max_fraction_positive', default=0.3, type=int)
   parser.add_argument('--min_fraction_positive', default=0.1, type=int)

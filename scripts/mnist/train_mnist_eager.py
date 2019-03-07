@@ -133,6 +133,7 @@ def main(args):
                mil_type=args.mil,
                deep_classifier=True,
   )
+  y_dummy = model(batch_x, verbose=True)
 
   if args.pretrained is not None and os.path.exists(args.pretrained):
     model.load_weights(args.pretrained, by_name = True)

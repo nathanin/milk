@@ -1,10 +1,11 @@
-# Run all of the experiments, one at a time.
+#!/bin/bash
+
 set -e
 steps=1000
 epochs=100
 bag=50
 lr=0.0001
-pretrained=../gleason_grade/gleason_classifier_shallow/gleason_classifier.h5
+pretrained=../gleason_grade/shallow_model/gleason_classifier.h5
 batch=2
 encoder=shallow
 

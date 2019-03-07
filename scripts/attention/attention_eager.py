@@ -149,7 +149,7 @@ def process_slide(svs, model, args, return_z=False):
   print('Processing {} tiles'.format(n_tiles))
   for imgs, idx_ in iterator:
     batches += 1
-    z = model.encode_bag(imgs, batch_size=args.batch_size, training=False, return_z=True)
+    z = model.encode_bag(imgs, batch_size=args.batch_size, training=True, return_z=True)
     zs.append(z)
     indices.append(idx_)
     if batches % 10 == 0:
@@ -160,15 +160,14 @@ def process_slide(svs, model, args, return_z=False):
   print('zs: ', zs.shape, zs.dtype)
   print('indices: ', indices.shape)
 
-  z_att, att = model.mil_attention(zs, training=False, verbose=True, return_att=True)
-  yhat = model.apply_classifier(z_att, training=False, verbose=True)
+  z_att, att = model.mil_attention(zs, training=True, verbose=True, return_att=True)
+  yhat = model.apply_classifier(z_att, training=True, verbose=True)
   print('yhat:', yhat)
 
   att = np.squeeze(att)
   print('att:', att.shape)
 
   return yhat, att, indices
-
 
 def main(args):
   # Translate obfuscated file names to paths if necessary

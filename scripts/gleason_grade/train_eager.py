@@ -113,7 +113,6 @@ if __name__ == '__main__':
   parser.add_argument('--device_buffer', default=64, type=int)
 
   parser.add_argument('--snapshot', default=None, type=str)
-  parser.add_argument('--encoder', default='big', type=str)
 
   args = parser.parse_args()
 

@@ -6,7 +6,7 @@ epochs=100
 bag=50
 lr=0.0001
 pretrained=../gleason_grade/shallow_model/gleason_classifier.h5
-batch=2
+batch=3
 encoder=shallow
 
 # with pretraining; with attention

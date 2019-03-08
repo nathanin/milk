@@ -158,8 +158,9 @@ def main(args):
       batch_x, batch_y = next(generator)
       model.train_on_batch(batch_x, batch_y)
 
-      y_pred = model.predict(batch_x)
-      print(y_pred)
+      if k % 10 == 0:
+        y_pred = model.predict(batch_x)
+        print(y_pred)
 
   #model.fit_generator(generator=generator, 
   #          validation_data=val_generator,
@@ -173,7 +174,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('-o', default='./bagged_mnist.h5', type=str)
   parser.add_argument('-n', default=100, type=int)
-  parser.add_argument('--lr',  default=1e-5, type=float)
+  parser.add_argument('--lr',  default=1e-3, type=float)
   parser.add_argument('--tpu',   default=False, action='store_true')
   parser.add_argument('--mil',   default='attention', type=str)
   parser.add_argument('--gpus',   default=1, type=int)

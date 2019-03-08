@@ -14,14 +14,14 @@ from milk.utilities.model_utils import lr_mult
 
 class MilkEager(tf.keras.Model):
   def __init__(self, z_dim=256, encoder_args=None, cls_normalize=True, mil_type='attention', 
-               deep_classifier=True, temperature=1):
+               batch_size=32, deep_classifier=True, temperature=1):
 
     super(MilkEager, self).__init__()
 
     self.hidden_dim = z_dim
     self.deep_classifier = deep_classifier
     self.mil_type = mil_type
-    self.built_fn = False
+    self.batch_size = batch_size
     self.temperature = temperature
     self.cls_normalize = cls_normalize
 
@@ -56,6 +56,7 @@ class MilkEager(tf.keras.Model):
 
     self.classifier = Dense(units=2, activation=tf.nn.softmax, use_bias=False, name='mil_classifier')
 
+  # @tf.contrib.eager.defun
   def mil_attention(self, features, verbose=False, return_att=False, return_raw_att=False, training=True):
     # features = self.att_batchnorm(features, training=training)
     att = self.attention(features)
@@ -91,6 +92,7 @@ class MilkEager(tf.keras.Model):
     else:
       return z
 
+  # @tf.contrib.eager.defun
   def apply_mil(self, z, training=True, verbose=False):
     if self.mil_type == 'attention':
       z = self.mil_attention(z, training=training, verbose=verbose)
@@ -101,11 +103,12 @@ class MilkEager(tf.keras.Model):
       print('z:', z.shape)
     return z
 
+  # @tf.contrib.eager.defun
   def encode_bag(self, x_bag, batch_size=64, training=True, verbose=False, return_z=False):
     z_bag = []
-    n_bags = x_bag.shape[0] // batch_size
-    remainder = x_bag.shape[0] - n_bags*batch_size
-    x_bag = tf.split(x_bag, tf.stack([batch_size]*n_bags + [remainder]), axis=0)
+    n_bags = x_bag.shape[0] // self.batch_size
+    remainder = x_bag.shape[0] - n_bags*self.batch_size
+    x_bag = tf.split(x_bag, tf.stack([self.batch_size]*n_bags + [remainder]), axis=0)
     for x_in in x_bag:
       z = self.densenet(x_in, training=training)
       if verbose:
@@ -130,6 +133,7 @@ class MilkEager(tf.keras.Model):
         z = self.apply_mil(z, verbose=verbose)
       return z
 
+  # @tf.contrib.eager.defun
   def apply_classifier(self, features, verbose=False, training=True):
     if self.cls_normalize:
       # features = self.classifier_bn(features, training=training)
@@ -141,9 +145,8 @@ class MilkEager(tf.keras.Model):
     yhat = self.classifier(features)
     return yhat
 
-  #@tf.contrib.eager.defun
-  def call(self, x_in, T=20, batch_size=64, 
-           training=True, verbose=False,):
+  @tf.contrib.eager.defun
+  def call(self, x_in, training=True, verbose=False):
     """
     `training` controls the use of dropout and batch norm, if defined
     `return_embedding`
@@ -167,7 +170,7 @@ class MilkEager(tf.keras.Model):
       if verbose:
         print('x_bag:', x_bag.shape)
       x_bag = tf.squeeze(x_bag, 0)
-      z = self.encode_bag(x_bag, batch_size=batch_size, training=training, verbose=verbose)
+      z = self.encode_bag(x_bag, training=training, verbose=verbose)
       zs.append(z)
     z_batch = tf.concat(zs, axis=0) #(batch, features)
     if verbose:

@@ -134,6 +134,7 @@ def main(args):
                deep_classifier=True,
   )
   y_dummy = model(batch_x, verbose=True)
+  model.summary()
 
   if args.pretrained is not None and os.path.exists(args.pretrained):
     model.load_weights(args.pretrained, by_name = True)
@@ -150,7 +151,7 @@ def main(args):
     for k in range(int(args.steps_per_epoch * args.epochs)):
       with tf.GradientTape() as tape:
         x, y = next(generator)
-        yhat = model(tf.constant(x), batch_size=16, training=True)
+        yhat = model(x, training=True)
         loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
 
       grads = tape.gradient(loss, model.variables)
@@ -160,6 +161,7 @@ def main(args):
         print('{:06d}: loss={:3.5f}'.format(k, np.mean(loss)))
         for y_, yh_ in zip(y, yhat):
           print('\t{} {}'.format(y_, yh_))
+
 
   except KeyboardInterrupt:
     print('Keyboard interrupt caught')

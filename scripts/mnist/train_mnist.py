@@ -18,6 +18,7 @@ import tensorflow as tf
 import tensorflow.contrib.eager as tfe
 from tensorflow.keras.models import load_model
 from tensorflow.keras.datasets import mnist
+from tensorflow.keras import backend as kb
 import numpy as np
 
 import argparse
@@ -125,8 +126,8 @@ def main(args):
   print('\ttest_x_pos:', test_x_pos.shape)
   print('\ttest_x_neg:', test_x_neg.shape)
 
-  generator = generate_bagged_mnist(train_x_pos, train_x_neg, args.n, args.batch_size)
-  val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.n, args.batch_size)
+  generator = generate_bagged_mnist(train_x_pos, train_x_neg,   args.n, 1)
+  val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.n, 1)
   batch_x, batch_y = next(generator)
   print('batch_x:', batch_x.shape, 'batch_y:', batch_y.shape)
 
@@ -152,20 +153,13 @@ def main(args):
   model.compile(optimizer=optimizer,
           loss = tf.keras.losses.categorical_crossentropy,
           metrics = ['categorical_accuracy'])
+  model.summary()
 
-  for epc in range(args.epochs):
-    for k in range(int(args.epoch_steps)):
-      batch_x, batch_y = next(generator)
-      model.train_on_batch(batch_x, batch_y)
-
-      y_pred = model.predict(batch_x)
-      print(y_pred)
-
-  #model.fit_generator(generator=generator, 
-  #          validation_data=val_generator,
-  #          validation_steps=100,
-  #          steps_per_epoch=args.epoch_steps, 
-  #          epochs=args.epochs)
+  model.fit_generator(generator=generator, 
+           validation_data=val_generator,
+           validation_steps=100,
+           steps_per_epoch=args.epoch_steps, 
+           epochs=args.epochs)
   
   model.save(args.o)
   

@@ -5,7 +5,7 @@ from __future__ import print_function
 import tensorflow as tf
 
 from tensorflow.keras.layers import (Input, Dense, Dropout, Average, Lambda, 
-  Multiply, Permute, Softmax, Dot)
+  Multiply, Permute, Softmax, Dot, Concatenate)
 
 from .encoder import make_encoder
 # from .utilities.model_utils import lr_mult
@@ -26,7 +26,7 @@ def squish_mean(features):
 def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
   for k in range(n_layers):
     features = Dense(width, activation=tf.nn.relu, name='deep_mil_{}'.format(k))(features)
-    # features = Dropout(dropout_rate, name='deep_mil_drop_{}'.format(k))(features)
+    features = Dropout(dropout_rate, name='deep_mil_drop_{}'.format(k))(features)
 
   return features
 
@@ -135,22 +135,19 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropou
     shape = shape[1:]
     return tuple(shape)
 
-  image = Lambda(lambda x: tf.squeeze(x, axis=0), 
-                          output_shape=squeeze_output_shape)(image_input)
-  if encoder is None:
-    if freeze_encoder:
-      print('NOTE: Initializing encoder with trainable = False')
-      trainable = False
-    else:
-      trainable = True
-
-    print('Making encoder')
-    features = make_encoder(image=image, 
-                            input_shape=input_shape,  ## Unused
-                            encoder_args=encoder_args,
-                            trainable=trainable)
+  # image = Lambda(lambda x: tf.squeeze(x, axis=0), 
+  #                         output_shape=squeeze_output_shape)(image_input)
+  if freeze_encoder:
+    print('NOTE: Initializing encoder with trainable = False')
+    trainable = False
   else:
-    features = encoder(image)
+    trainable = True
+
+  print('Making encoder')
+  features = make_encoder(image=image_input, 
+                          input_shape=input_shape,  ## Unused
+                          encoder_args=encoder_args,
+                          trainable=trainable)
 
   print('features after encoder', features.shape)
   print('MIL mode {}'.format(mode))
@@ -167,7 +164,28 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropou
     print('Multiple-Instance mode {} not recognized'.format(mode))
     raise NotImplementedError
 
+  print('returning logits:', logits.shape)
   model = tf.keras.Model(inputs=[image_input], outputs=[logits])
+  return model
+
+def MilkBatch(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, bag_size=50, 
+              dropout_rate=0.3, encoder_args=None, mode="instance", use_gate=True, 
+              temperature = 1.0, deep_classifier=False, freeze_encoder=False):
+  inner_model = Milk(input_shape = input_shape,
+                     encoder_args = encoder_args,
+                     mode = mode,
+                     batch_size = batch_size,
+                     temperature = temperature,
+                     deep_classifier = deep_classifier)
+
+  batch_input = Input(shape=[bag_size] + list(input_shape))
+  batch_logits = []
+  for k in range(batch_size):
+    bag = Lambda(lambda x: x[k,...])(batch_input)
+    encoding = inner_model(bag)
+    batch_logits.append(encoding)
+  batch_logits = Concatenate(axis=0)(batch_logits)
+  model = tf.keras.Model(inputs = batch_input, outputs = batch_logits)
   return model
 
 def MilkEncode(input_shape, encoder=None, dropout_rate=0.3, 

@@ -24,7 +24,7 @@ import numpy as np
 import argparse
 import os 
 
-from milk import Milk
+from milk import Milk, MilkBatch
 from milk.encoder_config import get_encoder_args
 
 def rearrange_bagged_mnist(x, y, positive_label):
@@ -126,48 +126,57 @@ def main(args):
   print('\ttest_x_pos:', test_x_pos.shape)
   print('\ttest_x_neg:', test_x_neg.shape)
 
-  generator = generate_bagged_mnist(train_x_pos, train_x_neg,   args.n, 1)
-  val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.n, 1)
+  generator = generate_bagged_mnist(train_x_pos, train_x_neg,   args.n, args.batch_size)
+  val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.n, args.batch_size)
   batch_x, batch_y = next(generator)
   print('batch_x:', batch_x.shape, 'batch_y:', batch_y.shape)
 
   encoder_args = get_encoder_args('mnist')
-  model = Milk(input_shape=(args.n, 28, 28, 1), 
-         encoder_args=encoder_args, 
-         mode=args.mil,
-         batch_size = args.batch_size,
-         deep_classifier=True
-  )
+  model = MilkBatch(input_shape=(28, 28, 1), 
+               encoder_args=encoder_args, 
+               mode=args.mil,
+               batch_size = args.batch_size,
+               bag_size = args.n,
+               deep_classifier=True)
+
+  # if args.gpus > 1:
+  #   print('Duplicating model onto 2 GPUs')
+  #   model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
+
+  # batch_input = tf.keras.layers.Input(shape=(args.n, 28,28, 1))
+  # batch_logits = []
+  # for k in range(args.batch_size):
+  #   bag = tf.keras.layers.Lambda(lambda x: x[k,...])(batch_input)
+  #   encoding = model(bag)
+  #   batch_logits.append(encoding)
+
+  # batch_logits = tf.keras.layers.Concatenate(axis=0)(batch_logits)
+  # batch_model = tf.keras.Model(inputs=batch_input, outputs=batch_logits)
+
+  optimizer = tf.keras.optimizers.Adam(lr=args.lr)
+  model.compile(optimizer=optimizer,
+                      loss = tf.keras.losses.categorical_crossentropy,
+                      metrics = ['categorical_accuracy'])
+  model.summary()
 
   if args.pretrained is not None and os.path.exists(args.pretrained):
+    print('Restoring weights from {}'.format(args.pretrained))
     model.load_weights(args.pretrained, by_name = True)
   else:
     print('Pretrained model not found ({}). Continuing end 2 end.'.format(args.pretrained))
 
-  if args.gpus > 1:
-    print('Duplicating model onto 2 GPUs')
-    model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
-
-  optimizer = tf.keras.optimizers.Adam(lr=args.lr, decay=args.decay)
-
-  model.compile(optimizer=optimizer,
-          loss = tf.keras.losses.categorical_crossentropy,
-          metrics = ['categorical_accuracy'])
-  model.summary()
-
   model.fit_generator(generator=generator, 
-           validation_data=val_generator,
-           validation_steps=100,
-           steps_per_epoch=args.epoch_steps, 
-           epochs=args.epochs)
-  
+                            validation_data=val_generator,
+                            validation_steps=100,
+                            steps_per_epoch=args.epoch_steps, 
+                            epochs=args.epochs)
   model.save(args.o)
   
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('-o', default='./bagged_mnist.h5', type=str)
   parser.add_argument('-n', default=100, type=int)
-  parser.add_argument('--lr',  default=1e-5, type=float)
+  parser.add_argument('--lr',  default=1e-4, type=float)
   parser.add_argument('--tpu',   default=False, action='store_true')
   parser.add_argument('--mil',   default='attention', type=str)
   parser.add_argument('--gpus',   default=1, type=int)

@@ -11,7 +11,7 @@ encoder=shallow
 
 # with pretraining; with attention
 for i in `seq 1 3`; do
-    python train_eager.py \
+    python train_keras.py \
         --steps_per_epoch $steps \
         --batch_size $batch \
         --epochs $epochs \
@@ -22,13 +22,12 @@ for i in `seq 1 3`; do
         --early_stop \
         --seed $i \
         --pretrained $pretrained \
-        --accumulate 5 \
         --temperature 0.5 \
         --encoder $encoder
 done
 
 for i in `seq 1 3`; do
-    python train_eager.py \
+    python train_keras.py \
         --steps_per_epoch $steps \
         --batch_size $batch \
         --epochs $epochs \
@@ -40,13 +39,12 @@ for i in `seq 1 3`; do
         --early_stop \
         --seed $i \
         --pretrained $pretrained \
-        --accumulate 5 \
         --temperature 0.5 \
         --encoder $encoder
 done
 
 for i in `seq 1 3`; do
-    python train_eager.py \
+    python train_keras.py \
         --steps_per_epoch $steps \
         --batch_size $batch \
         --epochs $epochs \
@@ -57,7 +55,6 @@ for i in `seq 1 3`; do
         --pretrained $pretrained \
         --early_stop \
         --seed $i \
-        --accumulate 5 \
         --temperature 0.5 \
         --encoder $encoder
 done

@@ -22,6 +22,7 @@ for i in `seq 1 3`; do
         --early_stop \
         --seed $i \
         --temperature 0.5 \
+        --accumulate 5 \
         --encoder $encoder
 done
 
@@ -37,6 +38,7 @@ for i in `seq 1 3`; do
         --early_stop \
         --seed $i \
         --temperature 0.5 \
+        --accumulate 5 \
         --encoder $encoder
 done
 
@@ -52,5 +54,6 @@ for i in `seq 1 3`; do
         --early_stop \
         --seed $i \
         --temperature 0.5 \
+        --accumulate 5 \
         --encoder $encoder
 done

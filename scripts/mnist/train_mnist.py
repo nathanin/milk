@@ -26,6 +26,7 @@ import os
 
 from milk import Milk, MilkBatch
 from milk.encoder_config import get_encoder_args
+from milk.utilities import training_utils
 
 def rearrange_bagged_mnist(x, y, positive_label):
   """
@@ -153,10 +154,11 @@ def main(args):
   # batch_logits = tf.keras.layers.Concatenate(axis=0)(batch_logits)
   # batch_model = tf.keras.Model(inputs=batch_input, outputs=batch_logits)
 
-  optimizer = tf.keras.optimizers.Adam(lr=args.lr)
+  # optimizer = tf.keras.optimizers.Adam(lr=args.lr)
+  optimizer = training_utils.AdamAccumulate(lr=args.lr, accum_iters=5)
   model.compile(optimizer=optimizer,
-                      loss = tf.keras.losses.categorical_crossentropy,
-                      metrics = ['categorical_accuracy'])
+                loss = tf.keras.losses.categorical_crossentropy,
+                metrics = ['categorical_accuracy'])
   model.summary()
 
   if args.pretrained is not None and os.path.exists(args.pretrained):

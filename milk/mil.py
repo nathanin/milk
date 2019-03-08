@@ -26,7 +26,7 @@ def squish_mean(features):
 def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
   for k in range(n_layers):
     features = Dense(width, activation=tf.nn.relu, name='deep_mil_{}'.format(k))(features)
-    features = Dropout(dropout_rate, name='deep_mil_drop_{}'.format(k))(features)
+    # features = Dropout(dropout_rate, name='deep_mil_drop_{}'.format(k))(features)
 
   return features
 
@@ -54,6 +54,7 @@ def average_pooling(features, n_classes, z_dim, dropout_rate, deep_classifier=Tr
   print('Setting up average pooling MIL')
   # features = mil_features(features, n_classes, z_dim, dropout_rate)
   features = squish_mean(features)
+  features = Dropout(dropout_rate, name='avg_do')(features)
 
   if deep_classifier:
     features = deep_feedforward(features)
@@ -93,7 +94,7 @@ def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True,
   print('Scaled features:', features.shape)
 
   # features = mil_features(features, n_classes, z_dim, dropout_rate)
-
+  features = Dropout(dropout_rate, name='att_do')(features)
   if deep_classifier:
     features = deep_feedforward(features)
 
@@ -129,7 +130,8 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropou
   image_input = Input(shape=input_shape, name='image') #e.g. (None, 100, 96, 96, 3)
 
   # Squeeze off the batch dimension
-  # Assume the actual batch dimension = 1
+  # Assumes the actual batch dimension = 1
+  # We don't want to do this if we're wrapping in a minibatch model
   def squeeze_output_shape(input_shape):
     shape = list(input_shape)
     shape = shape[1:]
@@ -171,13 +173,17 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropou
 def MilkBatch(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, bag_size=50, 
               dropout_rate=0.3, encoder_args=None, mode="instance", use_gate=True, 
               temperature = 1.0, deep_classifier=False, freeze_encoder=False):
+  """
+  Wraps the main MIL function to enable batching.
+  Input shape should be ~ (input_dim, input_dim, channels)
+  """            
   inner_model = Milk(input_shape = input_shape,
                      encoder_args = encoder_args,
                      mode = mode,
                      batch_size = batch_size,
                      temperature = temperature,
-                     deep_classifier = deep_classifier)
-
+                     deep_classifier = deep_classifier,
+                     freeze_encoder = freeze_encoder)
   batch_input = Input(shape=[bag_size] + list(input_shape))
   batch_logits = []
   for k in range(batch_size):

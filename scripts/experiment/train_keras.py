@@ -18,6 +18,7 @@ import sys
 import os 
 
 from milk.utilities import data_utils
+from milk.utilities import training_utils
 from milk import Milk, MilkBatch
 
 with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
@@ -104,7 +105,7 @@ def main(args):
                                               args.y_size, 
                                               args.crop_size, 
                                               args.scale, 
-                                              normalize=True)
+                                              normalize=False)
   train_x, train_y = data_utils.load_list_to_memory(train_list, case_label_fn)
   val_x, val_y = data_utils.load_list_to_memory(val_list, case_label_fn)
 
@@ -143,6 +144,8 @@ def main(args):
   if args.tpu:
     # Need to use tensorflow optimizer
     optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
+  elif args.accumulate > 1:
+    optimizer = training_utils.AdamAccumulate(lr=args.learning_rate, accum_iters=args.accumulate)
   else:
     optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
 
@@ -203,6 +206,14 @@ def main(args):
     callbacks = []
 
   try:
+    # for epc in range(args.epochs):
+    #   for k in range(int(args.steps_per_epoch)):
+    #     batchx, batchy = next(train_generator)
+    #     model.train_on_batch(batchx, batchy)
+    #     if k % 10 == 0:
+    #       batchpred = model.predict(batchx)
+    #       print(batchpred, batchy)
+
     model.fit_generator(generator=train_generator,
         validation_data=val_generator,
         validation_steps=100,
@@ -239,7 +250,7 @@ if __name__ == '__main__':
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
-  parser.add_argument('--accumulate',       default = 1, type=float)
+  parser.add_argument('--accumulate',       default = 1, type=int)
   parser.add_argument('--steps_per_epoch',  default = 500, type=int)
   parser.add_argument('--epochs',           default = 50, type=int)
 

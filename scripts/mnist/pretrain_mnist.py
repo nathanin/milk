@@ -14,7 +14,7 @@ import os
 from milk import make_encoder
 from milk import Classifier
 
-from encoder_config import encoder_args
+from milk.encoder_config import get_encoder_args
 
 def generate_batch(x, y, N):
   while True:
@@ -34,6 +34,7 @@ def main(args):
   batch_x, batch_y = next(generator)
   print('batch:', batch_x.shape, batch_y.shape, batch_x.min(), batch_x.max())
 
+  encoder_args = get_encoder_args('mnist')
   model = Classifier(input_shape=(28,28,1), n_classes=10, encoder_args=encoder_args)
 
   optimizer = tf.keras.optimizers.Adam(lr=args.lr, decay=args.decay)

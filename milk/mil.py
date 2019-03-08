@@ -5,7 +5,7 @@ from __future__ import print_function
 import tensorflow as tf
 
 from tensorflow.keras.layers import (Input, Dense, Dropout, Average, Lambda, 
-  Multiply, Permute, Softmax, Dot)
+  Multiply, Permute, Softmax, Dot, Concatenate)
 
 from .encoder import make_encoder
 # from .utilities.model_utils import lr_mult
@@ -26,7 +26,7 @@ def squish_mean(features):
 def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
   for k in range(n_layers):
     features = Dense(width, activation=tf.nn.relu, name='deep_mil_{}'.format(k))(features)
-    # features = Dropout(dropout_rate, name='deep_mil_drop_{}'.format(k))(features)
+    features = Dropout(dropout_rate, name='deep_mil_drop_{}'.format(k))(features)
 
   return features
 
@@ -103,7 +103,6 @@ def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True,
 def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropout_rate=0.3, 
          encoder_args=None, mode="instance", use_gate=True, temperature = 1.0,
          deep_classifier=False, freeze_encoder=False):
-
   """ Build the Multiple Instance Learning model
 
   Return a function that accepts batches of (batch, bag_size, h, w, ch)
@@ -127,8 +126,8 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropou
     "average"   -- average over the bag in latent space
     "attention" -- compute weighted average using learned weights
   """
-  image = Input(shape=input_shape, name='image') #e.g. (None, 100, 96, 96, 3)
-  print('image input:', image.shape)
+  image_input = Input(shape=input_shape, name='image') #e.g. (None, 100, 96, 96, 3)
+
   # Squeeze off the batch dimension
   # Assume the actual batch dimension = 1
   def squeeze_output_shape(input_shape):
@@ -136,53 +135,57 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropou
     shape = shape[1:]
     return tuple(shape)
 
-  # image_squeezed = Lambda(lambda x: tf.squeeze(x, axis=0), 
-  #                         output_shape=squeeze_output_shape)(image)
+  # image = Lambda(lambda x: tf.squeeze(x, axis=0), 
+  #                         output_shape=squeeze_output_shape)(image_input)
+  if freeze_encoder:
+    print('NOTE: Initializing encoder with trainable = False')
+    trainable = False
+  else:
+    trainable = True
 
-  def _milk_internal(image):
-    print('_milk_internal', image.shape)
-    if encoder is None:
-      if freeze_encoder:
-        print('NOTE: Initializing encoder with trainable = False')
-        trainable = False
-      else:
-        trainable = True
+  print('Making encoder')
+  features = make_encoder(image=image_input, 
+                          input_shape=input_shape,  ## Unused
+                          encoder_args=encoder_args,
+                          trainable=trainable)
 
-      print('Making encoder')
-      features = make_encoder(image=image, 
-                              input_shape=input_shape,  ## Unused
-                              encoder_args=encoder_args,
-                              trainable=trainable)
-    else:
-      features = encoder(image)
+  print('features after encoder', features.shape)
+  print('MIL mode {}'.format(mode))
+  if mode == "instance":
+    logits = instance_classifier(features, n_classes, 
+      deep_classifier=deep_classifier)
+  elif mode == "average":
+    logits = average_pooling(features, n_classes, z_dim, dropout_rate,
+      deep_classifier=deep_classifier)
+  elif mode == "attention":
+    logits = attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=use_gate,
+      temperature=temperature, deep_classifier=deep_classifier)
+  else:
+    print('Multiple-Instance mode {} not recognized'.format(mode))
+    raise NotImplementedError
 
-    print('features after encoder', features.shape)
+  print('returning logits:', logits.shape)
+  model = tf.keras.Model(inputs=[image_input], outputs=[logits])
+  return model
 
-    print('MIL mode {}'.format(mode))
-    if mode == "instance":
-      logits = instance_classifier(features, n_classes, 
-        deep_classifier=deep_classifier)
-    elif mode == "average":
-      logits = average_pooling(features, n_classes, z_dim, dropout_rate,
-        deep_classifier=deep_classifier)
-    elif mode == "attention":
-      logits = attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=use_gate,
-        temperature=temperature, deep_classifier=deep_classifier)
-    else:
-      print('Multiple-Instance mode {} not recognized'.format(mode))
-      raise NotImplementedError
+def MilkBatch(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, bag_size=50, 
+              dropout_rate=0.3, encoder_args=None, mode="instance", use_gate=True, 
+              temperature = 1.0, deep_classifier=False, freeze_encoder=False):
+  inner_model = Milk(input_shape = input_shape,
+                     encoder_args = encoder_args,
+                     mode = mode,
+                     batch_size = batch_size,
+                     temperature = temperature,
+                     deep_classifier = deep_classifier)
 
-    print('_milk_internal returning', logits.shape)
-    return logits
-  
-  def logits_shape(input_shape):
-    return tuple(batch_size, 1, 2)
-
-  logits = Lambda(lambda x: tf.map_fn(_milk_internal, x), output_shape=logits_shape)(image)
-  print('logits mapped', logits.shape)
-  logits = Lambda(lambda x: tf.squeeze(x, axis=1), output_shape=squeeze_output_shape)(logits)
-  print('logits squeezed', logits.shape)
-  model = tf.keras.Model(inputs=[image], outputs=[logits])
+  batch_input = Input(shape=[bag_size] + list(input_shape))
+  batch_logits = []
+  for k in range(batch_size):
+    bag = Lambda(lambda x: x[k,...])(batch_input)
+    encoding = inner_model(bag)
+    batch_logits.append(encoding)
+  batch_logits = Concatenate(axis=0)(batch_logits)
+  model = tf.keras.Model(inputs = batch_input, outputs = batch_logits)
   return model
 
 def MilkEncode(input_shape, encoder=None, dropout_rate=0.3, 
@@ -201,7 +204,6 @@ def MilkEncode(input_shape, encoder=None, dropout_rate=0.3,
   #   features = deep_feedforward(features, n_layers=5)
 
   return tf.keras.Model(inputs=[image], outputs=[features])
-
 
 def MilkPredict(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3, 
               mode="instance", use_gate=True, deep_classifier=True):
@@ -223,7 +225,6 @@ def MilkPredict(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3,
     raise NotImplementedError
 
   return tf.keras.Model(inputs=[features], outputs=[logits])
-
 
 def MilkAttention(input_shape, z_dim=256, n_classes=2, dropout_rate=0.3, 
                   temperature = 1.0, use_gate=True):

@@ -4,7 +4,7 @@ set -e
 steps=1000
 epochs=100
 bag=50
-lr=0.001
+lr=0.0001
 pretrained=../gleason_grade/shallow_model/gleason_classifier.h5
 batch=3
 encoder=shallow
@@ -23,6 +23,7 @@ for i in `seq 1 3`; do
         --seed $i \
         --temperature 0.5 \
         --accumulate 5 \
+        --pretrained $pretrained \
         --encoder $encoder
 done
 
@@ -39,6 +40,7 @@ for i in `seq 1 3`; do
         --seed $i \
         --temperature 0.5 \
         --accumulate 5 \
+        --pretrained $pretrained \
         --encoder $encoder
 done
 
@@ -55,5 +57,6 @@ for i in `seq 1 3`; do
         --seed $i \
         --temperature 0.5 \
         --accumulate 5 \
+        --pretrained $pretrained \
         --encoder $encoder
 done

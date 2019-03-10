@@ -68,7 +68,7 @@ def val_step(model, val_generator, batch_size=8, steps=50):
   losses = np.zeros(steps)
   for k in range(steps):
     x, y = next(val_generator)
-    yhat = model(x, batch_size=batch_size)
+    yhat = model(x)
     loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, tf.float32), y_pred=yhat)
     losses[k] = np.mean(loss)
 
@@ -254,11 +254,13 @@ def main(args):
   model = MilkEager(encoder_args=encoder_args, 
                     mil_type=args.mil,
                     deep_classifier=args.deep_classifier,
+                    batch_size=32,
                     temperature=args.temperature)
   #model.build_encode_fn(training=True, verbose=False, batch_size=64)
   tstart = time.time()
-  yhat = model(tf.constant(x), batch_size=32, training=True, verbose=True)
+  yhat = model(tf.constant(x), training=True, verbose=True)
   tend = time.time()
+  model.summary()
   print('yhat:', yhat.shape, 'tdelta = {:3.4f}'.format(tend-tstart))
 
   exptime = datetime.datetime.now()
@@ -297,7 +299,7 @@ def main(args):
       print(e)
 
   if args.early_stop:
-    stopper = ShouldStop(patience = 5)
+    stopper = ShouldStop(patience = 3)
   else:
     stopper = lambda x: False
 
@@ -315,7 +317,7 @@ def main(args):
         tstart = time.time()
         with tf.GradientTape() as tape:
           x, y = next(train_dataset)
-          yhat = model(tf.constant(x), batch_size=32, training=True)
+          yhat = model(tf.constant(x), training=True)
           loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
 
         loss_mn = np.mean(loss)
@@ -340,7 +342,7 @@ def main(args):
           for y_, yh_ in zip(y, yhat):
             print('\t{} {}'.format(y_, yh_))
 
-      val_loss = val_step(model, val_dataset, batch_size=32, steps=50)
+      val_loss = val_step(model, val_dataset, steps=50)
       print('epc: {} val_loss = {}'.format(epc, val_loss))
 
       if args.early_stop and stopper.should_stop(val_loss):

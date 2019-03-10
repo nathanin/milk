@@ -104,7 +104,7 @@ class MilkEager(tf.keras.Model):
     return z
 
   # @tf.contrib.eager.defun
-  def encode_bag(self, x_bag, batch_size=64, training=True, verbose=False, return_z=False):
+  def encode_bag(self, x_bag, training=True, verbose=False, return_z=False):
     z_bag = []
     n_bags = x_bag.shape[0] // self.batch_size
     remainder = x_bag.shape[0] - n_bags*self.batch_size
@@ -138,7 +138,9 @@ class MilkEager(tf.keras.Model):
     if self.cls_normalize:
       # features = self.classifier_bn(features, training=training)
       features = self.classifier_dropout_0(features, training=training)
-    for layer in self.classifier_layers:
+    for k, layer in enumerate(self.classifier_layers):
+      if verbose:
+        print('Classifier layer {}'.format(k))
       features = layer(features)
 
     # features = self.classifier_dropout_1(features, training=training)
@@ -179,4 +181,7 @@ class MilkEager(tf.keras.Model):
       yhat = self.apply_classifier(z_batch, training=training, verbose=verbose)
     else:
       yhat = z_batch
+    
+    if verbose:
+      print('returning', yhat.shape)
     return yhat

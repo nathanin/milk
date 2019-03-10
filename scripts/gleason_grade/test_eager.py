@@ -105,12 +105,15 @@ def main(args):
   print('batchx: ', batchx.get_shape())
   print('batchy: ', batchy.get_shape())
 
-  encoder_args = get_encoder_args(args.encoder)
-  model = ClassifierEager(encoder_args=encoder_args,
-                          n_classes=args.n_classes,)
-  yhat = model(batchx, training=False, verbose=True)
-  model.load_weights(args.snapshot)
-  model.summary()
+  if args.load_model:
+    model = load_model(args.snapshot, compile=False)
+  else:
+    encoder_args = get_encoder_args(args.encoder)
+    model = ClassifierEager(encoder_args=encoder_args,
+                            n_classes=args.n_classes,)
+    yhat = model(batchx, training=False, verbose=True)
+    model.summary()
+    model.load_weights(args.snapshot)
 
   # Loop:
   ytrue_vector, yhat_vector, features = [], [], []
@@ -167,6 +170,7 @@ if __name__ == '__main__':
   parser.add_argument('--save', default=None, type=str)
   parser.add_argument('--saveproj', default=None, type=str)
   parser.add_argument('--encoder', default='big', type=str)
+  parser.add_argument('--load_model', default=False, action='store_true')
 
   args = parser.parse_args()
 

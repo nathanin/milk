@@ -25,7 +25,7 @@ with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
 # with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
-from milk.encoder_config import big_args as encoder_args
+from milk.encoder_config import get_encoder_args
 
 def filter_list_by_label(lst):
   lst_out = []
@@ -126,15 +126,8 @@ def main(args):
   del x
   del y 
 
-  # encoder_args = {
-  #     'depth_of_model': 32,
-  #     'growth_rate': 64,
-  #     'num_of_blocks': 4,
-  #     'output_classes': 2,
-  #     'num_layers_in_each_block': 8,
-  # }
-
   print('Model initializing')
+  encoder_args = get_encoder_args(args.encoder)
   model = MilkBatch(input_shape=(args.crop_size, args.crop_size, 3), 
                     encoder_args=encoder_args, mode=args.mil, use_gate=args.gated_attention,
                     batch_size = args.batch_size, bag_size = args.bag_size, 

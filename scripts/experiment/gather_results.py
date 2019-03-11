@@ -47,12 +47,18 @@ def main(args):
   for ts in timestamps:
     yhat  = get_yhat(ts, args.src)
     ytrue = get_ytrue(ts, args.src)
-    ytrue_argmax = np.argmax(ytrue, axis=-1)
     yhat_argmax = np.argmax(yhat, axis=-1)
 
     yhat_1 = np.argmax(yhat, axis=-1)
-    ytrue_1 = np.argmax(ytrue, axis=-1)
+    if len(ytrue.shape) == 1:
+      ytrue_argmax = ytrue
+      ytrue_1 = ytrue
+    else:
+      ytrue_argmax = np.argmax(ytrue, axis=-1)
+      ytrue_1 = np.argmax(ytrue, axis=-1)
 
+    if len(yhat.shape) == 2:
+      yhat = yhat[:,1]
     acc =  np.mean( ( yhat_1 == ytrue_1 ) )
     auc =  roc_auc_score(   y_true = ytrue,   y_score = yhat)
     prec = precision_score( y_true = ytrue_1, y_pred  = yhat_1)

@@ -222,6 +222,7 @@ def main(args):
   encoder_args = get_encoder_args(args.encoder)
   model = MilkEager(encoder_args=encoder_args, 
                     deep_classifier=True, 
+                    batch_size=args.batch_size,
                     temperature=args.temperature,
                     cls_normalize=args.cls_normalize)
 
@@ -252,7 +253,7 @@ def main(args):
       case_x = case_x[np.random.choice(range(case_x.shape[0]), args.sample), ...]
       print(case_x.shape)
 
-    features = model.encode_bag(case_x, batch_size=args.batch_size, training=True, return_z=True)
+    features = model.encode_bag(case_x, training=True, return_z=True)
     print('features:', features.shape)
     features_att, attention = model.mil_attention(features, return_att=True, training=False)
     print('features:', features_att.shape, 'attention:', attention.shape)

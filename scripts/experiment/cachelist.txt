@@ -3,5 +3,6 @@ save/
 test_lists/
 val_lists/
 result_test/
+result_test_svs/
 result_test_mcdrop/
 runs*

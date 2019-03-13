@@ -92,21 +92,25 @@ def test_eval(ytrue, yhat, savepath=None):
     print(cr)
     print(cm)
 
-def run_sample(case_x, model, mcdropout=False, batch_size=64, sample_mode='all'):
+def run_sample(case_x, model, mcdropout=False, sample_mode='all'):
   print('case x : ', case_x.shape)
   n_tiles = case_x.shape[0]
-  case_x = np.expand_dims(case_x, axis=0)
+  case_x = tf.constant(case_x)
   if mcdropout:
     yhats = []
     for _ in range(25):
-      yhat = model(tf.constant(case_x), training=True, batch_size=batch_size)
+      yhat = model(tf.constant(case_x), training=True)
       yhats.append(yhat)
     
     yhats = np.stack(yhats, axis=0)
     yhat  = np.mean( yhats, axis=0)
   else:
-    yhat = model(tf.constant(case_x), training=False, batch_size=batch_size, verbose=False)
+    print('Running...')
+    with tf.device('/gpu:0'):
+      yhat = model(case_x, training=0)
     yhat = yhat.numpy()
+  
+  del case_x
   return yhat
 
 def main(args):
@@ -129,13 +133,12 @@ def main(args):
                     mil_type = args.mil, 
                     deep_classifier = args.deep_classifier,
                     cls_normalize = args.cls_normalize, 
+                    batch_size = args.batch_size,
                     temperature = args.temperature)
-  # model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=False )
   xdummy = tf.zeros((1, args.batch_size, args.x_size, args.y_size, 3))
-  ydummy = model(xdummy)
-
+  ydummy = model(xdummy, verbose=True)
   print(xdummy.shape, ydummy.shape)
-
+  del xdummy, ydummy
   model.load_weights(snapshot, by_name=True)
 
   test_list = os.path.join(args.testdir, '{}.txt'.format(args.timestamp))
@@ -152,12 +155,10 @@ def main(args):
           case_label_fn=case_label_fn,
           all_tiles=True,
           )
-      case_x = np.squeeze(case_x, axis=0)
+      # case_x = np.squeeze(case_x, axis=0)
       print('Running case x: ', case_x.shape)
-
       yhat = run_sample(case_x, model,
                         mcdropout = args.mcdropout,
-                        batch_size = args.batch_size,
                         sample_mode = args.sample_mode)
       ytrues.append(case_y)
       yhats.append(yhat)
@@ -205,7 +206,7 @@ if __name__ == '__main__':
   parser.add_argument('--y_size', default=128, type=int)
   parser.add_argument('--crop_size', default=96, type=int)
   parser.add_argument('--scale', default=1.0, type=float)
-  parser.add_argument('--batch_size', default=64, type=int)
+  parser.add_argument('--batch_size', default=96, type=int)
 
   parser.add_argument('--mil', default='attention', type=str)
   parser.add_argument('--sample_mode', default='all', type=str)

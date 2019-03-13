@@ -46,7 +46,7 @@ class ClassifierEager(tf.keras.Model):
       features = layer(features) 
       features = self.ff_dropout(features, training=training)
 
-    logist = self.classifier(features)
+    logits = self.classifier(features)
 
     if return_features:
       return logits, features

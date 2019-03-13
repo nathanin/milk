@@ -45,8 +45,13 @@ def main(args):
   accs, aucs, precs, recs, specs, f1s, yhats, ytrues = [], [], [], [], [], [], [], []
   
   for ts in timestamps:
-    yhat  = get_yhat(ts, args.src)
-    ytrue = get_ytrue(ts, args.src)
+    try:
+      yhat  = get_yhat(ts, args.src)
+      ytrue = get_ytrue(ts, args.src)
+    except:
+      print('failed to load data for timestamp {}'.format(ts))
+      continue
+
     ytrue_argmax = np.argmax(ytrue, axis=-1)
     yhat_argmax = np.argmax(yhat, axis=-1)
 

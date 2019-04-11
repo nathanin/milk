@@ -19,16 +19,9 @@ for pth in $( ls args/*.txt ); do
       --odir result_test \
       --mil $1 \
       --temperature 0.5 \
-      --encoder wide
-
-    # python test_eager_svs.py \
-    #   --timestamp $p \
-    #   --odir result_test_svs \
-    #   --mil $1 \
-    #   --temperature 0.5 \
-    #   --encoder wide \
-    #   --batch_size 64 \
-    #   --maxbatches 20
+      --encoder wide \
+      --batch_size 32 \
+      --oversample 1.5
 
   else
     echo skipping $p

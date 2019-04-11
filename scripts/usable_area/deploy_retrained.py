@@ -58,9 +58,9 @@ def get_input_output_ops(sess, model_path):
     return image_op, predict_op
 
 ## These must not introduce a shift
-PROCESS_MAG = 5
-BATCH_SIZE = 4
-OVERSAMPLE = 1.5
+PROCESS_MAG = 10
+BATCH_SIZE = 8
+OVERSAMPLE = 1.75
 INPUT_SIZE = 96
 PRINT_ITER = 500
 def main(sess, ramdisk_path, image_op, predict_op):

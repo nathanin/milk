@@ -43,7 +43,8 @@ def main(args):
     totalimgs = 0
     for imgpath in imglist:
         img = cv2.imread(imgpath, -1)
-        img = cv2.resize(img, dsize=(0,0), fx=0.125, fy=0.125) # downsample 40x --> 5x
+        # img = cv2.resize(img, dsize=(0,0), fx=0.125, fy=0.125) # downsample 40x --> 5x
+        img = cv2.resize(img, dsize=(0,0), fx=0.25, fy=0.25) # downsample 40x --> 10x
         subimgs = split_subimgs(img)
 
         print(imgpath, len(subimgs))

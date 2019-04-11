@@ -205,7 +205,7 @@ def process_slide(svs, model, args, return_z=False):
 
   for imgs, idx_ in iterator:
     batches += 1
-    z = model.encode_bag(imgs, training=True, return_z=True)
+    z = model.encode_bag(imgs, training=False, return_z=True)
     zs.append(z)
     indices.append(idx_)
     if batches % 10 == 0:
@@ -221,11 +221,11 @@ def process_slide(svs, model, args, return_z=False):
   print('indices: ', indices.shape)
 
   if args.mil == 'attention':
-    z_att, att = model.mil_attention(zs, training=True, verbose=True, return_att=True)
+    z_att, att = model.mil_attention(zs, training=False, verbose=True, return_att=True)
     att = np.squeeze(att)
     print('att:', att.shape)
   elif args.mil == 'average':
-    z_att = model.apply_mil(zs, training=True)
+    z_att = model.apply_mil(zs, training=False)
     att = np.zeros(1)
   elif args.mil == 'instance':
     att = np.zeros(1)
@@ -234,7 +234,7 @@ def process_slide(svs, model, args, return_z=False):
     print('{}'.format(yhat.shape))
     return yhat, att, indices
 
-  yhat = model.apply_classifier(z_att, training=True, verbose=True)
+  yhat = model.apply_classifier(z_att, training=False, verbose=True)
   print('yhat:', yhat)
 
   return yhat, att, indices
@@ -288,7 +288,8 @@ def main(args):
                   # background_speed  = 'accurate',
                   background_speed  = 'image',
                   background_image  = fgimg,
-                  preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32),
+                  # preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32),
+                  preprocess_fn     = lambda x: (x/255.).astype(np.float32),
                   process_mag       = args.mag,
                   process_size      = args.input_dim,
                   oversample_factor = args.oversample,
@@ -379,9 +380,9 @@ if __name__ == '__main__':
   #   os.makedirs(os.path.join(args.odir, args.timestamp))
   assert args.timestamp is not None
 
-  # config = tf.ConfigProto()
-  # config.gpu_options.allow_growth = True
-  tf.enable_eager_execution()
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth = True
+  tf.enable_eager_execution(config=config)
 
   main(args)
     

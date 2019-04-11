@@ -136,10 +136,10 @@ def draw_projection_with_images(z, attentions, high_attention,
   plt.ylim([ymin-ofs_radius, ymax+ofs_radius])
   att_index = np.argwhere(high_attention)
   ax = inset_images(ax, z, att_index, high_attention_images, 
-    edgecolor='k', rho_delta=ofs_radius)
+    edgecolor='r', rho_delta=ofs_radius)
   att_index = np.argwhere(low_attention)
   ax = inset_images(ax, z, att_index, low_attention_images, 
-    edgecolor='k', rho_delta=ofs_radius)
+    edgecolor='b', rho_delta=ofs_radius)
   if savepath is None:
     plt.show()
   else:

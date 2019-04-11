@@ -6,3 +6,5 @@ result_test/
 result_test_svs/
 result_test_mcdrop/
 runs*
+batch_train.sh
+train_eager.py

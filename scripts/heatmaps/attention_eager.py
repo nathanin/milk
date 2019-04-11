@@ -69,7 +69,15 @@ def get_img_idx(svs, batch_size, prefetch, generate_subset=False, sample=1.0):
   # Replace svs.generate_index with a rolled-out generator that minimizes
   # the amount of unnecessary processing to do:
   # if generate_subset:
-  dataset = tf.data.Dataset.from_generator(generator=svs.generate_index,
+
+  # Shuffle indices
+  def generate_shuffled_index():
+    indices = np.arange(len(svs.tile_list))
+    np.random.shuffle(indices)
+    for i in indices:
+      yield i
+
+  dataset = tf.data.Dataset.from_generator(generator=generate_shuffled_index,
       output_types=tf.int64)
   dataset = dataset.map(read_region_at_index, num_parallel_calls=4)
   dataset = dataset.prefetch(prefetch)
@@ -128,7 +136,7 @@ def get_slidelist_from_uids(uids, process_all=True):
     print('{:03d} {}\t\t{}'.format(i, s, l))
   return slide_list_out, labels
 
-def process_slide(svs, model, args, return_z=False):
+def process_slide(svs, model, args, return_z=None):
   n_tiles = len(svs.tile_list)
   prefetch = min(256, n_tiles)
 
@@ -142,7 +150,7 @@ def process_slide(svs, model, args, return_z=False):
   print('Processing {} tiles'.format(n_tiles))
   for imgs, idx_ in iterator:
     batches += 1
-    z = model.encode_bag(imgs, training=True, return_z=True)
+    z = model.encode_bag(imgs, training=False, return_z=True)
     zs.append(z)
     indices.append(idx_)
     if batches % 10 == 0:
@@ -153,14 +161,21 @@ def process_slide(svs, model, args, return_z=False):
   print('zs: ', zs.shape, zs.dtype)
   print('indices: ', indices.shape)
 
-  z_att, att = model.mil_attention(zs, training=True, verbose=True, return_att=True)
-  yhat = model.apply_classifier(z_att, training=True, verbose=True)
+  if args.mil == 'attention':
+    z_att, instance_score = model.mil_attention(zs, training=False, verbose=True, return_att=True)
+    yhat = model.apply_classifier(z_att, training=False, verbose=True)
+  elif args.mil == 'instance':
+    instance_score = zs[:,1]
+    yhat = tf.reduce_mean(zs, axis=0, keepdims=True)
+  else:
+    print('Unsupported MIL type {}.'.format(args.mil))
+
   print('yhat:', yhat)
 
-  att = np.squeeze(att)
-  print('att:', att.shape)
+  instance_score = np.squeeze(instance_score)
+  print('att:', instance_score.shape)
 
-  return yhat, att, indices
+  return yhat, instance_score, indices
 
 def main(args):
   # Translate obfuscated file names to paths if necessary
@@ -211,7 +226,8 @@ def main(args):
                   # background_speed  = 'accurate',
                   background_speed  = 'image',
                   background_image  = fgimg,
-                  preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32),
+                  # preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32),
+                  preprocess_fn     = lambda x: (x/255.).astype(np.float32),
                   process_mag       = args.mag,
                   process_size      = args.input_dim,
                   oversample_factor = args.oversample,
@@ -240,10 +256,10 @@ def main(args):
           attention_img.dtype, attention_img.min(),
           attention_img.max())
 
-    dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_att.npy'.format(basename, yhat[0,1]))
+    dst = os.path.join(args.odir, args.timestamp, '{}_{}_{:3.3f}_att.npy'.format(basename, lab, yhat[0,1]))
     np.save(dst, att)
 
-    dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_img.png'.format(basename, yhat[0,1]))
+    dst = os.path.join(args.odir, args.timestamp, '{}_{}_{:3.3f}_img.png'.format(basename, lab, yhat[0,1]))
     cv2.imwrite(dst, attention_img)
 
     try:
@@ -264,15 +280,15 @@ if __name__ == '__main__':
 
   # Changed often -- with defaults
   parser.add_argument('--mag',        default=5, type=int)
-  parser.add_argument('--odir',       default='attention_images', type=str)
+  parser.add_argument('--odir',       default='images-attention', type=str)
   parser.add_argument('--fgdir',      default='../usable_area/inference', type=str)
   parser.add_argument('--savedir',    default='../experiment/save', type=str)
   parser.add_argument('--testdir',    default='../experiment/test_lists', type=str)
   parser.add_argument('--ramdisk',    default='/dev/shm', type=str)
   parser.add_argument('--n_classes',  default=2, type=int)
   parser.add_argument('--input_dim',  default=96, type=int)
-  parser.add_argument('--batch_size', default=32, type=int)
-  parser.add_argument('--oversample', default=1.25, type=float)
+  parser.add_argument('--batch_size', default=64, type=int)
+  parser.add_argument('--oversample', default=1., type=float)
 
   parser.add_argument('--randomize',  default=False, action='store_true')
   parser.add_argument('--max_slides',  default=None, type=int)
@@ -292,9 +308,9 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(args.odir, args.timestamp))
   assert args.timestamp is not None
 
-  # config = tf.ConfigProto()
-  # config.gpu_options.allow_growth = True
-  tf.enable_eager_execution()
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth = True
+  tf.enable_eager_execution(config=config)
 
   main(args)
     

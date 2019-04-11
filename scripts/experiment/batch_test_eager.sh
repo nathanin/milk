@@ -27,8 +27,8 @@ for pth in $( ls args/*.txt ); do
       --mil $1 \
       --temperature 0.5 \
       --encoder wide \
-      --batch_size 64 \
-      --maxbatches 20
+      --batch_size 32 \
+      --oversample 1.5
 
     # python test_eager.py --timestamp $p --odir result_test_mcdrop --mil $1 --mcdropout --temperature 0.5 --encoder shallow --batch_size 128
   else

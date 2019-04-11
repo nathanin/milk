@@ -80,6 +80,7 @@ class MilkEager(tf.keras.Model):
     with tf.device('/cpu:0'):
       att = tf.nn.softmax(att, axis=1)
 
+    # TODO clean up logic
     if verbose:
       print('attention:', att.shape)
     z = tf.matmul(att, features)
@@ -104,8 +105,9 @@ class MilkEager(tf.keras.Model):
     return z
 
   # @tf.contrib.eager.defun
+  # TODO unify encode_bag to work in return_z mode for all MIL types
   def encode_bag(self, x_bag, training=True, verbose=False, return_z=False):
-    z_bag = []
+    z_bag, z_enc = [], []
     n_bags = x_bag.shape[0] // self.batch_size
     remainder = x_bag.shape[0] - n_bags*self.batch_size
     x_bag = tf.split(x_bag, tf.stack([self.batch_size]*n_bags + [remainder]), axis=0)
@@ -115,6 +117,7 @@ class MilkEager(tf.keras.Model):
         print('\t z: ', z.shape)
       z = self.drop2(z, training=training)
       if self.mil_type == 'instance':
+        z_enc.append(z)
         z = self.apply_classifier(z, verbose=verbose, training=training)
         if verbose:
           print('Instance yhat:', z.shape)
@@ -123,12 +126,18 @@ class MilkEager(tf.keras.Model):
     z = tf.concat(z_bag, axis=0)
     if verbose:
       print('\tz bag:', z.shape)
-    #z = self.att_batchnorm(z, training=training)
-    if return_z:
+
+    # request to return zed should clobber the rest of these ops
+    if return_z and self.mil_type == 'instance':
+      # z_enc = tf.concat(z_enc, axis=0)
+      # print('Returning zenc and z', z_enc.shape, z.shape)
+      return z
+      # return z_enc, z
+    elif return_z:
       return z
     else:
       if self.mil_type == 'instance':
-        z = tf.reduce_mean(z, axis=0, keep_dims=True)
+        z = tf.reduce_mean(z, axis=0, keepdims=True)
       else:
         z = self.apply_mil(z, verbose=verbose)
       return z

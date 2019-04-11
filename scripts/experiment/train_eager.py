@@ -22,8 +22,7 @@ from milk.eager import MilkEager
 
 import collections
 
-with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
-# with open('../dataset/cases_md5.pkl', 'rb') as f:  
+with open('../../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
 from milk.encoder_config import get_encoder_args
@@ -132,20 +131,16 @@ class GradientAccumulator():
     self.grad_counter = 0
     self.n = n
     self.batch_size = batch_size
-
     self.grads_and_vars = collections.defaultdict(list)
 
   def track(self, grads, variables):
     for g, v in zip(grads, variables):
       self.grads_and_vars[v.name].append(g)
-
     self.grad_counter += 1
-
     if self.grad_counter == self.n:
       should_update = True
     else:
       should_update = False
-
     return should_update
 
   def accumualte(self):
@@ -154,15 +149,12 @@ class GradientAccumulator():
       if any(x is None for x in g):
         grads.append(None)
         continue
-        
       if self.n == 1:
         grads.append(g[0])
       else:
         gmean = tf.reduce_mean(g, axis=0, keep_dims=False)
         grads.append(gmean)
-
     self.reset()
-
     return grads
 
   def reset(self):
@@ -214,8 +206,10 @@ def main(args):
   val_list = data_utils.enforce_minimum_size(val_list, args.bag_size, verbose=True)
   test_list = data_utils.enforce_minimum_size(test_list, args.bag_size, verbose=True)
   transform_fn_internal = data_utils.make_transform_fn(args.x_size, args.y_size, 
-                                              args.crop_size, args.scale,
-                                              eager=True)
+                                                      args.crop_size, args.scale,
+                                                      brightness=True,
+                                                      normalize=True,
+                                                      eager=True)
   train_x, train_y = data_utils.load_list_to_memory(train_list, case_label_fn)
   val_x, val_y = data_utils.load_list_to_memory(val_list, case_label_fn)
 
@@ -238,12 +232,11 @@ def main(args):
       pad_first_dim=False)
 
   train_dataset = data_utils.tf_dataset(train_generator, batch_size=args.batch_size, 
-    preprocess_fn=transform_fn, buffer_size=512, threads=8, iterator=True)
+    preprocess_fn=transform_fn, buffer_size=64, threads=8, iterator=True)
   val_dataset = data_utils.tf_dataset(val_generator, batch_size=args.batch_size, 
-    preprocess_fn=transform_fn, buffer_size=512, threads=8, iterator=True)
+    preprocess_fn=transform_fn, buffer_size=64, threads=8, iterator=True)
 
   print('Testing batch generator')
-  ## Some api change between nightly built TF and R1.5
   x, y = next(train_dataset)
   print('x: ', x.shape)
   print('y: ', y.shape)
@@ -336,7 +329,7 @@ def main(args):
           grads = accumulator.accumualte()
           optimizer.apply_gradients(zip(grads, trainable_variables))
 
-        if k % 100 == 0:
+        if k % 20 == 0:
           print('{:06d}: loss={:3.5f} dt={:3.3f}s'.format(k, np.mean(avglosses), np.mean(steptimes)))
           avglosses, steptimes = [], []
           for y_, yh_ in zip(y, yhat):
@@ -396,7 +389,7 @@ if __name__ == '__main__':
   parser.add_argument('--seed',             default = None, type=int)
   parser.add_argument('--val_pct',          default = 0.2, type=float)
   parser.add_argument('--test_pct',         default = 0.2, type=float)
-  parser.add_argument('--data_patt',        default = '../dataset/tiles_reduced', type=str)
+  parser.add_argument('--data_patt',        default = '../../dataset/tiles_reduced', type=str)
   parser.add_argument('--save_prefix',      default = 'save', type=str)
   parser.add_argument('--pretrained_model', default = None, type=str)
 

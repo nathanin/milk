@@ -1,12 +1,6 @@
-# Main experiment
+## Main experiment -- training with numpy-format bags
 
 The set up is to test various configurations of MIL functions and encoders:
-
-- `train_tpu_inmemory.py` runs the training, using command line flags to control the type of experiment.
-    - `--mil` : one of `attention`, `average`, `instance`
-
-Refer to `batch_train.sh` for various examples.
-
 The main experiments are:
 
 | # | MIL type | Encoder |

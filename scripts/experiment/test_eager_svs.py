@@ -34,11 +34,13 @@ import cv2
 import os
 import re
 
+from sklearn.metrics import (roc_auc_score, roc_curve, 
+  classification_report, confusion_matrix)
+
 import seaborn as sns
 from matplotlib import pyplot as plt
 
 from svs_reader import Slide, reinhard
-from attimg import draw_attention
 
 from milk.utilities import data_utils
 from milk.utilities import model_utils
@@ -51,6 +53,56 @@ uid2label = pickle.load(open('../dataset/cases_md5.pkl', 'rb'))
 uid2slide = pickle.load(open('../dataset/uid2slide.pkl', 'rb'))
 
 from milk.encoder_config import get_encoder_args
+""" Return a pretty string """
+def pprint_cm(ytrue, yhat, labels=['0', '1']):
+  n_classes = len(labels)
+  cm = confusion_matrix(y_true=ytrue, y_pred=yhat)
+  s = '\nConfusion Matrix:\n'
+  s += '\t{}\t{}'.format(*labels)
+  for k in range(n_classes):
+    s += '\n'
+    s += '{}'.format(labels[k])
+    for j in range(n_classes):
+      s += '\t{: 3d}'.format(cm[k, j])
+
+  s += '\n'
+  return s
+
+def test_eval(ytrue, yhat, savepath=None):
+  ytrue = ytrue
+  yhat_c = np.argmax(yhat, axis=-1)
+  yhat = yhat[:,1]
+  auc_c = 'AUC = {:3.5f}\n'.format(roc_auc_score(y_true=ytrue, y_score=yhat))
+  cr = classification_report(y_true=ytrue, y_pred=yhat_c) + '\n'
+  cm = pprint_cm(ytrue, yhat_c) + '\n'
+  if savepath is not None:
+    with open(savepath, 'w+') as f:
+        f.write(auc_c)
+        f.write(cr)            
+        f.write(cm)
+  else:
+    print(auc_c)
+    print(cr)
+    print(cm)
+
+def auc_curve(ytrue, yhat, savepath=None):
+  plt.figure(figsize=(2,2), dpi=300)
+  ytrue_c = ytrue
+  yhat_c = yhat[:,1]
+  auc_c = roc_auc_score(y_true=ytrue_c, y_score=yhat_c)
+  fpr, tpr, _ = roc_curve(y_true=ytrue_c, y_score=yhat_c)
+
+  plt.plot(fpr, tpr, 
+      label='M1 AUC={:3.3f}'.format(auc_c))
+      
+  plt.legend(loc='lower right', frameon=True)
+  plt.ylabel('Sensitivity')
+  plt.xlabel('1 - specificity')
+
+  if savepath is None:
+    plt.show()
+  else:
+    plt.savefig(savepath, bbox_inches='tight')
 
 def get_wrapped_fn(svs):
   def wrapped_fn(idx):
@@ -69,7 +121,17 @@ def get_img_idx(svs, batch_size, prefetch, generate_subset=False, sample=1.0):
   # Replace svs.generate_index with a rolled-out generator that minimizes
   # the amount of unnecessary processing to do:
   # if generate_subset:
-  dataset = tf.data.Dataset.from_generator(generator=svs.generate_index,
+
+  # Shuffle indices
+  def generate_shuffled_index():
+    indices = np.arange(len(svs.tile_list))
+    np.random.shuffle(indices)
+    for i in indices:
+      yield i
+
+  # dataset = tf.data.Dataset.from_generator(generator=svs.generate_index,
+  #     output_types=tf.int64)
+  dataset = tf.data.Dataset.from_generator(generator=generate_shuffled_index,
       output_types=tf.int64)
   dataset = dataset.map(read_region_at_index, num_parallel_calls=4)
   dataset = dataset.prefetch(prefetch)
@@ -140,25 +202,40 @@ def process_slide(svs, model, args, return_z=False):
   zs = []
   indices = []
   print('Processing {} tiles'.format(n_tiles))
+
   for imgs, idx_ in iterator:
     batches += 1
     z = model.encode_bag(imgs, training=True, return_z=True)
     zs.append(z)
     indices.append(idx_)
     if batches % 10 == 0:
-        print('batch {:04d}\t{}\t{}'.format( batches, z.shape, batches*args.batch_size ))
+      print('batch {:04d}\t{}\t{}'.format( batches, z.shape, batches*args.batch_size ))
+
+    if batches >= args.maxbatches:
+      print('Ending processing')
+      break
 
   zs = tf.concat(zs, axis=0)
   indices = np.concatenate(indices)
   print('zs: ', zs.shape, zs.dtype)
   print('indices: ', indices.shape)
 
-  z_att, att = model.mil_attention(zs, training=True, verbose=True, return_att=True)
+  if args.mil == 'attention':
+    z_att, att = model.mil_attention(zs, training=True, verbose=True, return_att=True)
+    att = np.squeeze(att)
+    print('att:', att.shape)
+  elif args.mil == 'average':
+    z_att = model.apply_mil(zs, training=True)
+    att = np.zeros(1)
+  elif args.mil == 'instance':
+    att = np.zeros(1)
+    print('instance {} -->'.format(zs.shape), end=' ')
+    yhat = tf.reduce_mean(zs, axis=0, keepdims=True)
+    print('{}'.format(yhat.shape))
+    return yhat, att, indices
+
   yhat = model.apply_classifier(z_att, training=True, verbose=True)
   print('yhat:', yhat)
-
-  att = np.squeeze(att)
-  print('att:', att.shape)
 
   return yhat, att, indices
 
@@ -173,7 +250,7 @@ def main(args):
   if args.max_slides:
     test_unique_ids = test_unique_ids[:args.max_slides]
 
-  slide_list, slide_labels = get_slidelist_from_uids(test_unique_ids)
+  slide_list, slide_labels = get_slidelist_from_uids(test_unique_ids, process_all=1)
 
   print('Found {} slides'.format(len(slide_list)))
 
@@ -221,39 +298,48 @@ def main(args):
       print('Required foreground image not found ({})'.format(fgpth))
       continue
     
-    svs.initialize_output(name='attention', dim=1, mode='tile')
-    n_tiles = len(svs.tile_list)
-
-    yhat, att, indices = process_slide(svs, model, args)
-    print('returned attention:', np.min(att), np.max(att), att.shape)
-
-    yhat = yhat.numpy()
-    yhats.append(yhat)
-    ytrues.append(lab)
-    print('\tSlide label: {} predicted: {}'.format(lab, yhat))
-
-    svs.place_batch(att, indices, 'attention', mode='tile')
-    attention_img = np.squeeze(svs.output_imgs['attention'])
-    attention_img = attention_img * (1. / attention_img.max())
-    attention_img = draw_attention(attention_img, n_bins=25)
-    print('attention image:', attention_img.shape, 
-          attention_img.dtype, attention_img.min(),
-          attention_img.max())
-
-    dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_att.npy'.format(basename, yhat[0,1]))
-    np.save(dst, att)
-
-    dst = os.path.join(args.odir, args.timestamp, '{}_{:3.3f}_img.png'.format(basename, yhat[0,1]))
-    cv2.imwrite(dst, attention_img)
-
     try:
+      svs.initialize_output(name='attention', dim=1, mode='tile')
+      n_tiles = len(svs.tile_list)
+
+      yhat, att, indices = process_slide(svs, model, args)
+      print('returned attention:', np.min(att), np.max(att), att.shape)
+
+      yhat = yhat.numpy()
+      yhats.append(yhat)
+      ytrues.append(lab)
+      print('\tSlide label: {} predicted: {}'.format(lab, yhat))
+
+      # if args.mil == 'attention':
+      #   dst = os.path.join(args.odir, 
+      #     '{}_{}_{:3.3f}_att.npy'.format(
+      #       args.timestamp, basename, yhat[0,1]))
+      #   np.save(dst, att)
+    except Exception as e:
+      print('Exception')
+      print(e)
+      # print('{} already removed'.format(ramdisk_path))
+    finally:
       svs.close()
       os.remove(ramdisk_path)
-    except:
-      print('{} already removed'.format(ramdisk_path))
 
   yhats = np.concatenate(yhats, axis=0)
   ytrues = np.array(ytrues)
+  for yh, yt in zip(yhats, ytrues):
+    s = '{}\t{}'.format(yh,yt)
+    print(s)
+
+  # Write out labels and predictions
+  save_yhat = os.path.join(args.odir, '{}.npy'.format(args.timestamp))
+  save_ytrue = os.path.join(args.odir, '{}_ytrue.npy'.format(args.timestamp))
+  np.save(save_yhat, yhats)
+  np.save(save_ytrue, ytrues)
+
+  save_img = os.path.join(args.odir, '{}.png'.format(args.timestamp))
+  save_metrics = os.path.join(args.odir, '{}.txt'.format(args.timestamp))
+  auc_curve(ytrues, yhats, savepath=save_img)
+  test_eval(ytrues, yhats, savepath=save_metrics)
+
   acc = (np.argmax(yhats, axis=-1) == ytrues).mean()
   print(acc)
 
@@ -264,7 +350,7 @@ if __name__ == '__main__':
 
   # Changed often -- with defaults
   parser.add_argument('--mag',        default=5, type=int)
-  parser.add_argument('--odir',       default='attention_images', type=str)
+  parser.add_argument('--odir',       default=None, type=str)
   parser.add_argument('--fgdir',      default='../usable_area/inference', type=str)
   parser.add_argument('--savedir',    default='../experiment/save', type=str)
   parser.add_argument('--testdir',    default='../experiment/test_lists', type=str)
@@ -272,7 +358,8 @@ if __name__ == '__main__':
   parser.add_argument('--n_classes',  default=2, type=int)
   parser.add_argument('--input_dim',  default=96, type=int)
   parser.add_argument('--batch_size', default=32, type=int)
-  parser.add_argument('--oversample', default=1.25, type=float)
+  parser.add_argument('--oversample', default=1.5, type=float)
+  parser.add_argument('--maxbatches', default=np.inf, type=int)
 
   parser.add_argument('--randomize',  default=False, action='store_true')
   parser.add_argument('--max_slides',  default=None, type=int)
@@ -288,8 +375,8 @@ if __name__ == '__main__':
   parser.add_argument('--mcdropout_sample', default=0.25, type=int)
   args = parser.parse_args()
 
-  if not os.path.exists(os.path.join(args.odir, args.timestamp)):
-    os.makedirs(os.path.join(args.odir, args.timestamp))
+  # if not os.path.exists(os.path.join(args.odir, args.timestamp)):
+  #   os.makedirs(os.path.join(args.odir, args.timestamp))
   assert args.timestamp is not None
 
   # config = tf.ConfigProto()

@@ -47,10 +47,8 @@ from milk.utilities import model_utils
 from milk.eager import MilkEager
 
 # uid2label = pickle.load(open('../dataset/case_dict_obfuscated.pkl', 'rb'))
-uid2label = pickle.load(open('../dataset/cases_md5.pkl', 'rb'))
-uid2slide = pickle.load(open('../dataset/uid2slide.pkl', 'rb'))
-
-from milk.encoder_config import big_args as encoder_args
+# from milk.encoder_config import big_args as encoder_args
+from milk.encoder_config import get_encoder_args
 
 def get_wrapped_fn(svs):
   def wrapped_fn(idx):
@@ -108,33 +106,6 @@ def read_test_list(test_file):
   
   return test_list
 
-def get_slidelist_from_uids(uids, process_all=True):
-  """ Translate the numpy name into a path to some slides
-
-  Each case can have multiple slides, so decide what to do with them
-  """
-  slide_list_out = []
-  labels = []
-  for uid in uids:
-    try:
-      slide_list = uid2slide[uid]
-      if len(slide_list) > 0:
-        if process_all:
-          slide_list_out += slide_list
-          labels += [uid2label[uid]]*len(slide_list)
-        else:
-          slide_list_out.append(np.random.choice(slide_list))
-          labels.append(uid2label[uid])
-      else:
-        print('WARNING UID: {} found no associated slides'.format(uid))
-    except:
-      print('WARNING UID: {} not found in slide list'.format(uid))
-
-  print('Testing on slides:')
-  for i, (s, l) in enumerate(zip(slide_list_out, labels)):
-    print('{:03d} {}\t\t{}'.format(i, s, l))
-  return slide_list_out, labels
-
 def process_slide(svs, model, args, return_z=False):
   n_tiles = len(svs.tile_list)
   prefetch = min(512, n_tiles)
@@ -149,7 +120,8 @@ def process_slide(svs, model, args, return_z=False):
   print('Processing {} tiles'.format(n_tiles))
   for imgs, idx_ in iterator:
     batches += 1
-    z = model.encode_bag(imgs, batch_size=args.batch_size, training=True, return_z=True)
+    z = model.encode_bag(imgs, training=True, return_z=True)
+    # z = model.encode_bag(imgs, training=False, return_z=True)
     zs.append(z)
     indices.append(idx_)
     if batches % 10 == 0:
@@ -160,15 +132,22 @@ def process_slide(svs, model, args, return_z=False):
   print('zs: ', zs.shape, zs.dtype)
   print('indices: ', indices.shape)
 
-  if args.mil == 'average':
-    z_mil = tf.reduce_mean(zs, axis=0, keep_dims=True)
-    att = None
-  elif args.mil == 'attention':
-    z_mil, att = model.mil_attention(zs, training=False, verbose=True, return_att=True)
+  if args.mil == 'attention':
+    z_att, att = model.mil_attention(zs, training=True, verbose=True, return_raw_att=True)
     att = np.squeeze(att)
     print('att:', att.shape)
+  elif args.mil == 'average':
+    z_att = tf.reduce_mean(zs, axis=0, keep_dims=True)
+    att = np.zeros(1)
+  elif args.mil == 'instance':
+    # att = np.zeros(1)
+    zpos = zs[:,1].numpy()
+    print('instance {} -->'.format(zs.shape), end=' ')
+    yhat = tf.reduce_mean(zs, axis=0, keepdims=True)
+    print('{}'.format(yhat.shape))
+    return yhat, zpos, indices
 
-  yhat = model.apply_classifier(z_mil, training=False, verbose=True)
+  yhat = model.apply_classifier(z_att, training=True, verbose=True)
   print('yhat:', yhat)
 
   # de-reference the iterator maybe?
@@ -176,51 +155,6 @@ def process_slide(svs, model, args, return_z=False):
   del iterator
 
   return yhat, att, indices
-
-"""
-Track attention on an included/not-included basis.
-'sample' argument controls the % of the whole slide to use in each mcdropout iteration
-"""
-# def process_slide_mcdropout(svs, encode_model, args):
-#   yhats = []
-#   atts = np.zeros((len(svs.tile_list), args.mcdropout_t))-1
-#   zs, indices_all = process_slide(svs, encode_model, y_op, att_op, 
-#                               z_pl, args, return_z=True)
-
-#   n_tiles = len(svs.tile_list)
-#   n_sample = int(n_tiles * args.mcdropout_sample)
-#   print('zs:', zs.shape)
-#   print('indices:', indices_all.shape)
-#   for t in range(args.mcdropout_t):
-#     zs_sample = np.random.choice(range(n_tiles), n_sample)
-#     zs_ = zs[zs_sample, :]
-#     indices = indices_all[zs_sample]
-#     print('sampled {} images from z ({})'.format(n_sample, zs_.shape))
-
-#     yhat = sess.run(y_op, feed_dict={z_pl: zs_})
-#     print('yhat:', yhat)
-
-#     att = sess.run(att_op, feed_dict={z_pl: zs_})
-#     att = np.squeeze(att)
-#     print('att:', att.shape)
-
-#     ## Use returned indices to map attentions back to the tiles
-#     att_map = np.zeros(len(svs.tile_list))
-#     att_map[indices] = att
-#     atts[:,t] = att_map
-
-#     yhats.append(yhat)
-
-#   yhats = np.concatenate(yhats, axis=0)
-#   yhat_mean = np.mean(yhats, axis=0, keepdims=True)
-#   yhat_std = np.std(yhats, axis=0, keepdims=True)
-#   print('\tyhat_std:', yhat_std)
-
-#   atts[atts==-1] = np.nan
-#   att_mean = np.nanmean(atts, axis=1, keepdims=True)
-#   att_std  = np.nanstd(atts, axis=1, keepdims=True)
-
-#   return yhat_mean, att_mean, yhat_std, att_std, indices_all
 
 def read_list(test_file):
   test_list = []
@@ -235,12 +169,12 @@ def main(args):
   slide_list = read_list(args.test_list)
   print('Found {} slides'.format(len(slide_list)))
 
-  # snapshot = os.path.join(args.savedir, '{}.h5'.format(args.timestamp))
-  # trained_model = load_model(snapshot)
-  # if args.mcdropout:
-  #   encoder_args['mcdropout'] = True
-
-  model = MilkEager( encoder_args=encoder_args, mil_type=args.mil, deep_classifier=args.deep_classifier )
+  encoder_args = get_encoder_args(args.encoder)
+  model = MilkEager(encoder_args=encoder_args, 
+                    mil_type=args.mil, 
+                    batch_size=args.batch_size,
+                    temperature=args.temperature,
+                    deep_classifier=args.deep_classifier)
 
   x_pl = np.zeros((1, args.batch_size, args.input_dim, args.input_dim, 3), dtype=np.float32)
   yhat = model(tf.constant(x_pl), verbose=True)
@@ -259,25 +193,27 @@ def main(args):
       ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
       print('Using fg image at : {}'.format(fgpth))
       fgimg = cv2.imread(fgpth, 0)
-      svs = Slide(slide_path        = ramdisk_path, 
-                  # background_speed  = 'accurate',
-                  background_speed  = 'image',
-                  background_image  = fgimg,
-                  preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32) ,
-                  process_mag       = args.mag,
-                  process_size      = args.input_dim,
-                  oversample_factor = args.oversample,
-                  verbose           = False)
+      try:
+        svs = Slide(slide_path        = ramdisk_path, 
+                    # background_speed  = 'accurate',
+                    background_speed  = 'image',
+                    background_image  = fgimg,
+                    preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32),
+                    process_mag       = args.mag,
+                    process_size      = args.input_dim,
+                    oversample_factor = args.oversample,
+                    verbose           = False)
+      except Exception as e:
+        print(e)
+        print('Caught SVS related error. Cleaning ramdisk and continuing.')
+        print('Cleaning file: {}'.format(ramdisk_path))
+        os.remove(ramdisk_path)
+        continue
+
     else:
-      ## require precomputed background; Exit.
-      print('Required foreground image not found ({})'.format(fgpth))
-      continue
+        continue
     
     svs.initialize_output(name='attention', dim=1, mode='tile')
-
-    # if args.mcdropout:
-    #   yhat, att, yhat_sd, att_sd, indices = process_slide_mcdropout(svs, model, args)
-    # else:
     yhat, att, indices = process_slide(svs, model, args)
 
     yhats.append(yhat)
@@ -285,7 +221,10 @@ def main(args):
 
     if args.mil == 'average':
       print('Average MIL; continuing')
-    elif args.mil == 'attention':
+    elif args.mil in ['attention', 'instance']:
+      print('Placing values ranged {:3.3f} - {:3.3f}'.format(att.min(), att.max()))
+      print('Visualizing mean {:3.5f}'.format(np.mean(att)))
+      print('Visualizing std {:3.5f}'.format(np.std(att)))
       svs.place_batch(att, indices, 'attention', mode='tile')
       attention_img = np.squeeze(svs.output_imgs['attention'])
       attention_img = attention_img * (1. / attention_img.max())
@@ -296,7 +235,6 @@ def main(args):
 
       dst = os.path.join(args.odir, '{}_att.npy'.format(basename))
       np.save(dst, att)
-
       dst = os.path.join(args.odir, '{}_img.png'.format(basename))
       cv2.imwrite(dst, attention_img)
 
@@ -324,9 +262,9 @@ if __name__ == '__main__':
   parser.add_argument('--odir',       default=None, type=str)  # Required
   parser.add_argument('--test_list',  default=None, type=str)  # Required
   parser.add_argument('--snapshot',   default=None, type=str)  # Required
+  parser.add_argument('--fgdir',      default=None, type=str)  # Required
   
   parser.add_argument('--mag',        default=5, type=int)
-  parser.add_argument('--fgdir',      default='tcga-prad-fg', type=str)
   parser.add_argument('--ramdisk',    default='/dev/shm', type=str)
   parser.add_argument('--n_classes',  default=2, type=int)
   parser.add_argument('--input_dim',  default=96, type=int)
@@ -336,8 +274,10 @@ if __name__ == '__main__':
   parser.add_argument('--overwrite',  default=False, action='store_true')
 
   parser.add_argument('--mil',        default='attention', type=str)
+  parser.add_argument('--encoder',    default='wide', type=str)
   parser.add_argument('--mcdropout',  default=False, action='store_true')
   parser.add_argument('--mcdropout_t', default=25, type=int)
+  parser.add_argument('--temperature', default=0.5, type=float) 
   parser.add_argument('--deep_classifier', default=True, action='store_false') ## almost-always True
   parser.add_argument('--gated_attention', default=True, action='store_false') ## almost-always True
   parser.add_argument('--mcdropout_sample', default=0.25, type=int)

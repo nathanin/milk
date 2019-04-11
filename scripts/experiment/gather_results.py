@@ -54,9 +54,20 @@ def main(args):
 
     ytrue_argmax = np.argmax(ytrue, axis=-1)
     yhat_argmax = np.argmax(yhat, axis=-1)
+    if len(ytrue.shape)==2:
+      ytrue_argmax = np.argmax(ytrue, axis=-1)
+    else:
+      ytrue_argmax = ytrue
 
     yhat_1 = np.argmax(yhat, axis=-1)
-    ytrue_1 = np.argmax(ytrue, axis=-1)
+    if len(ytrue.shape) == 2:
+      ytrue_1 = np.argmax(ytrue, axis=-1)
+    else:
+      ytrue_1 = ytrue
+
+    if len(yhat.shape) == 2:
+      ytrue = ytrue[:,1]
+      yhat = yhat[:,1]
 
     acc =  np.mean( ( yhat_1 == ytrue_1 ) )
     auc =  roc_auc_score(   y_true = ytrue,   y_score = yhat)

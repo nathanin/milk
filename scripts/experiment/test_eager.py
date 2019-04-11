@@ -99,7 +99,7 @@ def run_sample(case_x, model, mcdropout=False, sample_mode='all'):
   if mcdropout:
     yhats = []
     for _ in range(25):
-      yhat = model(tf.constant(case_x), training=True)
+      yhat = model(tf.constant(case_x), training=1)
       yhats.append(yhat)
     
     yhats = np.stack(yhats, axis=0)

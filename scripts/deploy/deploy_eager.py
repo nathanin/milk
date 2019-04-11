@@ -40,10 +40,6 @@ from matplotlib import pyplot as plt
 from svs_reader import Slide, reinhard
 from attimg import draw_attention
 
-from milk.utilities import data_utils
-from milk.utilities import model_utils
-from milk.utilities import training_utils
-from milk.utilities import model_utils
 from milk.eager import MilkEager
 
 # uid2label = pickle.load(open('../dataset/case_dict_obfuscated.pkl', 'rb'))
@@ -55,7 +51,6 @@ def get_wrapped_fn(svs):
     coords = svs.tile_list[idx]
     img = svs._read_tile(coords)
     return img, idx
-
   return wrapped_fn
 
 def get_img_idx(svs, batch_size, prefetch, generate_subset=False, sample=1.0):
@@ -69,7 +64,6 @@ def get_img_idx(svs, batch_size, prefetch, generate_subset=False, sample=1.0):
   # Replace svs.generate_index with a rolled-out generator that minimizes
   # the amount of unnecessary processing to do:
   # if generate_subset:
-
   dataset = tf.data.Dataset.from_generator(generator=svs.generate_index,
       output_types=tf.int64)
   dataset = dataset.map(read_region_at_index, num_parallel_calls=4)
@@ -209,7 +203,6 @@ def main(args):
         print('Cleaning file: {}'.format(ramdisk_path))
         os.remove(ramdisk_path)
         continue
-
     else:
         continue
     

@@ -13,7 +13,7 @@ python deploy_eager.py --odir local-svs \
     --snapshot ../experiment/wide_model_pretrained/save/2019_03_28_19_01_12.h5 \
     --mil attention \
     --fgdir ../usable_area/inference \
-    --oversample 5
+    --oversample 3
 
 # python deploy_eager.py --odir local-svs-instance \
 #     --test_list local_svs.txt \

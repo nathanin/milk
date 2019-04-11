@@ -221,22 +221,26 @@ def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda
 
     yield batch_x, y.astype(np.float32)
 
-def tf_dataset(generator, preprocess_fn=lambda x: x, batch_size=1, buffer_size=256, threads=8, iterator=False):
+def tf_dataset(generator, preprocess_fn=lambda x: x, batch_size=1, buffer_size=64, threads=8, iterator=False):
   def map_fn(x,y):
     x = tf.contrib.eager.py_func(preprocess_fn, inp=[x], Tout=(tf.float32))
     y = tf.squeeze(y)
     return x, y
 
   dataset = tf.data.Dataset.from_generator(generator, output_types=(tf.float32, tf.float32))
-  dataset = dataset.apply(tf.data.experimental.map_and_batch(map_func=map_fn, batch_size=batch_size))
-  #dataset = dataset.map(map_fn, num_parallel_calls=threads)
-  #dataset = dataset.batch(batch_size)
-  dataset = dataset.prefetch(1)
+  #dataset = dataset.apply(tf.data.experimental.map_and_batch(map_func=map_fn, batch_size=batch_size))
+  dataset = dataset.map(map_fn, num_parallel_calls=threads)
+  dataset = dataset.prefetch(buffer_size)
+  dataset = dataset.batch(batch_size)
   #dataset = dataset.apply(tf.data.experimental.prefetch_to_device('/gpu:0', buffer_size=16))
 
+  # if tf.executing_eagerly():
+  #   print('Executing eagerly. Returning the iterable dataset object')
+  #   return dataset
+
   if iterator:
-    #dataset = tf.contrib.eager.Iterator(dataset)
     dataset = dataset.make_one_shot_iterator()
+
   return dataset
 
 def load(data_path, 
@@ -316,7 +320,8 @@ def load(data_path,
   return batch_x, as_one_hot(y_)
 
 def make_transform_fn(height, width, crop_size, scale=1.0, 
-  flip=True, middle_crop=False, rotate=True, normalize=False, eager=False):
+  flip=True, middle_crop=False, rotate=True, normalize=False, 
+  brightness=False, eager=False):
   """ Return a series of chained numpy and open-cv functions
   
   """
@@ -361,6 +366,20 @@ def make_transform_fn(height, width, crop_size, scale=1.0,
     return (x_ * (1/255.)).astype(np.float32)
     # return (x_ * (2/255.) - 1).astype(np.float32)
 
+  # stackoverflow.com: how to fast cahnge image brightness with python opencv
+  def _random_brightness(x_):
+    value = np.random.randint(low=0, high=30)
+    hsv = cv2.cvtColor(x_, cv2.COLOR_RGB2HSV) 
+    h, s, v = cv2.split(hsv)
+
+    # Handle overflowing
+    lim = 255 - value
+    v[v > lim] = 255
+    v[v <= lim] += value
+    
+    final_hsv = cv2.merge((h,s,v))
+    return cv2.cvtColor(final_hsv, cv2.COLOR_HSV2RGB)
+
   def _chained_fns(x_):
     if eager:
       x_ = x_.numpy()
@@ -373,10 +392,11 @@ def make_transform_fn(height, width, crop_size, scale=1.0,
     if rotate:
       x_ = _rotate_90(x_)
 
-    # x_ = _resize_fn(x_)
-
     if flip:
       x_ = _flip_fn(x_)
+
+    if brightness:
+      x_ = _random_brightness(x_)
 
     if normalize:
       x_ = reinhard(x_)

@@ -12,6 +12,13 @@ deep_args = {
     'num_layers_in_each_block': 16,
 }
 
+small_args = {
+    'depth_of_model': 24,
+    'growth_rate': 24,
+    'num_of_blocks': 4,
+    'num_layers_in_each_block': 6,
+}
+
 big_args = {
     'depth_of_model': 80,
     'growth_rate': 36,
@@ -37,6 +44,8 @@ mnist_args = {
 def get_encoder_args(arg_str):
   if arg_str == 'big':
     return big_args
+  elif arg_str == 'small':
+    return small_args
   elif arg_str == 'wide':
     return wide_args
   elif arg_str == 'deep':

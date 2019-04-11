@@ -167,18 +167,50 @@ def main(args):
   else:
     print('Pretrained model not found ({}). Continuing end 2 end.'.format(args.pretrained))
 
+<<<<<<< HEAD
+  if args.gpus > 1:
+    print('Duplicating model onto 2 GPUs')
+    model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
+
+  optimizer = tf.keras.optimizers.Adam(lr=args.lr, decay=args.decay)
+
+  model.compile(optimizer=optimizer,
+          loss = tf.keras.losses.categorical_crossentropy,
+          metrics = ['categorical_accuracy'])
+
+  for epc in range(args.epochs):
+    for k in range(int(args.epoch_steps)):
+      batch_x, batch_y = next(generator)
+      model.train_on_batch(batch_x, batch_y)
+
+      if k % 10 == 0:
+        y_pred = model.predict(batch_x)
+        print(y_pred)
+
+  #model.fit_generator(generator=generator, 
+  #          validation_data=val_generator,
+  #          validation_steps=100,
+  #          steps_per_epoch=args.epoch_steps, 
+  #          epochs=args.epochs)
+  
+=======
   model.fit_generator(generator=generator, 
                             validation_data=val_generator,
                             validation_steps=100,
                             steps_per_epoch=args.epoch_steps, 
                             epochs=args.epochs)
+>>>>>>> ffc6ce4dbe53dc39884d1a0b0ef41ba8a3df0ac6
   model.save(args.o)
   
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('-o', default='./bagged_mnist.h5', type=str)
   parser.add_argument('-n', default=100, type=int)
+<<<<<<< HEAD
+  parser.add_argument('--lr',  default=1e-3, type=float)
+=======
   parser.add_argument('--lr',  default=1e-4, type=float)
+>>>>>>> ffc6ce4dbe53dc39884d1a0b0ef41ba8a3df0ac6
   parser.add_argument('--tpu',   default=False, action='store_true')
   parser.add_argument('--mil',   default='attention', type=str)
   parser.add_argument('--gpus',   default=1, type=int)

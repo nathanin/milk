@@ -151,7 +151,11 @@ def main(args):
     for k in range(int(args.steps_per_epoch * args.epochs)):
       with tf.GradientTape() as tape:
         x, y = next(generator)
+<<<<<<< HEAD
+        yhat = model(tf.constant(x), batch_size=args.n, training=True)
+=======
         yhat = model(x, training=True)
+>>>>>>> ffc6ce4dbe53dc39884d1a0b0ef41ba8a3df0ac6
         loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
 
       grads = tape.gradient(loss, model.variables)

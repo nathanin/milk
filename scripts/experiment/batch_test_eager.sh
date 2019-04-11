@@ -14,23 +14,15 @@ for pth in $( ls args/*.txt ); do
   if grep -xq mil.$1 $pth
   then
     echo testing $p
-    # python test_eager.py \
-    #   --timestamp $p \
-    #   --odir result_test \
-    #   --mil $1 \
-    #   --temperature 0.5 
-    #   --encoder wide
-
-    python test_eager_svs.py \
+    python test_eager.py \
       --timestamp $p \
-      --odir result_test_svs \
+      --odir result_test \
       --mil $1 \
       --temperature 0.5 \
       --encoder wide \
       --batch_size 32 \
       --oversample 1.5
 
-    # python test_eager.py --timestamp $p --odir result_test_mcdrop --mil $1 --mcdropout --temperature 0.5 --encoder shallow --batch_size 128
   else
     echo skipping $p
   fi

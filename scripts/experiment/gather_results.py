@@ -45,9 +45,14 @@ def main(args):
   accs, aucs, precs, recs, specs, f1s, yhats, ytrues = [], [], [], [], [], [], [], []
   
   for ts in timestamps:
-    yhat  = get_yhat(ts, args.src)
-    ytrue = get_ytrue(ts, args.src)
+    try:
+      yhat  = get_yhat(ts, args.src)
+      ytrue = get_ytrue(ts, args.src)
+    except:
+      print('failed to load data for timestamp {}'.format(ts))
+      continue
 
+    ytrue_argmax = np.argmax(ytrue, axis=-1)
     yhat_argmax = np.argmax(yhat, axis=-1)
     if len(ytrue.shape)==2:
       ytrue_argmax = np.argmax(ytrue, axis=-1)
@@ -61,7 +66,8 @@ def main(args):
       ytrue_1 = ytrue
 
     if len(yhat.shape) == 2:
-      yhat = yhat[:,1].reshape(-1,1)
+      ytrue = ytrue[:,1]
+      yhat = yhat[:,1]
 
     acc =  np.mean( ( yhat_1 == ytrue_1 ) )
     auc =  roc_auc_score(   y_true = ytrue,   y_score = yhat)

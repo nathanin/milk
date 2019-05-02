@@ -19,6 +19,13 @@ small_args = {
     'num_layers_in_each_block': 6,
 }
 
+tiny_args = {
+    'depth_of_model': 12,
+    'growth_rate': 36,
+    'num_of_blocks': 4,
+    'num_layers_in_each_block': 3,
+}
+
 big_args = {
     'depth_of_model': 80,
     'growth_rate': 36,
@@ -46,6 +53,8 @@ def get_encoder_args(arg_str):
     return big_args
   elif arg_str == 'small':
     return small_args
+  elif arg_str == 'tiny':
+    return tiny_args
   elif arg_str == 'wide':
     return wide_args
   elif arg_str == 'deep':

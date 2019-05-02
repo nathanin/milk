@@ -156,7 +156,7 @@ class MilkEager(tf.keras.Model):
     yhat = self.classifier(features)
     return yhat
 
-  @tf.contrib.eager.defun
+  # @tf.contrib.eager.defun
   def call(self, x_in, training=True, verbose=False):
     """
     `training` controls the use of dropout and batch norm, if defined
@@ -175,7 +175,7 @@ class MilkEager(tf.keras.Model):
       print('Encoder Call:')
       print('n_x: ', n_x)
     zs = []
-    # This loop is over the batch dimension;
+    # This loop is over the batch dimension
     x_in_split = tf.split(x_in, n_x, axis=0)
     for x_bag in x_in_split:
       if verbose:

@@ -185,7 +185,7 @@ def load_list_to_memory(case_list, case_label_fn):
   return data, labels
 
 def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda x: x,
-  pad_first_dim=True):
+                         pad_first_dim=True):
   """ Yield cases from dictionaries
   batch_x = (batch_size, bag_size, h, w, c)  
   batch_y = (batch_size, 2)

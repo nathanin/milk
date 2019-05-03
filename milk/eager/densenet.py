@@ -288,6 +288,7 @@ class DenseNetEager(tf.keras.Model):
 
 
   # def call(self, x, verbose=False, training=True):
+  # @tf.contrib.eager.defun
   def call(self, x, training=True):
     # if verbose:
     #   print('DenseNet Input:')

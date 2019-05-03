@@ -200,7 +200,8 @@ def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda
       data = xdict[k] 
       label = ydict[k]
       indices = np.random.choice(range(data.shape[0]), bag_size)
-      data = apply_transform(transform_fn, data[indices, ...])
+      if transform_fn is not None:
+        data = apply_transform(transform_fn, data[indices, ...])
       batch_x.append(data)
       batch_y.append(label)
 
@@ -223,7 +224,8 @@ def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda
 
 def tf_dataset(generator, preprocess_fn=lambda x: x, batch_size=1, buffer_size=64, threads=8, iterator=False):
   def map_fn(x,y):
-    x = tf.contrib.eager.py_func(preprocess_fn, inp=[x], Tout=(tf.float32))
+    #x = tf.contrib.eager.py_func(preprocess_fn, inp=[x], Tout=(tf.float32))
+    x = tf.py_function(preprocess_fn, inp=[x], Tout=(tf.float32))
     y = tf.squeeze(y)
     return x, y
 
@@ -231,7 +233,9 @@ def tf_dataset(generator, preprocess_fn=lambda x: x, batch_size=1, buffer_size=6
   #dataset = dataset.apply(tf.data.experimental.map_and_batch(map_func=map_fn, batch_size=batch_size))
   dataset = dataset.map(map_fn, num_parallel_calls=threads)
   dataset = dataset.prefetch(buffer_size)
-  dataset = dataset.batch(batch_size)
+
+  with tf.device('/gpu:0'):
+    dataset = dataset.batch(batch_size)
   #dataset = dataset.apply(tf.data.experimental.prefetch_to_device('/gpu:0', buffer_size=16))
 
   # if tf.executing_eagerly():

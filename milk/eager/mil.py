@@ -156,7 +156,7 @@ class MilkEager(tf.keras.Model):
     yhat = self.classifier(features)
     return yhat
 
-  @tf.contrib.eager.defun
+  # @tf.contrib.eager.defun
   def call(self, x_in, training=True, verbose=False):
     """
     `training` controls the use of dropout and batch norm, if defined

@@ -1,6 +1,5 @@
 from __future__ import print_function
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
 import numpy as np
 import os
 import cv2
@@ -200,119 +199,119 @@ def get_nested_variables(model):
 
     return all_variables, densenet_variables
 
-LOG_EVERY_N = 25
-# PRETRAIN_SNAPSHOT = 'pretraining/trained/eager_segmentation-13001'
-# PRETRAIN_SNAPSHOT = 'pretraining/classifier/eager_classifier-14001'
-def mil_train_loop(EPOCHS=100, 
-                   EPOCH_ITERS=500, 
-                   global_step=None, 
-                   model=None,
-                   optimizer=None, 
-                   grads=None, 
-                   loss_function=loss_function, #saver=None,
-                   train_dataset=None, 
-                   val_dataset=None, 
-                   accuracy_function=None,
-                   save_prefix=None, 
-                   img_debug_dir=None,
-                   waiting_time=5,
-                   pretrain_snapshot=None):
-    ## Reset global step
-    if global_step.numpy() > 0:
-        tf.assign(global_step, 0)
-
-    best_val_acc = 0.
-    best_train_acc = 0.
-    accuracy_tol = 0.05
-    best_val_loss = np.log(2)
-
-    # all_vars, densenet_vars = get_nested_variables(model)
-    all_vars = model.variables
-    encoder_vars = model.encoder.variables 
-
-    print('Creating saver ({})'.format(save_prefix))
-    encoder_saver = tfe.Saver(encoder_vars)
-    saver = tfe.Saver(all_vars)
-    if pretrain_snapshot is not None:
-        print('Restoring from {}'.format(pretrain_snapshot))
-        encoder_saver.restore(pretrain_snapshot)
-
-    saver.save(save_prefix, global_step=0)
-    best_snapshot = 0
-    since_last_snapshot = 0
-    PATIENTCE = 10000
-
-    print('Performing initial log', end='...')
-    logging(model, val_dataset, loss_function, grads, [1.])
-    print('Done')
-
-    print('Entering training loop:')
-    print('Starting training at global step: {}'.format(global_step.numpy()))
-    global_index = 0
-    last_N_losses = []
-    for epoch in range(1, EPOCHS):
-        batch_times = []
-        for _ in range(EPOCH_ITERS):
-            tf.assign(global_step, global_step+1)
-            tstart = time.time()
-            with tf.device('/gpu:0'):
-                loss_val, grads_and_vars = grads(model, train_dataset)
-                optimizer.apply_gradients(grads_and_vars)
-
-            last_N_losses.append(loss_val.numpy())
-            batch_times.append(time.time()-tstart)
-
-            global_index += 1
-            if global_index % LOG_EVERY_N == 0:
-                print('EPOCH [{:04d}] STEP [{:05d}] '.format(epoch, global_index), end = ' ')
-                logging(model, val_dataset, loss_function, grads, last_N_losses)
-                last_N_losses = []
-
-        mean_batch_time = np.mean(batch_times)
-        train_loss, val_loss, train_acc, val_acc = mil_test_step(model, 
-            grads=grads, 
-            train_dataset=train_dataset, 
-            val_dataset=val_dataset, 
-            global_step=global_step, 
-            mean_batch=mean_batch_time, 
-            N=100,
-            loss_function=loss_function, 
-            accuracy_function=accuracy_function)
-
-        if epoch < waiting_time: 
-            print('Epoch < waiting time ({})'.format(waiting_time))
-            continue
-
-        ## Check whether to save
-        if val_acc > best_val_acc:
-            print('Val acc {} > previous best {}; Snapshotting'.format(val_acc, best_val_acc))
-            saver.save(save_prefix, global_step=global_step)
-            since_last_snapshot = 0
-            best_val_acc = val_acc
-            if val_loss < best_val_loss:
-                print('Val loss {} < previous best {}. Updating'.format(val_loss, best_val_loss))
-                best_val_loss = val_loss
-            best_snapshot = global_step.numpy()
-
-        elif val_acc > best_val_acc - accuracy_tol:
-            print('Matched best val accuracy within tolerance {}'.format(accuracy_tol))
-            # if val_loss < best_val_loss and train_acc >= best_train_acc:
-            if val_loss < best_val_loss:
-                print('Val loss {} < previous best snapshot {}; '.format(val_loss, best_val_loss))
-                print('train acc {} > previous best {}; Snapshotting'.format(train_acc, best_train_acc))
-                saver.save(save_prefix, global_step=global_step)
-                since_last_snapshot = 0
-                best_val_loss = val_loss
-                best_train_acc = train_acc
-                best_snapshot = global_step.numpy()
-
-        if since_last_snapshot > 15 and global_step > PATIENTCE:
-            print('25 Epochs have passed since the last snapshot. Exiting.')
-            break
-        else:
-            since_last_snapshot += 1
-
-    return saver, best_snapshot
+#LOG_EVERY_N = 25
+## PRETRAIN_SNAPSHOT = 'pretraining/trained/eager_segmentation-13001'
+## PRETRAIN_SNAPSHOT = 'pretraining/classifier/eager_classifier-14001'
+#def mil_train_loop(EPOCHS=100, 
+#                   EPOCH_ITERS=500, 
+#                   global_step=None, 
+#                   model=None,
+#                   optimizer=None, 
+#                   grads=None, 
+#                   loss_function=loss_function, #saver=None,
+#                   train_dataset=None, 
+#                   val_dataset=None, 
+#                   accuracy_function=None,
+#                   save_prefix=None, 
+#                   img_debug_dir=None,
+#                   waiting_time=5,
+#                   pretrain_snapshot=None):
+#    ## Reset global step
+#    if global_step.numpy() > 0:
+#        tf.assign(global_step, 0)
+#
+#    best_val_acc = 0.
+#    best_train_acc = 0.
+#    accuracy_tol = 0.05
+#    best_val_loss = np.log(2)
+#
+#    # all_vars, densenet_vars = get_nested_variables(model)
+#    all_vars = model.variables
+#    encoder_vars = model.encoder.variables 
+#
+#    print('Creating saver ({})'.format(save_prefix))
+#    encoder_saver = tfe.Saver(encoder_vars)
+#    saver = tfe.Saver(all_vars)
+#    if pretrain_snapshot is not None:
+#        print('Restoring from {}'.format(pretrain_snapshot))
+#        encoder_saver.restore(pretrain_snapshot)
+#
+#    saver.save(save_prefix, global_step=0)
+#    best_snapshot = 0
+#    since_last_snapshot = 0
+#    PATIENTCE = 10000
+#
+#    print('Performing initial log', end='...')
+#    logging(model, val_dataset, loss_function, grads, [1.])
+#    print('Done')
+#
+#    print('Entering training loop:')
+#    print('Starting training at global step: {}'.format(global_step.numpy()))
+#    global_index = 0
+#    last_N_losses = []
+#    for epoch in range(1, EPOCHS):
+#        batch_times = []
+#        for _ in range(EPOCH_ITERS):
+#            tf.assign(global_step, global_step+1)
+#            tstart = time.time()
+#            with tf.device('/gpu:0'):
+#                loss_val, grads_and_vars = grads(model, train_dataset)
+#                optimizer.apply_gradients(grads_and_vars)
+#
+#            last_N_losses.append(loss_val.numpy())
+#            batch_times.append(time.time()-tstart)
+#
+#            global_index += 1
+#            if global_index % LOG_EVERY_N == 0:
+#                print('EPOCH [{:04d}] STEP [{:05d}] '.format(epoch, global_index), end = ' ')
+#                logging(model, val_dataset, loss_function, grads, last_N_losses)
+#                last_N_losses = []
+#
+#        mean_batch_time = np.mean(batch_times)
+#        train_loss, val_loss, train_acc, val_acc = mil_test_step(model, 
+#            grads=grads, 
+#            train_dataset=train_dataset, 
+#            val_dataset=val_dataset, 
+#            global_step=global_step, 
+#            mean_batch=mean_batch_time, 
+#            N=100,
+#            loss_function=loss_function, 
+#            accuracy_function=accuracy_function)
+#
+#        if epoch < waiting_time: 
+#            print('Epoch < waiting time ({})'.format(waiting_time))
+#            continue
+#
+#        ## Check whether to save
+#        if val_acc > best_val_acc:
+#            print('Val acc {} > previous best {}; Snapshotting'.format(val_acc, best_val_acc))
+#            saver.save(save_prefix, global_step=global_step)
+#            since_last_snapshot = 0
+#            best_val_acc = val_acc
+#            if val_loss < best_val_loss:
+#                print('Val loss {} < previous best {}. Updating'.format(val_loss, best_val_loss))
+#                best_val_loss = val_loss
+#            best_snapshot = global_step.numpy()
+#
+#        elif val_acc > best_val_acc - accuracy_tol:
+#            print('Matched best val accuracy within tolerance {}'.format(accuracy_tol))
+#            # if val_loss < best_val_loss and train_acc >= best_train_acc:
+#            if val_loss < best_val_loss:
+#                print('Val loss {} < previous best snapshot {}; '.format(val_loss, best_val_loss))
+#                print('train acc {} > previous best {}; Snapshotting'.format(train_acc, best_train_acc))
+#                saver.save(save_prefix, global_step=global_step)
+#                since_last_snapshot = 0
+#                best_val_loss = val_loss
+#                best_train_acc = train_acc
+#                best_snapshot = global_step.numpy()
+#
+#        if since_last_snapshot > 15 and global_step > PATIENTCE:
+#            print('25 Epochs have passed since the last snapshot. Exiting.')
+#            break
+#        else:
+#            since_last_snapshot += 1
+#
+#    return saver, best_snapshot
 
 
 def mil_test_step(model, 

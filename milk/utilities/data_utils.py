@@ -223,7 +223,7 @@ def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda
 
 def tf_dataset(generator, preprocess_fn=lambda x: x, batch_size=1, buffer_size=64, threads=8, iterator=False):
   def map_fn(x,y):
-    x = tf.contrib.eager.py_func(preprocess_fn, inp=[x], Tout=(tf.float32))
+    x = tf.py_function(preprocess_fn, inp=[x], Tout=(tf.float32))
     y = tf.squeeze(y)
     return x, y
 

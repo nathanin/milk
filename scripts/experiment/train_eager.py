@@ -167,6 +167,33 @@ def eval_acc(ytrue, yhat):
   acc = (ytrue_max == yhat_max).mean()
   return acc
 
+
+# Wrap transform fn in an apply()
+def get_transform_fn(fn):
+  def apply_fn(x_bag):
+    x_bag = [fn(x) for x in x_bag]
+    return tf.stack(x_bag, 0)
+  return apply_fn
+
+def get_data_generator(slide_list, pct, transform_fn, case_label_fn):
+  assert pct < 1 and pct > 0 
+  n_slides = len(slide_list)
+  use_slides = np.random.choice(slide_list, int(n_slides * pct), replace=False)
+
+  x, y = data_utils.load_list_to_memory(use_slides, case_label_fn)
+  transform_fn = get_transform_fn(transform_fn)
+
+  # Define the python generator function in context with x and y
+  def data_generator():
+    return data_utils.generate_from_memory(x, y, batch_size=1,
+      bag_size=args.bag_size, 
+      pad_first_dim=False)
+
+  dataset = data_utils.tf_dataset(data_generator, batch_size=args.batch_size, 
+    preprocess_fn=transform_fn, buffer_size=64, threads=8, iterator=True)
+
+  return dataset
+
 def main(args):
   """ 
   1. Create generator datasets from the provided lists
@@ -210,32 +237,9 @@ def main(args):
                                                       brightness=True,
                                                       normalize=True,
                                                       eager=True)
-  train_x, train_y = data_utils.load_list_to_memory(train_list, case_label_fn)
-  val_x, val_y = data_utils.load_list_to_memory(val_list, case_label_fn)
-
-  # Wrap transform fn in an apply_:
-  def get_transform_fn(fn):
-    def apply_fn(x_bag):
-      x_bag = [fn(x) for x in x_bag]
-      return tf.stack(x_bag, 0)
-    return apply_fn
-
   transform_fn = get_transform_fn(transform_fn_internal)
 
-  def train_generator():
-    return data_utils.generate_from_memory(train_x, train_y, batch_size=1,
-      bag_size=args.bag_size, #transform_fn=transform_fn,
-      pad_first_dim=False)
-  def val_generator():
-    return data_utils.generate_from_memory(val_x, val_y, batch_size=1,
-      bag_size=args.bag_size, #transform_fn=transform_fn, 
-      pad_first_dim=False)
-
-  train_dataset = data_utils.tf_dataset(train_generator, batch_size=args.batch_size, 
-    preprocess_fn=transform_fn, buffer_size=64, threads=8, iterator=True)
-  val_dataset = data_utils.tf_dataset(val_generator, batch_size=args.batch_size, 
-    preprocess_fn=transform_fn, buffer_size=64, threads=8, iterator=True)
-
+  train_dataset = get_data_generator(slide_list, 0.25, transform_fn, case_label_fn)
   print('Testing batch generator')
   x, y = next(train_dataset)
   print('x: ', x.shape)
@@ -305,6 +309,9 @@ def main(args):
   try:
     for epc in range(args.epochs):
       optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate/(epc+1))
+
+      # Refresh the training set each epoch
+      train_dataset = get_data_generator(train_list, 0.25, transform_fn, case_label_fn)
       for k in range(args.steps_per_epoch):
         totalsteps += 1
         tstart = time.time()
@@ -335,6 +342,11 @@ def main(args):
           for y_, yh_ in zip(y, yhat):
             print('\t{} {}'.format(y_, yh_))
 
+      # De-reference the training dataset, then make a new one for a validation step
+      print('De-referencing train_dataset')
+      train_dataset = None
+      print('Gathering val dataset')
+      val_dataset = get_data_generator(val_list, 1., transform_fn, case_label_fn)
       val_loss = val_step(model, val_dataset, steps=50)
       print('epc: {} val_loss = {}'.format(epc, val_loss))
 
@@ -365,18 +377,19 @@ def main(args):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
 
-  # Model settings
+  # Model and data
   parser.add_argument('--mil',              default = 'attention', type=str)
   parser.add_argument('--scale',            default = 1.0, type=float)
   parser.add_argument('--x_size',           default = 128, type=int)
   parser.add_argument('--y_size',           default = 128, type=int)
-  parser.add_argument('--bag_size',         default = 50, type=int)
+  parser.add_argument('--bag_size',         default = 500, type=int)
   parser.add_argument('--crop_size',        default = 96, type=int)
   parser.add_argument('--batch_size',       default = 1, type=int)
+  parser.add_argument('--cases_subset',     default = 64, type=int)
   parser.add_argument('--freeze_encoder',   default = False, action='store_true')
   parser.add_argument('--gated_attention',  default = True, action='store_false')
   parser.add_argument('--temperature',      default = 1, type=float)
-  parser.add_argument('--encoder',          default = 'big', type=str)
+  parser.add_argument('--encoder',          default = 'tiny', type=str)
   parser.add_argument('--deep_classifier',  default = False, action='store_true')
 
   # Optimizer settings
@@ -393,7 +406,7 @@ if __name__ == '__main__':
   parser.add_argument('--save_prefix',      default = 'save', type=str)
   parser.add_argument('--pretrained_model', default = None, type=str)
 
-  # old
+  # old - displaced by letting pretrained_model be None
   parser.add_argument('--dont_use_pretrained', default = False, action='store_true')
 
   parser.add_argument('--verbose',          default = False, action='store_true')

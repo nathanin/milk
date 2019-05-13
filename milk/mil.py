@@ -137,8 +137,8 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropou
     shape = shape[1:]
     return tuple(shape)
 
-  # image = Lambda(lambda x: tf.squeeze(x, axis=0), 
-  #                         output_shape=squeeze_output_shape)(image_input)
+  image = Lambda(lambda x: tf.squeeze(x, axis=0), output_shape=squeeze_output_shape)(image_input)
+
   if freeze_encoder:
     print('NOTE: Initializing encoder with trainable = False')
     trainable = False
@@ -146,7 +146,7 @@ def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropou
     trainable = True
 
   print('Making encoder')
-  features = make_encoder(image=image_input, 
+  features = make_encoder(image=image, 
                           input_shape=input_shape,  ## Unused
                           encoder_args=encoder_args,
                           trainable=trainable)

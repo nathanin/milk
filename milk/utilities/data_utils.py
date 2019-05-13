@@ -33,6 +33,8 @@ import re
 import time
 import contextlib
 
+from tensorflow.keras.utils import Sequence
+
 
 def as_one_hot(y):
   onehot = np.zeros((len(y), 2), dtype=np.float32)
@@ -197,7 +199,7 @@ def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda
     batch_x = []
     batch_y = []
     for k in choices:
-      data = xdict[k] 
+      data  = xdict[k] 
       label = ydict[k]
       indices = np.random.choice(range(data.shape[0]), bag_size)
       if transform_fn is not None:
@@ -221,6 +223,70 @@ def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda
       y = np.eye(batch_size, 2)[batch_y]
 
     yield batch_x, y.astype(np.float32)
+
+class MILSequence(Sequence):
+  #def __init__(self, x_dict, y_dict, batch_size, bag_size, iters, transform_fn = lambda x: x, pad_first_dim=True):
+  def __init__(self, x_list, x_pct, batch_size, bag_size, iters, case_label_fn,
+    transform_fn = lambda x: x, pad_first_dim=True):
+    self.x_list = x_list
+    self.x_pct = x_pct
+    self.batch_size = batch_size
+    self.bag_size = bag_size
+    self.iters = iters
+    self.case_label_fn = case_label_fn
+    self.transform_fn = transform_fn
+    self.pad_first_dim = pad_first_dim
+
+    self.on_epoch_end()
+
+  def __len__(self):
+    return self.iters
+    #return len(self.x_dict) // self.batch_size
+    return self.iters
+
+  def __getitem__(self, idx):
+    """ essentially dupe functionality from generate_from_memory """
+    # trash the index
+    del idx
+  
+    choices = np.random.choice(self.x_keys, self.batch_size, replace=False)
+    batch_x, batch_y = [], []
+  
+    for k in choices:
+      data  = self.x_dict[k]
+      label = self.y_dict[k]
+      indices = np.random.choice(range(data.shape[0]), self.bag_size, replace=False)
+      if self.transform_fn is not None:
+        data = apply_transform(self.transform_fn, data[indices, ...])
+      batch_x.append(data)
+      batch_y.append(label)
+
+    if self.batch_size == 1 and not self.pad_first_dim:
+      batch_x = batch_x[0]
+      batch_y = batch_y[0]
+    else:
+      batch_x = np.stack(batch_x, axis=0)
+      batch_y = np.stack(batch_y, axis=0)
+        
+    if self.batch_size == 1:
+      if batch_y == 1:
+        y = np.expand_dims(np.array([0, 1]), 0)
+      else:
+        y = np.expand_dims(np.array([1, 0]), 0)
+    else:
+      y = np.eye(self.batch_size, 2)[batch_y]
+
+    return batch_x, y
+    
+  def on_epoch_end(self):
+    """ Subset x_list and load up the cpu memory with data """
+    self.x_dict = None
+    n_use = int(len(self.x_list) * self.x_pct)
+    self.x_use = np.random.choice(self.x_list, n_use, replace=False)
+    
+    self.x_dict, self.y_dict = load_list_to_memory(self.x_use, self.case_label_fn)
+    self.x_keys = list(self.x_dict.keys())
+    self.n_x = len(self.x_keys)
 
 def tf_dataset(generator, preprocess_fn=lambda x: x, batch_size=1, buffer_size=64, threads=8, iterator=False):
   def map_fn(x,y):

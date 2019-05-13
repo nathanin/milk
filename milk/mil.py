@@ -23,7 +23,7 @@ def squish_mean(features):
 
   return features
 
-def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.3):
+def deep_feedforward(features, n_layers=5, width=256, dropout_rate=0.25):
   for k in range(n_layers):
     features = Dense(width, activation=tf.nn.relu, name='deep_mil_{}'.format(k))(features)
     # features = Dropout(dropout_rate, name='deep_mil_drop_{}'.format(k))(features)
@@ -101,7 +101,7 @@ def attention_pooling(features, n_classes, z_dim, dropout_rate, use_gate=True,
   logits = Dense(n_classes, activation=tf.nn.softmax, name='mil_classifier')(features)
   return logits
 
-def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropout_rate=0.3, 
+def Milk(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, dropout_rate=0.25, 
          encoder_args=None, mode="instance", use_gate=True, temperature = 1.0,
          deep_classifier=False, freeze_encoder=False):
   """ Build the Multiple Instance Learning model
@@ -194,7 +194,7 @@ def MilkBatch(input_shape, encoder=None, z_dim=256, n_classes=2, batch_size=1, b
   model = tf.keras.Model(inputs = batch_input, outputs = batch_logits)
   return model
 
-def MilkEncode(input_shape, encoder=None, dropout_rate=0.3, 
+def MilkEncode(input_shape, encoder=None, dropout_rate=0.7, 
              encoder_args=None, deep_classifier=False):
   image = Input(shape=input_shape, name='image') #e.g. (None, 100, 96, 96, 3)
   print('image input:', image.shape)

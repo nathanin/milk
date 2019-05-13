@@ -162,7 +162,7 @@ def DenseBlock(features, num_layers, growth_rate, data_format,
 
 def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks, 
              num_layers_in_each_block, data_format, bottleneck=True,
-             compression=0.5, weight_decay=1e-4, dropout_rate=0.5,
+             compression=0.5, weight_decay=1e-4, dropout_rate=0.25,
              pool_initial=True, include_top=True, with_classifier=False,
              num_classes=2, return_model=False, mcdropout=False,
              trainable=True):

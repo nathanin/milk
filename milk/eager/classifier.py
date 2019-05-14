@@ -1,7 +1,6 @@
 from __future__ import print_function
 import numpy as np
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
 import sys
 
 from tensorflow.keras.layers import Dense, Dropout, BatchNormalization

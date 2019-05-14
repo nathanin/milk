@@ -21,8 +21,7 @@ from milk.utilities import data_utils
 from milk.utilities import training_utils
 from milk import Milk
 
-# with open('../../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
-with open('../../dataset/CASE_LABEL_DICT.pkl', 'rb') as f:  
+with open('../../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
 # with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
@@ -152,14 +151,6 @@ def main(args):
   # print('y: ', y.shape)
   # del x
   # del y 
-
-  # encoder_args = {
-  #     'depth_of_model': 32,
-  #     'growth_rate': 64,
-  #     'num_of_blocks': 4,
-  #     'output_classes': 2,
-  #     'num_layers_in_each_block': 8,
-  # }
 
   print('Model initializing')
   encoder_args = get_encoder_args(args.encoder)

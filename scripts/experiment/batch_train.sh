@@ -1,12 +1,12 @@
 #!/bin/bash
 
 set -e
-steps=1000
+steps=500
 epochs=100
-bag=250
+bag=100
 lr=0.0001
 pretrained=../gleason_grade/wide_model/gleason_classifier_eager.h5
-batch=1
+batch=4
 encoder=tiny
 
 for i in `seq 1 5`; do
@@ -15,13 +15,11 @@ for i in `seq 1 5`; do
         --batch_size $batch \
         --epochs $epochs \
         --bag_size $bag \
-        --mil attention \
+        --mil instance \
         --deep_classifier \
         --learning_rate $lr \
         --early_stop \
         --seed $i \
         --temperature 0.5 \
-        --accumulate 5 \
-        --encoder $encoder \
-        --data_patt ../../dataset/tiles_10x_combined
+        --encoder $encoder
 done

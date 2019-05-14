@@ -19,7 +19,7 @@ import argparse
 from milk.utilities import ClassificationDataset
 from milk.classifier import Classifier
 
-from milk.encoder_config import big_args as encoder_args
+from milk.encoder_config import get_encoder_args
 
 def main(args):
   print(args) 
@@ -39,6 +39,7 @@ def main(args):
   )
 
   # Test batch:
+  encoder_args = get_encoder_args('tiny')
   model = Classifier(input_shape=(args.input_dim, args.input_dim, 3), 
                      n_classes=args.n_classes, 
                      encoder_args=encoder_args, 
@@ -69,6 +70,7 @@ if __name__ == '__main__':
   parser.add_argument('--tpu', default=False, action='store_true')
   parser.add_argument('--epochs', default=50, type=int)
   parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.tfrecord')
+  parser.add_argument('--encoder', default='tiny')
   parser.add_argument('--n_classes', default=5, type=int)
   parser.add_argument('--save_path', default='./pretrained.h5')
   parser.add_argument('--n_threads', default=12, type=int)

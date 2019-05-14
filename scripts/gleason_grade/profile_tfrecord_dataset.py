@@ -1,6 +1,5 @@
 """
 Print to console some statistics about the contents of a tfrecord dataset
-
 """
 
 import tensorflow as tf

@@ -19,6 +19,14 @@ small_args = {
   'num_layers_in_each_block': 6,
 }
 
+small_nopool_args = {
+  'depth_of_model': 24,
+  'growth_rate': 24,
+  'num_of_blocks': 4,
+  'num_layers_in_each_block': 6,
+  'pool_initial': False
+}
+
 tiny_args = {
   'depth_of_model': 12,
   'growth_rate': 36,
@@ -38,6 +46,14 @@ shallow_args = {
   'growth_rate': 48,
   'num_of_blocks': 4,
   'num_layers_in_each_block': 8,
+}
+
+shallow_nopool_args = {
+  'depth_of_model': 32,
+  'growth_rate': 48,
+  'num_of_blocks': 4,
+  'num_layers_in_each_block': 8,
+  'pool_initial': False
 }
 
 mnist_args = {
@@ -61,5 +77,9 @@ def get_encoder_args(arg_str):
     return deep_args
   elif arg_str == 'shallow':
     return shallow_args
+  elif arg_str == 'shallow-nopool':
+    return shallow_nopool_args
+  elif arg_str == 'small-nopool':
+    return small_nopool_args
   elif arg_str == 'mnist':
     return mnist_args

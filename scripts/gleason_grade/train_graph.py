@@ -39,7 +39,7 @@ def main(args):
   )
 
   # Test batch:
-  encoder_args = get_encoder_args('tiny')
+  encoder_args = get_encoder_args(args.encoder)
   model = Classifier(input_shape=(args.input_dim, args.input_dim, 3), 
                      n_classes=args.n_classes, 
                      encoder_args=encoder_args, 
@@ -47,7 +47,7 @@ def main(args):
 
   ## Need tf.train for TPU's
   # optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-  optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
+  optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-5)
 
   model.compile(optimizer=optimizer,
           loss=tf.keras.losses.categorical_crossentropy,
@@ -68,17 +68,17 @@ def main(args):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--tpu', default=False, action='store_true')
-  parser.add_argument('--epochs', default=50, type=int)
+  parser.add_argument('--epochs', default=10, type=int)
   parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.tfrecord')
-  parser.add_argument('--encoder', default='tiny')
+  parser.add_argument('--encoder', default='small')
   parser.add_argument('--n_classes', default=5, type=int)
   parser.add_argument('--save_path', default='./pretrained.h5')
   parser.add_argument('--n_threads', default=12, type=int)
   parser.add_argument('--input_dim', default=96, type=int)
   parser.add_argument('--downsample', default=0.25, type=float)
-  parser.add_argument('--iterations', default=2500, type=int)
+  parser.add_argument('--iterations', default=1000, type=int)
   parser.add_argument('--batch_size', default=64, type=int)
-  parser.add_argument('--learning_rate', default=1e-4, type=float)
+  parser.add_argument('--learning_rate', default=1e-3, type=float)
   parser.add_argument('--shuffle_buffer', default=128, type=int)
   parser.add_argument('--prefetch_buffer', default=512, type=int)
 

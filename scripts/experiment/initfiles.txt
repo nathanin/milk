@@ -1,2 +1,3 @@
 batch_train.sh
 train_eager.py
+train_tpu_inmemory.py

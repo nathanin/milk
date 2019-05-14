@@ -77,8 +77,8 @@ class MilkEager(tf.keras.Model):
     # Question: WTF?
     # tensorflow.python.framework.errors_impl.InternalError: CUB segmented reduce errorinvalid configuration argument [Op:Softmax]
     # unless we put this op on CPU in eager mode.
-    with tf.device('/cpu:0'):
-      att = tf.nn.softmax(att, axis=1)
+    # with tf.device('/cpu:0'):
+    att = tf.nn.softmax(att, axis=1)
 
     # TODO clean up logic
     if verbose:
@@ -107,21 +107,24 @@ class MilkEager(tf.keras.Model):
   # @tf.contrib.eager.defun
   # TODO unify encode_bag to work in return_z mode for all MIL types
   def encode_bag(self, x_bag, training=True, verbose=False, return_z=False):
-    z_bag, z_enc = [], []
-    n_bags = x_bag.shape[0] // self.batch_size
-    remainder = x_bag.shape[0] - n_bags*self.batch_size
+    bag_size = x_bag.shape[0]
+    n_bags = bag_size // self.batch_size
+    remainder = bag_size - n_bags*self.batch_size
     x_bag = tf.split(x_bag, tf.stack([self.batch_size]*n_bags + [remainder]), axis=0)
-    for x_in in x_bag:
+    z_bag, z_enc = [None]*len(x_bag), [None]*len(x_bag)
+    for i, x_in in enumerate(x_bag):
       z = self.densenet(x_in, training=training)
       if verbose:
         print('\t z: ', z.shape)
       z = self.drop2(z, training=training)
       if self.mil_type == 'instance':
-        z_enc.append(z)
+        # z_enc.append(z)
+        z_enc[i] = z
         z = self.apply_classifier(z, verbose=verbose, training=training)
         if verbose:
           print('Instance yhat:', z.shape)
-      z_bag.append(z)
+      # z_bag.append(z)
+      z_bag[i] = z
 
     z = tf.concat(z_bag, axis=0)
     if verbose:
@@ -174,9 +177,11 @@ class MilkEager(tf.keras.Model):
     if verbose:
       print('Encoder Call:')
       print('n_x: ', n_x)
-    zs = []
-    # This loop is over the batch dimension;
+    # This loop is over the batch dimension
     x_in_split = tf.split(x_in, n_x, axis=0)
+    # zs = [self.encode_bag(tf.squeeze(x_bag), training=training, verbose=verbose) \
+    #       for x_bag in x_in_split]
+    zs = []
     for x_bag in x_in_split:
       if verbose:
         print('x_bag:', x_bag.shape)

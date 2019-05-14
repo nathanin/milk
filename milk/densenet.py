@@ -75,7 +75,7 @@ def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
                     trainable=trainable
                     )(features)
 
-  # features = BatchNormalization(momentum=0.99, axis=-1)(features)
+  # features = BatchNormalization(momentum=0.9, axis=-1)(features)
   if mcdropout:
     features = Dropout(dropout_rate)(features, training=True)
   else:
@@ -97,7 +97,7 @@ def TransitionBlock(features, num_filters, data_format, weight_decay=1e-4,
 
   axis = -1 if data_format == "channels_last" else 1
 
-  # feautes = BatchNormalization(momentum=0.99, axis=-1)(features)
+  # features = BatchNormalization(momentum=0.9, axis=-1)(features)
   features = Conv2D(num_filters,
                     (1, 1),
                     activation=tf.nn.relu,
@@ -162,7 +162,7 @@ def DenseBlock(features, num_layers, growth_rate, data_format,
 
 def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks, 
              num_layers_in_each_block, data_format, bottleneck=True,
-             compression=0.5, weight_decay=1e-4, dropout_rate=0.5,
+             compression=0.5, weight_decay=1e-4, dropout_rate=0.25,
              pool_initial=True, include_top=True, with_classifier=False,
              num_classes=2, return_model=False, mcdropout=False,
              trainable=True):
@@ -248,7 +248,7 @@ def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks,
                             data_format=data_format,
                             name='encoder_pool_init'
                             )(features)
-    # features = BatchNormalization(momentum=0.99, axis=-1)(features)
+    # features = BatchNormalization(momentum=0.9, axis=-1)(features)
 
   # calculating the number of filters after each block
   num_filters_after_each_block = [num_filters]

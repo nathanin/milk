@@ -1,6 +1,5 @@
 """
 Dump images from the npy caches
-
 Optionally add in a border
 """
 import numpy as np
@@ -16,7 +15,8 @@ def list_caches(src):
 def load_cache(pth, n_imgs, size):
   x_cache = np.load(pth, mmap_mode='r')
 
-  idx = np.random.choice(range(x_cache.shape[0]), min(n_imgs, x_cache.shape[0]))
+  idx = np.random.choice(range(x_cache.shape[0]), min(n_imgs, x_cache.shape[0]), 
+    replace=False)
   imgs = [cv2.resize(x, dsize=(size, size)) for x in x_cache[idx,...]]
   return imgs
 
@@ -35,11 +35,11 @@ def main(args):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--src', default='./tiles_reduced')
-  parser.add_argument('--dst', default='./tile_images')
-  parser.add_argument('--size', default=64, type=int)
+  parser.add_argument('--src', default='./tiles_10x')
+  parser.add_argument('--dst', default='./tile_10x_images')
+  parser.add_argument('--size', default=128, type=int)
   parser.add_argument('--border', default=False, action='store_true')
-  parser.add_argument('--n_per_cache', default=4, type=int)
+  parser.add_argument('--n_per_cache', default=16, type=int)
 
   args = parser.parse_args()
   main(args)

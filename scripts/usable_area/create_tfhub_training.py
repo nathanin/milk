@@ -25,16 +25,6 @@ def split_subimgs(img):
 
     return subimgs
 
-def initialize_output_dirs(output_base):
-    os.makedirs(output_base)
-
-    for k in range(5):
-        pth = os.path.join(output_base, '{}'.format(k))
-        os.makedirs(pth)
-
-N_CLASSES = 2
-CLASSES = range(N_CLASSES)
-
 def main(args):
     jpglist = sorted(glob.glob(os.path.join(args.source_dir, '*.jpg')))
     pnglist = sorted(glob.glob(os.path.join(args.source_dir, '*.png')))

@@ -13,12 +13,13 @@ import pickle
 import shutil
 import argparse
 
-from svs_reader import Slide
+from svs_reader import Slide, reinhard
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 
 def preprocess_fn(img):
+  #img = reinhard(img)
   img = img * (1/255.)
   return img.astype(np.float32)
 
@@ -27,7 +28,7 @@ def prob_output(svs):
   probs *= 255.
   return probs.astype(np.uint8)
 
-def transfer_to_ramdisk(src, ramdisk = '/dev/shm'):
+def transfer_to_ramdisk(src, ramdisk = '/appdata'):
   base = os.path.basename(src)
   dst = os.path.join(ramdisk, base)
   print('Transferring: {} --> {}'.format(src, dst))
@@ -60,7 +61,7 @@ def get_input_output_ops(sess, model_path):
 ## These must not introduce a shift
 PROCESS_MAG = 5
 BATCH_SIZE = 8
-OVERSAMPLE = 1.5
+OVERSAMPLE = 1.25
 INPUT_SIZE = 96
 PRINT_ITER = 500
 def main(sess, ramdisk_path, image_op, predict_op):
@@ -73,7 +74,7 @@ def main(sess, ramdisk_path, image_op, predict_op):
   print('Working {}'.format(ramdisk_path))
   svs = Slide(slide_path  = ramdisk_path,
         preprocess_fn = preprocess_fn,
-        background_speed = 'accurate',
+        background_speed = 'fast',
         process_mag   = PROCESS_MAG,
         process_size  = INPUT_SIZE,
         oversample_factor = OVERSAMPLE,

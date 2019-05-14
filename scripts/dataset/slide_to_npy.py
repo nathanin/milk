@@ -12,31 +12,35 @@ from svs_reader import Slide
 
 '''
 Update to use case list, and account for multiple slides per case.
-
-
 '''
 
-
-RAM_DISK = '/dev/shm'
+RAM_DISK = '/app'
 def transfer_to_ramdisk(src, ramdisk = RAM_DISK):
   base = os.path.basename(src)
   dst = os.path.join(ramdisk, base)
   shutil.copyfile(src, dst)
   return dst
 
+
 def dump_slide(slide_path, args, return_stack=False):
-  tmp_path = transfer_to_ramdisk(slide_path)
-  print(tmp_path)
   basename = os.path.basename(slide_path)
+  record_path = os.path.join(args.out_dir, basename.replace('.svs', '.npy'))
+  if os.path.exists(record_path):
+    print('{} exists'.format(record_path))
+    return None
+
+  fgpath = os.path.join(args.fgdir, '{}_fg.png'.format(basename.replace('.svs', '')))
+  print('Looking for fg image: {}'.format(fgpath))
+  if os.path.exists(fgpath):
+    fgimg = cv2.imread(fgpath, 0)
+  else:
+    print('Foreground image {} not found'.format(fgpath))
+    return None
+
+  tmp_path = transfer_to_ramdisk(slide_path)
+  print('{} copied to {}'.format(slide_path, tmp_path))
 
   try:
-    fgpath = os.path.join(args.fgdir, '{}_fg.png'.format(basename.replace('.svs', '')))
-    if os.path.exists(fgpath):
-      fgimg = cv2.imread(fgpath, 0)
-    else:
-      print('Foreground image {} not found'.format(fgpath))
-      return None
-
     svs = Slide(slide_path = tmp_path,
                 background_speed  = 'image',
                 background_image  = fgimg,
@@ -56,8 +60,6 @@ def dump_slide(slide_path, args, return_stack=False):
     cv2.imwrite(fg_fn, fg*255)
     
     # Dump tiles sequentially
-    record_path = os.path.join(args.out_dir, basename.replace('.svs', '.npy'))
-
     img_stack = np.zeros((max_tiles, args.size, args.size, 3), dtype=np.uint8)
     insert_to = 0
 
@@ -101,6 +103,7 @@ def dump_slide(slide_path, args, return_stack=False):
 
   return None
 
+
 def dump_sets(args):
   case_dict = {}
   svs_set = pickle.load(open(args.svs_set, 'rb'))
@@ -128,6 +131,7 @@ def dump_sets(args):
     print('case {} got stack {}. Saving {}'.format(caseid, stack.shape, dst))
     np.save(dst, stack)
 
+
 def dump_dir(args):
   slide_list = glob.glob(os.path.join(args.svs_dir, '*.svs'))
   # case_names = get_case_names(slide_list)
@@ -136,22 +140,26 @@ def dump_dir(args):
   for slide in slide_list:
     status = dump_slide(slide, args)
   
+
 def dump_list(args):
   slide_list = []
   with open(args.svs_list, 'r') as f:
     for L in f:
+      L = L.replace('\n', '')
       if os.path.exists(L):
         slide_list.append(L)
       else:
         print('WARNING {} not found'.format(L))
-
-  for slide in slide_list:
+  print('Dumping {} slides from list {}'.format(len(slide_list), args.svs_list))
+  for i, slide in enumerate(slide_list):
+    print('Slide {}'.format(i))
     dump_slide(slide, args)
+
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('svs_dir', default='.')
-  parser.add_argument('out_dir', default='.')
+  parser.add_argument('--svs_dir')
+  parser.add_argument('--out_dir')
   parser.add_argument('--svs_list', default=None)
   parser.add_argument('--svs_set', default=None)
   parser.add_argument('--max', default=2500, type=int)
@@ -161,6 +169,8 @@ if __name__ == '__main__':
   parser.add_argument('--fgdir', default='../usable_area/inference', type=str)
 
   args = parser.parse_args()
+  print(args)
+
   if args.svs_list is not None:
     dump_list(args)
   elif args.svs_set is not None:

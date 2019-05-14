@@ -18,6 +18,7 @@ import sys
 import os 
 
 from milk.utilities import data_utils
+from milk.utilities import training_utils
 from milk import Milk
 
 with open('../../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
@@ -62,6 +63,24 @@ def load_lists(data_patt, val_list_file, test_list_file):
 
   return train_list, val_list, test_list
 
+def subset_and_generate(srclist, case_label_fn, transform_fn, args, pct=0.5):
+  n_srcs = len(srclist)
+  n_use = int(n_srcs * pct)
+  uselist = np.random.choice(srclist, n_use, replace=False)
+
+  xs, ys = data_utils.load_list_to_memory(uselist, case_label_fn)
+  #ymax = np.argmax(ys, axis=-1)
+  for yk in np.unique(ys):
+    ny = np.sum(ys == yk)
+    print('y={} : {}'.format(yk, ny))
+
+  gen = data_utils.generate_from_memory(xs, ys, 
+                                        batch_size = args.batch_size,
+                                        bag_size = args.bag_size,
+                                        transform_fn = transform_fn)
+                                       
+  return gen
+
 def main(args):
   """ 
   1. Create generator datasets from the provided lists
@@ -105,25 +124,33 @@ def main(args):
                                               args.crop_size, 
                                               args.scale, 
                                               normalize=True)
-  train_x, train_y = data_utils.load_list_to_memory(train_list, case_label_fn)
-  val_x, val_y = data_utils.load_list_to_memory(val_list, case_label_fn)
+  # train_x, train_y = data_utils.load_list_to_memory(train_list, case_label_fn)
+  # val_x, val_y = data_utils.load_list_to_memory(val_list, case_label_fn)
 
-  train_generator = data_utils.generate_from_memory(train_x, train_y, 
-      batch_size=args.batch_size,
-      bag_size=args.bag_size, 
-      transform_fn=transform_fn,)
-  val_generator = data_utils.generate_from_memory(val_x, val_y, 
-      batch_size=args.batch_size,
-      bag_size=args.bag_size, 
-      transform_fn=transform_fn,)
+  # train_generator = data_utils.generate_from_memory(train_x, train_y, 
+  #     batch_size=args.batch_size,
+  #     bag_size=args.bag_size, 
+  #     transform_fn=transform_fn,)
+  # val_generator = data_utils.generate_from_memory(val_x, val_y, 
+  #     batch_size=args.batch_size,
+  #     bag_size=args.bag_size, 
+  #     transform_fn=transform_fn,)
 
-  print('Testing batch generator')
-  ## Some api change between nightly built TF and R1.5
-  x, y = next(train_generator)
-  print('x: ', x.shape)
-  print('y: ', y.shape)
-  del x
-  del y 
+  # train_generator = subset_and_generate(train_list, case_label_fn, transform_fn, args, pct=0.5)
+  # val_generator = subset_and_generate(val_list, case_label_fn, transform_fn, args, pct=1.)
+
+  train_sequence = data_utils.MILSequence(train_list, 0.5, args.batch_size, args.bag_size, args.steps_per_epoch,
+    case_label_fn, transform_fn, pad_first_dim=True)
+  val_sequence = data_utils.MILSequence(val_list, 1., args.batch_size, args.bag_size, 100,
+    case_label_fn, transform_fn, pad_first_dim=True)
+
+  # print('Testing batch generator')
+  # ## Some api change between nightly built TF and R1.5
+  # x, y = next(train_generator)
+  # print('x: ', x.shape)
+  # print('y: ', y.shape)
+  # del x
+  # del y 
 
   print('Model initializing')
   encoder_args = get_encoder_args(args.encoder)
@@ -136,7 +163,9 @@ def main(args):
     # Need to use tensorflow optimizer
     optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
   else:
-    optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
+    # optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
+    optimizer = training_utils.AdamAccumulate(lr=args.learning_rate,
+                               accum_iters=args.accumulate)
 
   exptime = datetime.datetime.now()
   exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
@@ -195,12 +224,19 @@ def main(args):
     callbacks = []
 
   try:
-    model.fit_generator(generator=train_generator,
-        validation_data=val_generator,
-        validation_steps=100,
-        steps_per_epoch=args.steps_per_epoch, 
+    # refresh the data generator with a new subset each epoch
+    # test on the same validation data
+    # for epc in range(args.epochs):
+      # train_generator = []
+      # train_generator = subset_and_generate(train_list, case_label_fn, transform_fn, args, pct=0.25)
+    model.fit_generator(generator=train_sequence,
+        validation_data=val_sequence,
+        #steps_per_epoch=args.steps_per_epoch, 
         epochs=args.epochs,
-        callbacks=callbacks)
+        workers=8,
+        use_multiprocessing=True,
+        callbacks=callbacks, )
+
   except KeyboardInterrupt:
     print('Keyboard interrupt caught')
   except Exception as e:
@@ -231,7 +267,7 @@ if __name__ == '__main__':
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
-  parser.add_argument('--accumulate',       default = 1, type=float)
+  parser.add_argument('--accumulate',       default = 1, type=int)
   parser.add_argument('--steps_per_epoch',  default = 500, type=int)
   parser.add_argument('--epochs',           default = 50, type=int)
 

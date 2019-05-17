@@ -6,7 +6,7 @@ class ClassificationDataset(object):
 
   With on the fly augmentation functions
 
-  TODO add a switch for eager mode.
+  TODO:
   Test if prefetch_to_device in graph mode is significantly faster.
   Prefetch buffer doesn't seem to work
   """
@@ -38,15 +38,14 @@ class ClassificationDataset(object):
               .prefetch(buffer_size=prefetch_buffer)
               .batch(batch))
     
+    # TODO
     # if device is not None:
     #   self.dataset = self.dataset.apply(tf.data.experimental.prefetch_to_device(
     #   device=device, buffer_size=device_buffer
     #   ))
     
     if eager:
-      # Eager iterator
       self.iterator = tfe.Iterator(self.dataset)
-      # pass
     else:
       self.iterator = self.dataset.make_initializable_iterator()
       self.x_op, self.y_op = self.iterator.get_next()

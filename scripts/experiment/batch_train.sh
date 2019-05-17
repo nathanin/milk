@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-steps=1000
+steps=500
 epochs=100
 bag=100
 lr=0.0001

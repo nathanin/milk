@@ -36,7 +36,7 @@ from tensorflow.keras.layers import (
 l2 = tf.keras.regularizers.l2
 
 def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
-              dropout_rate=0.3, name_suffix='', mcdropout=False, trainable=True):
+              dropout_rate=0.1, name_suffix='', mcdropout=False, trainable=True):
   """Convolutional Block consisting of (batchnorm->relu->conv).
 
   Arguments:
@@ -85,7 +85,7 @@ def ConvBlock(features, num_filters, data_format, bottleneck, weight_decay=1e-4,
 
 
 def TransitionBlock(features, num_filters, data_format, weight_decay=1e-4,
-                    dropout_rate=0.3, block_num=0, trainable=True):
+                    dropout_rate=0.1, block_num=0, trainable=True):
   """Transition Block to reduce the number of features.
 
   Arguments:
@@ -120,7 +120,7 @@ def TransitionBlock(features, num_filters, data_format, weight_decay=1e-4,
 
 
 def DenseBlock(features, num_layers, growth_rate, data_format, 
-               bottleneck, weight_decay=1e-4, dropout_rate=0.3,
+               bottleneck, weight_decay=1e-4, dropout_rate=0.1,
                block_num=0, mcdropout=False, trainable=True):
   """Dense Block consisting of ConvBlocks where each block's
   output is concatenated with its input.
@@ -162,7 +162,7 @@ def DenseBlock(features, num_layers, growth_rate, data_format,
 
 def DenseNet(image, input_shape, depth_of_model, growth_rate, num_of_blocks, 
              num_layers_in_each_block, data_format, bottleneck=True,
-             compression=0.5, weight_decay=1e-4, dropout_rate=0.25,
+             compression=0.5, weight_decay=1e-4, dropout_rate=0.1,
              pool_initial=True, include_top=True, with_classifier=False,
              num_classes=2, return_model=False, mcdropout=False,
              trainable=True):

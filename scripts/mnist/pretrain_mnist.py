@@ -34,7 +34,7 @@ def main(args):
   batch_x, batch_y = next(generator)
   print('batch:', batch_x.shape, batch_y.shape, batch_x.min(), batch_x.max())
 
-  encoder_args = get_encoder_args('mnist')
+  encoder_args = get_encoder_args(args.mnist)
   model = Classifier(input_shape=(28,28,1), n_classes=10, encoder_args=encoder_args)
 
   optimizer = tf.keras.optimizers.Adam(lr=args.lr, decay=args.decay)
@@ -56,6 +56,7 @@ if __name__ == '__main__':
   parser.add_argument('--batch', default=96, type=int)
   parser.add_argument('--decay', default=1e-5, type=float)
   parser.add_argument('--epochs', default=10, type=int)
+  parser.add_argument('--encoder', default='mnist', type=str)
   parser.add_argument('--steps_per_epoch', default=int(1e3))
   args = parser.parse_args()
 

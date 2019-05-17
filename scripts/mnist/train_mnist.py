@@ -25,8 +25,16 @@ import argparse
 import os 
 
 from milk import Milk, MilkBatch
+from milk.eager import MilkEager
 from milk.encoder_config import get_encoder_args
 from milk.utilities import training_utils
+
+# https://github.com/tensorflow/tensorflow/blob/6612da89516247503f03ef76e974b51a434fb52e/tensorflow/python/keras/callbacks.py#L985-L1004
+# def write_summary(writer, model, loss):
+#   for l in model.layers:
+#     for w in l.trainable_weights:
+#       w_name = w.name
+#       grad = model.optimizer.get_gradients(model.total_loss, w)
 
 def rearrange_bagged_mnist(x, y, positive_label):
   """
@@ -102,7 +110,8 @@ def generate_bagged_mnist(x_pos, x_neg, N, batch):
       batch_x.append(xbag.astype(np.float32))
       batch_y.append(y_onehot)
     
-    yield np.concatenate(batch_x, axis=0), np.concatenate(batch_y, axis=0)
+    #yield np.concatenate(batch_x, axis=0), np.concatenate(batch_y, axis=0)
+    yield [np.squeeze(x, axis=0) for x in batch_x], np.concatenate(batch_y, axis=0)
 
 def main(args):
   if args.mnist is not None:
@@ -127,39 +136,23 @@ def main(args):
   print('\ttest_x_pos:', test_x_pos.shape)
   print('\ttest_x_neg:', test_x_neg.shape)
 
-  generator = generate_bagged_mnist(train_x_pos, train_x_neg,   args.n, args.batch_size)
-  val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.n, args.batch_size)
+  generator = generate_bagged_mnist(train_x_pos, train_x_neg,   args.bag_size, args.batch_size)
+  val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.bag_size, args.batch_size)
   batch_x, batch_y = next(generator)
-  print('batch_x:', batch_x.shape, 'batch_y:', batch_y.shape)
+  print('batch_x:', batch_x[0].shape, 'batch_y:', batch_y.shape)
 
   encoder_args = get_encoder_args('mnist')
-  model = MilkBatch(input_shape=(28, 28, 1), 
-               encoder_args=encoder_args, 
-               mode=args.mil,
-               batch_size = args.batch_size,
-               bag_size = args.n,
-               deep_classifier=True)
+  model = MilkBatch(input_shape=(args.bag_size, 28, 28, 1), 
+                    encoder_args=encoder_args, 
+                    mode=args.mil,
+                    batch_size = args.batch_size,
+                    bag_size = args.bag_size,
+                    deep_classifier=True)
 
-  # if args.gpus > 1:
-  #   print('Duplicating model onto 2 GPUs')
-  #   model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
-
-  # batch_input = tf.keras.layers.Input(shape=(args.n, 28,28, 1))
-  # batch_logits = []
-  # for k in range(args.batch_size):
-  #   bag = tf.keras.layers.Lambda(lambda x: x[k,...])(batch_input)
-  #   encoding = model(bag)
-  #   batch_logits.append(encoding)
-
-  # batch_logits = tf.keras.layers.Concatenate(axis=0)(batch_logits)
-  # batch_model = tf.keras.Model(inputs=batch_input, outputs=batch_logits)
-
-  # optimizer = tf.keras.optimizers.Adam(lr=args.lr)
-  optimizer = training_utils.AdamAccumulate(lr=args.lr, accum_iters=5)
-  model.compile(optimizer=optimizer,
-                loss = tf.keras.losses.categorical_crossentropy,
-                metrics = ['categorical_accuracy'])
-  model.summary()
+  # model = MilkEager(encoder_args = encoder_args,
+  #                   mil_type = args.mil,)
+  # model.build((args.batch_size, args.bag_size, 28, 28, 1))
+  # model.summary()
 
   if args.pretrained is not None and os.path.exists(args.pretrained):
     print('Restoring weights from {}'.format(args.pretrained))
@@ -167,60 +160,56 @@ def main(args):
   else:
     print('Pretrained model not found ({}). Continuing end 2 end.'.format(args.pretrained))
 
-<<<<<<< HEAD
   if args.gpus > 1:
     print('Duplicating model onto 2 GPUs')
     model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
 
   optimizer = tf.keras.optimizers.Adam(lr=args.lr, decay=args.decay)
-
   model.compile(optimizer=optimizer,
           loss = tf.keras.losses.categorical_crossentropy,
-          metrics = ['categorical_accuracy'])
+          metrics = ['categorical_accuracy'], 
+          )
 
-  for epc in range(args.epochs):
-    for k in range(int(args.epoch_steps)):
-      batch_x, batch_y = next(generator)
-      model.train_on_batch(batch_x, batch_y)
+  model.summary()
 
-      if k % 10 == 0:
-        y_pred = model.predict(batch_x)
-        print(y_pred)
+  # for epc in range(args.epochs):
+  #   for k in range(int(args.epoch_steps)):
+  #     batch_x, batch_y = next(generator)
+  #     model.train_on_batch(batch_x, batch_y)
+  #     if k % 10 == 0:
+  #       y_pred = model.predict(batch_x)
+  #       print(y_pred)
 
-  #model.fit_generator(generator=generator, 
-  #          validation_data=val_generator,
-  #          validation_steps=100,
-  #          steps_per_epoch=args.epoch_steps, 
-  #          epochs=args.epochs)
-  
-=======
+  callbacks = [ tf.keras.callbacks.TensorBoard(histogram_freq=1,
+                                               write_graph=False,
+                                               write_grads=True, 
+                                               update_freq='batch')]
+
   model.fit_generator(generator=generator, 
-                            validation_data=val_generator,
-                            validation_steps=100,
-                            steps_per_epoch=args.epoch_steps, 
-                            epochs=args.epochs)
->>>>>>> ffc6ce4dbe53dc39884d1a0b0ef41ba8a3df0ac6
+                      validation_data=val_generator,
+                      validation_steps=100,
+                      steps_per_epoch=args.epoch_steps, 
+                      epochs=args.epochs,
+                      callbacks=callbacks)
+
   model.save(args.o)
   
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('-o', default='./bagged_mnist.h5', type=str)
-  parser.add_argument('-n', default=100, type=int)
-<<<<<<< HEAD
-  parser.add_argument('--lr',  default=1e-3, type=float)
-=======
   parser.add_argument('--lr',  default=1e-4, type=float)
->>>>>>> ffc6ce4dbe53dc39884d1a0b0ef41ba8a3df0ac6
-  parser.add_argument('--tpu',   default=False, action='store_true')
   parser.add_argument('--mil',   default='attention', type=str)
-  parser.add_argument('--gpus',   default=1, type=int)
   parser.add_argument('--mnist', default=None)
+  parser.add_argument('--bag_size', default=25, type=int)
+  parser.add_argument('--batch_size', default=4, type=int)
+
   parser.add_argument('--ntest', default=25, type=int)
+  parser.add_argument('--tpu',   default=False, action='store_true')
+  parser.add_argument('--gpus',   default=1, type=int)
   parser.add_argument('--decay', default=1e-5, type=float)
-  parser.add_argument('--epochs', default=10, type=int)
+  parser.add_argument('--epochs', default=100, type=int)
   parser.add_argument('--pretrained', default=None)
-  parser.add_argument('--batch_size', default=1, type=int)
-  parser.add_argument('--epoch_steps', default=1e3, type=int)
+  parser.add_argument('--epoch_steps', default=250, type=int)
   parser.add_argument('--max_fraction_positive', default=0.3, type=int)
   parser.add_argument('--min_fraction_positive', default=0.1, type=int)
 

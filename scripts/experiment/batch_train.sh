@@ -3,108 +3,22 @@
 set -e
 steps=1000
 epochs=100
-bag=50
+bag=100
 lr=0.0001
 pretrained=../gleason_grade/wide_model/gleason_classifier_eager.h5
-batch=2
+batch=4
 encoder=wide
 
-# with pretraining; with attention
-for i in `seq 1 5`; do
-    python train_eager.py \
-        --steps_per_epoch $steps \
-        --batch_size $batch \
-        --epochs $epochs \
-        --bag_size $bag \
-        --mil attention \
-        --deep_classifier \
-        --learning_rate $lr \
-        --early_stop \
-        --seed $i \
-        --temperature 0.5 \
-        --accumulate 5 \
-        --pretrained $pretrained \
-        --encoder $encoder
-done
-
-for i in `seq 1 5`; do
-    python train_eager.py \
-        --steps_per_epoch $steps \
-        --batch_size $batch \
-        --epochs $epochs \
-        --bag_size $bag \
-        --mil average \
-        --deep_classifier \
-        --learning_rate $lr \
-        --early_stop \
-        --seed $i \
-        --temperature 0.5 \
-        --accumulate 5 \
-        --pretrained $pretrained \
-        --encoder $encoder
-done
-
-for i in `seq 1 5`; do
-    python train_eager.py \
-        --steps_per_epoch $steps \
-        --batch_size $batch \
-        --epochs $epochs \
-        --bag_size $bag \
-        --mil instance \
-        --deep_classifier \
-        --learning_rate $lr \
-        --early_stop \
-        --seed $i \
-        --temperature 0.5 \
-        --accumulate 5 \
-        --pretrained $pretrained \
-        --encoder $encoder
-done
-
-# for i in `seq 1 5`; do
-#     python train_eager.py \
-#         --steps_per_epoch $steps \
-#         --batch_size $batch \
-#         --epochs $epochs \
-#         --bag_size $bag \
-#         --mil attention \
-#         --deep_classifier \
-#         --learning_rate $lr \
-#         --early_stop \
-#         --seed $i \
-#         --temperature 0.5 \
-#         --accumulate 5 \
-#         --encoder $encoder
-# done
-# 
-# for i in `seq 1 5`; do
-#     python train_eager.py \
-#         --steps_per_epoch $steps \
-#         --batch_size $batch \
-#         --epochs $epochs \
-#         --bag_size $bag \
-#         --mil average \
-#         --deep_classifier \
-#         --learning_rate $lr \
-#         --early_stop \
-#         --seed $i \
-#         --temperature 0.5 \
-#         --accumulate 5 \
-#         --encoder $encoder
-# done
-# 
-# for i in `seq 1 5`; do
-#     python train_eager.py \
-#         --steps_per_epoch $steps \
-#         --batch_size $batch \
-#         --epochs $epochs \
-#         --bag_size $bag \
-#         --mil instance \
-#         --deep_classifier \
-#         --learning_rate $lr \
-#         --early_stop \
-#         --seed $i \
-#         --temperature 0.5 \
-#         --accumulate 5 \
-#         --encoder $encoder
-# done
+python train_eager.py \
+  --steps_per_epoch $steps \
+  --batch_size $batch \
+  --epochs $epochs \
+  --bag_size $bag \
+  --mil attention \
+  --deep_classifier \
+  --learning_rate $lr \
+  --early_stop \
+  --seed 1 \
+  --temperature 0.5 \
+  --pretrained $pretrained \
+  --encoder $encoder

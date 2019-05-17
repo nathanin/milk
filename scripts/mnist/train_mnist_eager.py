@@ -130,8 +130,8 @@ def main(args):
 
   encoder_args = get_encoder_args('mnist')
   model = MilkEager(encoder_args=encoder_args, 
-               mil_type=args.mil,
-               deep_classifier=True,
+                    mil_type=args.mil,
+                    deep_classifier=True,
   )
   y_dummy = model(batch_x, verbose=True)
   model.summary()
@@ -143,7 +143,9 @@ def main(args):
 
   if args.gpus > 1:
     print('Duplicating model onto 2 GPUs')
-    model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
+    model = tf.keras.utils.multi_gpu_model(model, args.gpus, 
+                                           cpu_merge=True, 
+                                           cpu_relocation=False)
 
   optimizer = tf.train.AdamOptimizer(learning_rate=args.lr)
 
@@ -151,11 +153,7 @@ def main(args):
     for k in range(int(args.steps_per_epoch * args.epochs)):
       with tf.GradientTape() as tape:
         x, y = next(generator)
-<<<<<<< HEAD
-        yhat = model(tf.constant(x), batch_size=args.n, training=True)
-=======
-        yhat = model(x, training=True)
->>>>>>> ffc6ce4dbe53dc39884d1a0b0ef41ba8a3df0ac6
+        yhat = model(tf.constant(x), training=True)
         loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
 
       grads = tape.gradient(loss, model.variables)
@@ -183,7 +181,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('-o', default='./bagged_mnist_eager.h5', type=str)
   parser.add_argument('-n', default=50, type=int)
-  parser.add_argument('--lr',   default=1e-5, type=float)
+  parser.add_argument('--lr',   default=1e-3, type=float)
   parser.add_argument('--tpu',  default=False, action='store_true')
   parser.add_argument('--mil',  default='attention', type=str)
   parser.add_argument('--gpus', default=1, type=int)
@@ -191,8 +189,8 @@ if __name__ == '__main__':
   parser.add_argument('--ntest', default=25, type=int)
   parser.add_argument('--decay', default=1e-5, type=float)
   parser.add_argument('--epochs', default=10, type=int)
-  parser.add_argument('--pretrained', default=None)
-  parser.add_argument('--steps_per_epoch', default=1e3, type=int)
+  parser.add_argument('--pretrained', default='mnist_classifier.h5')
+  parser.add_argument('--steps_per_epoch', default=int(1e3), type=int)
   parser.add_argument('--batch_size', default=1, type=int)
   parser.add_argument('--max_fraction_positive', default=0.3, type=int)
   parser.add_argument('--min_fraction_positive', default=0.1, type=int)

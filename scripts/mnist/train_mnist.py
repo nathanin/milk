@@ -110,12 +110,14 @@ def main(args):
   else:
     (train_x, train_y), (test_x, test_y) = mnist.load_data()
 
+  train_x = train_x / 255.
+  test_x = test_x / 255.
   print('train_x:', train_x.shape, train_x.dtype, train_x.min(), train_x.max())
   print('train_y:', train_y.shape)
   print('test_x:', test_x.shape)
   print('test_y:', test_y.shape)
   
-  positive_label = np.random.choice(range(10))
+  positive_label = np.random.choice(range(10), 1, replace=False)
   print('using positive label = {}'.format(positive_label))
 
   train_x_pos, train_x_neg = rearrange_bagged_mnist(train_x, train_y, positive_label)
@@ -127,18 +129,18 @@ def main(args):
   print('\ttest_x_pos:', test_x_pos.shape)
   print('\ttest_x_neg:', test_x_neg.shape)
 
-  generator = generate_bagged_mnist(train_x_pos, train_x_neg,   args.n, args.batch_size)
-  val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.n, args.batch_size)
+  generator = generate_bagged_mnist(train_x_pos, train_x_neg,   args.bag_size, args.batch_size)
+  val_generator = generate_bagged_mnist(test_x_pos, test_x_neg, args.bag_size, args.batch_size)
   batch_x, batch_y = next(generator)
   print('batch_x:', batch_x.shape, 'batch_y:', batch_y.shape)
 
   encoder_args = get_encoder_args('mnist')
-  model = MilkBatch(input_shape=(28, 28, 1), 
-               encoder_args=encoder_args, 
-               mode=args.mil,
-               batch_size = args.batch_size,
-               bag_size = args.n,
-               deep_classifier=True)
+  model = MilkBatch(input_shape = (args.bag_size, 28, 28, 1), 
+                    encoder_args = encoder_args, 
+                    mode = args.mil,
+                    batch_size = args.batch_size,
+                    bag_size = args.bag_size,
+                    deep_classifier = True)
 
   # if args.gpus > 1:
   #   print('Duplicating model onto 2 GPUs')
@@ -154,8 +156,8 @@ def main(args):
   # batch_logits = tf.keras.layers.Concatenate(axis=0)(batch_logits)
   # batch_model = tf.keras.Model(inputs=batch_input, outputs=batch_logits)
 
-  # optimizer = tf.keras.optimizers.Adam(lr=args.lr)
-  optimizer = training_utils.AdamAccumulate(lr=args.lr, accum_iters=5)
+  optimizer = tf.keras.optimizers.Adam(lr=args.lr)
+  # optimizer = training_utils.AdamAccumulate(lr=args.lr, accum_iters=5)
   model.compile(optimizer=optimizer,
                 loss = tf.keras.losses.categorical_crossentropy,
                 metrics = ['categorical_accuracy'])
@@ -167,10 +169,10 @@ def main(args):
   else:
     print('Pretrained model not found ({}). Continuing end 2 end.'.format(args.pretrained))
 
-<<<<<<< HEAD
   if args.gpus > 1:
     print('Duplicating model onto 2 GPUs')
-    model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
+    model = tf.keras.utils.multi_gpu_model(model, args.gpus, 
+                                           cpu_merge=True, cpu_relocation=False)
 
   optimizer = tf.keras.optimizers.Adam(lr=args.lr, decay=args.decay)
 
@@ -178,49 +180,37 @@ def main(args):
           loss = tf.keras.losses.categorical_crossentropy,
           metrics = ['categorical_accuracy'])
 
-  for epc in range(args.epochs):
-    for k in range(int(args.epoch_steps)):
-      batch_x, batch_y = next(generator)
-      model.train_on_batch(batch_x, batch_y)
+  # for epc in range(args.epochs):
+  #   for k in range(int(args.epoch_steps)):
+  #     batch_x, batch_y = next(generator)
+  #     model.train_on_batch(batch_x, batch_y)
+  #     if k % 10 == 0:
+  #       y_pred = model.predict(batch_x)
+  #       print(y_pred)
 
-      if k % 10 == 0:
-        y_pred = model.predict(batch_x)
-        print(y_pred)
-
-  #model.fit_generator(generator=generator, 
-  #          validation_data=val_generator,
-  #          validation_steps=100,
-  #          steps_per_epoch=args.epoch_steps, 
-  #          epochs=args.epochs)
-  
-=======
   model.fit_generator(generator=generator, 
-                            validation_data=val_generator,
-                            validation_steps=100,
-                            steps_per_epoch=args.epoch_steps, 
-                            epochs=args.epochs)
->>>>>>> ffc6ce4dbe53dc39884d1a0b0ef41ba8a3df0ac6
+           validation_data=val_generator,
+           validation_steps=100,
+           steps_per_epoch=args.epoch_steps, 
+           epochs=args.epochs)
+  
   model.save(args.o)
   
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('-o', default='./bagged_mnist.h5', type=str)
-  parser.add_argument('-n', default=100, type=int)
-<<<<<<< HEAD
-  parser.add_argument('--lr',  default=1e-3, type=float)
-=======
-  parser.add_argument('--lr',  default=1e-4, type=float)
->>>>>>> ffc6ce4dbe53dc39884d1a0b0ef41ba8a3df0ac6
-  parser.add_argument('--tpu',   default=False, action='store_true')
-  parser.add_argument('--mil',   default='attention', type=str)
-  parser.add_argument('--gpus',   default=1, type=int)
+  parser.add_argument('--bag_size', default=25, type=int)
+  parser.add_argument('--lr', default=1e-4, type=float)
+  parser.add_argument('--tpu', default=False, action='store_true')
+  parser.add_argument('--mil', default='attention', type=str)
+  parser.add_argument('--gpus', default=1, type=int)
   parser.add_argument('--mnist', default=None)
   parser.add_argument('--ntest', default=25, type=int)
   parser.add_argument('--decay', default=1e-5, type=float)
-  parser.add_argument('--epochs', default=10, type=int)
-  parser.add_argument('--pretrained', default=None)
-  parser.add_argument('--batch_size', default=1, type=int)
-  parser.add_argument('--epoch_steps', default=1e3, type=int)
+  parser.add_argument('--epochs', default=25, type=int)
+  parser.add_argument('--pretrained', default='mnist_classifier.h5')
+  parser.add_argument('--batch_size', default=12, type=int)
+  parser.add_argument('--epoch_steps', default=int(1e3), type=int)
   parser.add_argument('--max_fraction_positive', default=0.3, type=int)
   parser.add_argument('--min_fraction_positive', default=0.1, type=int)
 

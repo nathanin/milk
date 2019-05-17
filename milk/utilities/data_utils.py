@@ -227,7 +227,7 @@ def generate_from_memory(xdict, ydict, batch_size, bag_size, transform_fn=lambda
 class MILSequence(Sequence):
   #def __init__(self, x_dict, y_dict, batch_size, bag_size, iters, transform_fn = lambda x: x, pad_first_dim=True):
   def __init__(self, x_list, x_pct, batch_size, bag_size, iters, case_label_fn,
-    transform_fn = lambda x: x, pad_first_dim=True):
+    transform_fn = lambda x: x, pad_first_dim=True, workers=1):
     self.x_list = x_list
     self.x_pct = x_pct
     self.batch_size = batch_size
@@ -236,6 +236,7 @@ class MILSequence(Sequence):
     self.case_label_fn = case_label_fn
     self.transform_fn = transform_fn
     self.pad_first_dim = pad_first_dim
+    self.workser = workers
 
     self.on_epoch_end()
 
@@ -277,7 +278,7 @@ class MILSequence(Sequence):
       y = np.eye(self.batch_size, 2)[batch_y]
 
     return batch_x, y
-    
+
   def on_epoch_end(self):
     """ Subset x_list and load up the cpu memory with data """
     self.x_dict = None

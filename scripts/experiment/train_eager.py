@@ -22,11 +22,6 @@ from milk.eager import MilkEager
 
 import collections
 
-# with open('../../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
-#   case_dict = pickle.load(f)
-sys.path.insert(0, '../../dataset/')
-from CASE_LABEL_DICT import CASE_LABEL_DICT as case_dict
-
 from milk.encoder_config import get_encoder_args
 
 def filter_list_by_label(lst):
@@ -44,12 +39,6 @@ def filter_list_by_label(lst):
     len(lst), len(lst_out)
   ))
   return lst_out
-
-def case_label_fn(data_path):
-  case = os.path.splitext(os.path.basename(data_path))[0]
-  y_ = case_dict[case]
-  # print(data_path, y_)
-  return y_
 
 def load_lists(data_patt, val_list_file, test_list_file):
   data_list = glob.glob(data_patt)
@@ -74,7 +63,8 @@ def val_step(model, val_generator, batch_size=8, steps=50):
   for k in range(steps):
     x, y = next(val_generator)
     yhat = model(x)
-    loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, tf.float32), y_pred=yhat)
+    loss = tf.keras.losses.categorical_crossentropy(
+      y_true=tf.constant(y, tf.float32), y_pred=yhat)
     losses[k] = np.mean(loss)
 
   val_loss = np.mean(losses)
@@ -262,21 +252,36 @@ def main(args):
   transform_fn_val = get_transform_fn(transform_fn_internal_val)
 
   print('Making a sample data generator')
-  train_dataset = get_data_generator(train_list, 0.1, transform_fn, case_label_fn, args)
+  train_gen = get_data_generator(train_list, 0.1, transform_fn, case_label_fn, args)
+  val_gen = get_data_generator(val_list, 0.1, transform_fn, case_label_fn, args)
+
+  # print('Making sample Sequence')
+  # train_sequence = tf.keras.utils.SequenceEnqueuer(data_utils.MILSequence(train_list, 0.5, 
+  #   args.batch_size, args.bag_size, args.steps_per_epoch,
+  #   case_label_fn, transform_fn, pad_first_dim=True))
+  # val_sequence = tf.keras.utils.SequenceEnqueuer(data_utils.MILSequence(val_list, 1., 
+  #   args.batch_size, args.bag_size, 100,
+  #   case_label_fn, transform_fn, pad_first_dim=True))
+
+  # train_sequence.start()
+  # train_gen = train_sequence.get() 
+  # val_sequence.start()
+  # val_gen = val_sequence.get() 
+
   print('Testing batch generator')
-  x, y = next(train_dataset)
+  x, y = next(train_gen)
   print('x: ', x.shape)
   print('y: ', y.shape)
 
   print('Warm up the queue')
-  for _ in range(100):
-    x, y = next(train_dataset)
+  for _ in range(10):
+    x, y = next(train_gen)
 
   times = []
   ts = time.time()
   for _ in range(10):
     tstart = time.time()
-    x, y = next(train_dataset)
+    x, y = next(train_gen)
     times.append(time.time() - tstart)
   print('10 batches in {} (average {})'.format(time.time() - ts, np.mean(times)))
 
@@ -284,10 +289,11 @@ def main(args):
   ts = time.time()
   for _ in range(10):
     tstart = time.time()
-    x, y = next(train_dataset)
+    x, y = next(train_gen)
     x = x.gpu()
     times.append(time.time() - tstart)
-  print('10 batches in {} (average {}) with GPU transfer'.format(time.time() - ts, np.mean(times)))
+  print('10 batches in {} (average {}) with GPU transfer'.format(
+    time.time() - ts, np.mean(times)))
 
   #with tf.device('/gpu:0'): 
   print('Model initializing')
@@ -353,14 +359,16 @@ def main(args):
       optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate/(epc+1))
 
       # Refresh the training set each epoch
-      train_dataset = get_data_generator(train_list, 0.5, transform_fn, case_label_fn, args)
+      train_gen = get_data_generator(train_list, 0.5, transform_fn, case_label_fn, args)
+      # train_sequence.on_epoch_end()
       for k in range(args.steps_per_epoch):
         totalsteps += 1
         tstart = time.time()
         with tf.GradientTape() as tape:
-          x, y = next(train_dataset)
+          x, y = next(train_gen)
           yhat = model(x.gpu(), training=True)
-          loss = tf.keras.losses.categorical_crossentropy(y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
+          loss = tf.keras.losses.categorical_crossentropy(
+            y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
 
         loss_mn = np.mean(loss)
         acc = eval_acc(y, yhat)
@@ -381,17 +389,17 @@ def main(args):
           optimizer.apply_gradients(zip(grads, trainable_variables))
 
         if k % 20 == 0:
-          print('{:06d}: loss={:3.5f} dt={:3.3f}s'.format(k, np.mean(avglosses), np.mean(steptimes)))
+          print('{:06d}: loss={:3.5f} dt={:3.3f}s'.format(k, 
+            np.mean(avglosses), np.mean(steptimes)))
           avglosses, steptimes = [], []
           for y_, yh_ in zip(y, yhat):
             print('\t{} {}'.format(y_, yh_))
 
       # De-reference the training dataset, then make a new one for a validation step
-      print('De-referencing train_dataset')
-      train_dataset = None
-      print('Gathering val dataset')
-      val_dataset = get_data_generator(val_list, 1., transform_fn_val, case_label_fn, args)
-      val_loss = val_step(model, val_dataset, steps=50)
+      # print('De-referencing train_sequence')
+      train_gen = None
+      # val_dataset = get_data_generator(val_list, 1., transform_fn_val, case_label_fn, args)
+      val_loss = val_step(model, val_gen, steps=50)
       print('epc: {} val_loss = {}'.format(epc, val_loss))
 
       if args.early_stop and stopper.should_stop(val_loss):
@@ -446,7 +454,8 @@ if __name__ == '__main__':
   parser.add_argument('--seed',             default = None, type=int)
   parser.add_argument('--val_pct',          default = 0.2, type=float)
   parser.add_argument('--test_pct',         default = 0.2, type=float)
-  parser.add_argument('--data_patt',        default = '../../dataset/tiles_reduced', type=str)
+  parser.add_argument('--data_patt',        default = None, type=str)
+  parser.add_argument('--data_labels',      default = None, type=str)
   parser.add_argument('--save_prefix',      default = 'save', type=str)
   parser.add_argument('--pretrained_model', default = None, type=str)
 
@@ -459,7 +468,16 @@ if __name__ == '__main__':
   parser.add_argument('--early_stop',       default = False, action='store_true')
   args = parser.parse_args()
 
-  config = tf.ConfigProto()
+  config = tf.ConfigProto(log_device_placement=True)
   config.gpu_options.allow_growth = True
   tf.enable_eager_execution(config=config)
+
+  with open(args.data_labels, 'rb') as f:  
+    case_dict = pickle.load(f)
+
+  def case_label_fn(data_path):
+    case = os.path.splitext(os.path.basename(data_path))[0]
+    y_ = case_dict[case]
+    return y_
+
   main(args)

@@ -112,7 +112,11 @@ class MilkEager(tf.keras.Model):
     remainder = bag_size - n_bags*self.batch_size
     x_bag = tf.split(x_bag, tf.stack([self.batch_size]*n_bags + [remainder]), axis=0)
     z_bag, z_enc = [None]*len(x_bag), [None]*len(x_bag)
-    for i, x_in in enumerate(x_bag):
+
+    # This loop raises an AutographParseError if inside a tf.contrib.eager.defun
+    # It's a syntax error, maybe we need to change the loop
+    for i in range(len(x_bag)):
+      x_in = x_bag[i]
       z = self.densenet(x_in, training=training)
       if verbose:
         print('\t z: ', z.shape)

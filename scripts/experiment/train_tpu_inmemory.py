@@ -246,12 +246,12 @@ p
       # train_generator = []
       # train_generator = subset_and_generate(train_list, case_label_fn, transform_fn, args, pct=0.25)
     model.fit_generator(generator=train_sequence,
-        validation_data=val_sequence,
-        #steps_per_epoch=args.steps_per_epoch, 
-        epochs=args.epochs,
-        workers=8,
-        use_multiprocessing=True,
-        callbacks=callbacks, )
+                        validation_data=val_sequence,
+                        #steps_per_epoch=args.steps_per_epoch, 
+                        epochs=args.epochs,
+                        workers=8,
+                        use_multiprocessing=True,
+                        callbacks=callbacks, )
 
   except KeyboardInterrupt:
     print('Keyboard interrupt caught')

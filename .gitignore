@@ -24,5 +24,5 @@ checkpoint*
 *.svs
 *.tfrecord
 
-dataset/CASE_GRADE_DICT.py
-dataset/CASE_LABEL_DICT.py
+*CASE_GRADE_DICT.py
+*CASE_LABEL_DICT.py

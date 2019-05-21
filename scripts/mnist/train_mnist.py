@@ -119,12 +119,14 @@ def main(args):
   else:
     (train_x, train_y), (test_x, test_y) = mnist.load_data()
 
+  train_x = train_x / 255.
+  test_x = test_x / 255.
   print('train_x:', train_x.shape, train_x.dtype, train_x.min(), train_x.max())
   print('train_y:', train_y.shape)
   print('test_x:', test_x.shape)
   print('test_y:', test_y.shape)
   
-  positive_label = np.random.choice(range(10))
+  positive_label = np.random.choice(range(10), 1, replace=False)
   print('using positive label = {}'.format(positive_label))
 
   train_x_pos, train_x_neg = rearrange_bagged_mnist(train_x, train_y, positive_label)
@@ -162,7 +164,8 @@ def main(args):
 
   if args.gpus > 1:
     print('Duplicating model onto 2 GPUs')
-    model = tf.keras.utils.multi_gpu_model(model, args.gpus, cpu_merge=True, cpu_relocation=False)
+    model = tf.keras.utils.multi_gpu_model(model, args.gpus, 
+                                           cpu_merge=True, cpu_relocation=False)
 
   optimizer = tf.keras.optimizers.Adam(lr=args.lr, decay=args.decay)
   model.compile(optimizer=optimizer,

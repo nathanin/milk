@@ -81,7 +81,6 @@ def split_train_test_balanced(data_list, test_pct=0.2):
 
 def split_train_val_test(data_list, val_pct=0.2, test_pct=0.2):
 
-
   total_cases = len(data_list)
   aim_test = int(total_cases * test_pct)
   print('Aiming for {} train / {} test'.format(
@@ -302,8 +301,8 @@ def tf_dataset(generator, preprocess_fn=lambda x: x, batch_size=1, buffer_size=6
 
   with tf.device('/gpu:0'):
     dataset = dataset.batch(batch_size)
-  #dataset = dataset.apply(tf.data.experimental.prefetch_to_device('/gpu:0', buffer_size=16))
 
+  #dataset = dataset.apply(tf.data.experimental.prefetch_to_device('/gpu:0', buffer_size=16))
   # if tf.executing_eagerly():
   #   print('Executing eagerly. Returning the iterable dataset object')
   #   return dataset

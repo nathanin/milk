@@ -3,12 +3,6 @@ Script to run the MIL workflow on numpy saved tile caches
 
 V1 of the script adds external tracking of val and test lists
 for use with test_*.py
-
-Updated to use Keras Sequence for data feeding
-
-TPU compatible*
-
-*probably, close to it at least.
 """
 from __future__ import print_function
 import tensorflow as tf
@@ -25,10 +19,9 @@ import os
 
 from milk.utilities import data_utils
 from milk.utilities import training_utils
-from milk import Milk, MilkBatch
+from milk import Milk
 
-# with open('../../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
-with open('../../dataset/CASE_LABEL_DICT.pkl', 'rb') as f:  
+with open('../../dataset/case_dict_obfuscated.pkl', 'rb') as f:  
 # with open('../dataset/cases_md5.pkl', 'rb') as f:  
   case_dict = pickle.load(f)
 
@@ -161,26 +154,18 @@ def main(args):
 
   print('Model initializing')
   encoder_args = get_encoder_args(args.encoder)
-  #model = Milk(input_shape=(args.bag_size, args.crop_size, args.crop_size, 3), 
-  #             encoder_args=encoder_args, mode=args.mil, use_gate=args.gated_attention,
-  #             temperature=args.temperature, freeze_encoder=args.freeze_encoder, 
-  #             deep_classifier=args.deep_classifier)
-  model = MilkBatch(input_shape=(args.bag_size, args.crop_size, args.crop_size, 3), 
-                    encoder_args = encoder_args, 
-                    batch_size = args.batch_size,
-                    mode = args.mil, 
-                    use_gate = args.gated_attention,
-                    temperature = args.temperature, 
-                    freeze_encoder = args.freeze_encoder, 
-                    deep_classifier = args.deep_classifier)
+  model = Milk(input_shape=(args.bag_size, args.crop_size, args.crop_size, 3), 
+               encoder_args=encoder_args, mode=args.mil, use_gate=args.gated_attention,
+               temperature=args.temperature, freeze_encoder=args.freeze_encoder, 
+               deep_classifier=args.deep_classifier)
   
   if args.tpu:
     # Need to use tensorflow optimizer
     optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
   else:
-    optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
-    # optimizer = training_utils.AdamAccumulate(lr=args.learning_rate,
-    #                            accum_iters=args.accumulate)
+    # optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-6)
+    optimizer = training_utils.AdamAccumulate(lr=args.learning_rate,
+                               accum_iters=args.accumulate)
 
   exptime = datetime.datetime.now()
   exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
@@ -238,7 +223,6 @@ def main(args):
   else:
     callbacks = []
 
-p
   try:
     # refresh the data generator with a new subset each epoch
     # test on the same validation data

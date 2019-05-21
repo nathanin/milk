@@ -187,7 +187,15 @@ def main(args):
   auc_curve(ytrue, yhat, savepath=save_img)
   test_eval(ytrue, yhat, savepath=save_metrics)
 
-if __name__ == '__main__':
+if __name__ == '__main__': 
+  """
+  Example usage:
+
+  test_eager.py --timestamp xxx \
+                --odir test_metrics \
+                --temperature 0.5 \
+                --encoder small
+  """
   # n_repeat controls re-sampling from the case
   # mcdropout is a flag for doing mcdropout to approximate posterior probability
   parser = argparse.ArgumentParser()

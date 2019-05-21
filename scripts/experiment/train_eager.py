@@ -252,21 +252,8 @@ def main(args):
   transform_fn_val = get_transform_fn(transform_fn_internal_val)
 
   print('Making a sample data generator')
-  train_gen = get_data_generator(train_list, 0.1, transform_fn, case_label_fn, args)
-  val_gen = get_data_generator(val_list, 0.1, transform_fn, case_label_fn, args)
-
-  # print('Making sample Sequence')
-  # train_sequence = tf.keras.utils.SequenceEnqueuer(data_utils.MILSequence(train_list, 0.5, 
-  #   args.batch_size, args.bag_size, args.steps_per_epoch,
-  #   case_label_fn, transform_fn, pad_first_dim=True))
-  # val_sequence = tf.keras.utils.SequenceEnqueuer(data_utils.MILSequence(val_list, 1., 
-  #   args.batch_size, args.bag_size, 100,
-  #   case_label_fn, transform_fn, pad_first_dim=True))
-
-  # train_sequence.start()
-  # train_gen = train_sequence.get() 
-  # val_sequence.start()
-  # val_gen = val_sequence.get() 
+  train_gen = get_data_generator(train_list, 1, transform_fn, case_label_fn, args)
+  val_gen = get_data_generator(val_list, 1, transform_fn_val, case_label_fn, args)
 
   print('Testing batch generator')
   x, y = next(train_gen)
@@ -352,6 +339,7 @@ def main(args):
   trainable_variables = model.trainable_variables
   accumulator = GradientAccumulator(n = args.accumulate, variable_list=trainable_variables)
 
+  # train_gen = get_data_generator(train_list, 1., transform_fn, case_label_fn, args)
   losstracker, acctracker, steptracker, avglosses, steptimes = [], [], [], [], []
   totalsteps = 0
   try:
@@ -359,8 +347,9 @@ def main(args):
       optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate/(epc+1))
 
       # Refresh the training set each epoch
-      train_gen = get_data_generator(train_list, 0.5, transform_fn, case_label_fn, args)
-      # train_sequence.on_epoch_end()
+      # print('De-referencing old train_gen')
+      # train_gen = None
+      # train_gen = get_data_generator(train_list, 0.5, transform_fn, case_label_fn, args)
       for k in range(args.steps_per_epoch):
         totalsteps += 1
         tstart = time.time()
@@ -395,9 +384,6 @@ def main(args):
           for y_, yh_ in zip(y, yhat):
             print('\t{} {}'.format(y_, yh_))
 
-      # De-reference the training dataset, then make a new one for a validation step
-      # print('De-referencing train_sequence')
-      train_gen = None
       # val_dataset = get_data_generator(val_list, 1., transform_fn_val, case_label_fn, args)
       val_loss = val_step(model, val_gen, steps=50)
       print('epc: {} val_loss = {}'.format(epc, val_loss))
@@ -440,9 +426,9 @@ if __name__ == '__main__':
   parser.add_argument('--cases_subset',     default = 64, type=int)
   parser.add_argument('--freeze_encoder',   default = False, action='store_true')
   parser.add_argument('--gated_attention',  default = True, action='store_false')
+  parser.add_argument('--deep_classifier',  default = False, action='store_true')
   parser.add_argument('--temperature',      default = 1, type=float)
   parser.add_argument('--encoder',          default = 'tiny', type=str)
-  parser.add_argument('--deep_classifier',  default = False, action='store_true')
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)

@@ -21,7 +21,8 @@ from milk.utilities import training_utils
 #from milk.utilities import evaluate
 from milk.eager import MilkEager
 
-with open('../dataset/case_dict_obfuscated.pkl', 'rb') as f:
+# with open('../../dataset/case_dict_obfuscated.pkl', 'rb') as f:
+with open('../../dataset/tiles_10x_epithelium/CASE_LABEL_DICT.pkl', 'rb') as f:
   case_dict = pickle.load(f)
 
 from milk.encoder_config import get_encoder_args

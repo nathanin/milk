@@ -331,7 +331,7 @@ def main(args):
       print(e)
 
   if args.early_stop:
-    stopper = ShouldStop(patience = 3)
+    stopper = ShouldStop(patience = 10)
   else:
     stopper = lambda x: False
 

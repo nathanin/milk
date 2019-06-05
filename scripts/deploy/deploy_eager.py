@@ -160,7 +160,7 @@ def read_list(test_file):
 
 def main(args):
   # Translate obfuscated file names to paths if necessary
-  slide_list = read_list(args.test_list)
+  slide_list = read_list(args.f)
   print('Found {} slides'.format(len(slide_list)))
 
   encoder_args = get_encoder_args(args.encoder)
@@ -175,14 +175,14 @@ def main(args):
   print('yhat:', yhat.shape)
 
   print('setting model weights')
-  model.load_weights(args.snapshot, by_name=True)
+  model.load_weights(args.s, by_name=True)
 
   ## Loop over found slides:
   yhats = []
   for i, src in enumerate(slide_list):
     print('\nSlide {}'.format(i))
     basename = os.path.basename(src).replace('.svs', '')
-    fgpth = os.path.join(args.fgdir, '{}_fg.png'.format(basename))
+    fgpth = os.path.join(args.fg, '{}_fg.png'.format(basename))
     if os.path.exists(fgpth):
       ramdisk_path = transfer_to_ramdisk(src, args.ramdisk)  # never use the original src
       print('Using fg image at : {}'.format(fgpth))
@@ -226,12 +226,12 @@ def main(args):
             attention_img.dtype, attention_img.min(),
             attention_img.max())
 
-      dst = os.path.join(args.odir, '{}_att.npy'.format(basename))
+      dst = os.path.join(args.o, '{}_att.npy'.format(basename))
       np.save(dst, att)
-      dst = os.path.join(args.odir, '{}_img.png'.format(basename))
+      dst = os.path.join(args.o, '{}_img.png'.format(basename))
       cv2.imwrite(dst, attention_img)
 
-    yhat_dst = os.path.join(args.odir, '{}_ypred.npy'.format(basename))
+    yhat_dst = os.path.join(args.o, '{}_ypred.npy'.format(basename))
     np.save(yhat_dst, yhat)
 
     try:
@@ -246,16 +246,16 @@ if __name__ == '__main__':
   for instance:
 
   python deploy_eager.py \
-    --odir tcga-prad \
-    --test_list ./tcga_prad_slides.txt \
-    --snapshot <path> \
-    --fgdir ./tcga-prad-fg
+    -o tcga-prad \
+    -f ./tcga_prad_slides.txt \
+    -s <path> \
+    --fg ./tcga-prad-fg
   """
   parser = argparse.ArgumentParser()
-  parser.add_argument('--odir',       default=None, type=str)  # Required
-  parser.add_argument('--test_list',  default=None, type=str)  # Required
-  parser.add_argument('--snapshot',   default=None, type=str)  # Required
-  parser.add_argument('--fgdir',      default=None, type=str)  # Required
+  parser.add_argument('-o',       default=None, type=str)  # Required
+  parser.add_argument('-f',  default=None, type=str)  # Required
+  parser.add_argument('-s',   default=None, type=str)  # Required
+  parser.add_argument('--fg',      default=None, type=str)  # Required
   
   parser.add_argument('--mag',        default=5, type=int)
   parser.add_argument('--ramdisk',    default='/dev/shm', type=str)

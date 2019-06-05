@@ -258,7 +258,7 @@ if __name__ == '__main__':
   parser.add_argument('--fgdir',      default=None, type=str)  # Required
   
   parser.add_argument('--mag',        default=5, type=int)
-  parser.add_argument('--ramdisk',    default='/dev/shm', type=str)
+  parser.add_argument('--ramdisk',    default='./', type=str)
   parser.add_argument('--n_classes',  default=2, type=int)
   parser.add_argument('--input_dim',  default=96, type=int)
   parser.add_argument('--batch_size', default=64, type=int)

@@ -1,5 +1,6 @@
 from __future__ import print_function
 import tensorflow as tf
+tfe = tf.contrib.eager
 
 class ClassificationDataset(object):
   """ Eager-enabled dataset for image/mask pairs

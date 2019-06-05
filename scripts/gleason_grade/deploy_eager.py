@@ -33,11 +33,10 @@ class_mnemonics = {
 }
 
 colors = np.array([[175, 33, 8],
-           [20, 145, 4],
-           [177, 11, 237],
-           [14, 187, 235],
-           [255, 255, 255]
-          ])
+                   [20, 145, 4],
+                   [177, 11, 237],
+                   [14, 187, 235],
+                   [255, 255, 255]])
 
 def colorize(rgb, prob):
   prob = cv2.resize(prob, dsize=rgb.shape[:2][::-1], interpolation=cv2.INTER_NEAREST)
@@ -168,16 +167,18 @@ def main(args):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
+  # Required
   parser.add_argument('--slide_dir', default='../dataset/svs/', type=str)
-  parser.add_argument('--shuffle', default=False, action='store_true')
+  parser.add_argument('--save_dir', default=None, type=str)
   parser.add_argument('--snapshot', default='./pretrained.h5', type=str)
+  parser.add_argument('--encoder', default='small', type=str)
+
+  parser.add_argument('--shuffle', default=False, action='store_true')
   parser.add_argument('--n_classes', default=5, type=int)
   parser.add_argument('--input_dim', default=96, type=int)
-  parser.add_argument('--mag', default=5, type=int)
+  parser.add_argument('--mag', default=10, type=int)
   parser.add_argument('--batch_size', default=64, type=int)
-  parser.add_argument('--save_dir', default=None, type=str)
-  parser.add_argument('--ramdisk', default='/dev/shm', type=str)
-  parser.add_argument('--encoder', default='big', type=str)
+  parser.add_argument('--ramdisk', default='./', type=str)
   parser.add_argument('--fgdir', default='../usable_area/inference', type=str)
   args = parser.parse_args()
 

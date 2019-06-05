@@ -3,7 +3,7 @@
 set -e
 steps=500
 epochs=100
-bag=100
+bag=125
 lr=0.0001
 pretrained=../gleason_grade/wide_model/gleason_classifier_eager.h5
 batch=1

@@ -220,6 +220,8 @@ def main(args):
       print('Visualizing std {:3.5f}'.format(np.std(att)))
       svs.place_batch(att, indices, 'attention', mode='tile')
       attention_img = np.squeeze(svs.output_imgs['attention'])
+      attention_img_raw = np.squeeze(svs.output_imgs['attention'])
+
       attention_img = attention_img * (1. / attention_img.max())
       attention_img = draw_attention(attention_img, n_bins=50)
       print('attention image:', attention_img.shape, 
@@ -227,7 +229,7 @@ def main(args):
             attention_img.max())
 
       dst = os.path.join(args.o, '{}_att.npy'.format(basename))
-      np.save(dst, att)
+      np.save(dst, attention_img_raw)
       dst = os.path.join(args.o, '{}_img.png'.format(basename))
       cv2.imwrite(dst, attention_img)
 
@@ -264,7 +266,7 @@ if __name__ == '__main__':
   parser.add_argument('--batch_size', default=64, type=int)
   parser.add_argument('--oversample', default=1.1, type=float)
   parser.add_argument('--randomize',  default=False, action='store_true')
-  parser.add_argument('--overwrite',  default=False, action='store_true')
+  parser.add_argument('--clobber',    default=False, action='store_true')
 
   parser.add_argument('--mil',        default='attention', type=str)
   parser.add_argument('--encoder',    default='wide', type=str)

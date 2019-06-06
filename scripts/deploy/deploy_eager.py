@@ -192,7 +192,8 @@ def main(args):
                     # background_speed  = 'accurate',
                     background_speed  = 'image',
                     background_image  = fgimg,
-                    preprocess_fn     = lambda x: (reinhard(x)/255.).astype(np.float32),
+                    preprocess_fn     = lambda x: (x/255.).astype(np.float32),
+                    normalize_fn      = lambda x: x,
                     process_mag       = args.mag,
                     process_size      = args.input_dim,
                     oversample_factor = args.oversample,
@@ -204,7 +205,8 @@ def main(args):
         os.remove(ramdisk_path)
         continue
     else:
-        continue
+      print(fgpth)
+      continue
     
     svs.initialize_output(name='attention', dim=1, mode='tile')
     yhat, att, indices = process_slide(svs, model, args)
@@ -250,14 +252,14 @@ if __name__ == '__main__':
   python deploy_eager.py \
     -o tcga-prad \
     -f ./tcga_prad_slides.txt \
-    -s <path> \
+    -s path/to/snapshot.h5 \
     --fg ./tcga-prad-fg
   """
   parser = argparse.ArgumentParser()
-  parser.add_argument('-o',       default=None, type=str)  # Required
-  parser.add_argument('-f',  default=None, type=str)  # Required
+  parser.add_argument('-o',   default=None, type=str)  # Required
+  parser.add_argument('-f',   default=None, type=str)  # Required
   parser.add_argument('-s',   default=None, type=str)  # Required
-  parser.add_argument('--fg',      default=None, type=str)  # Required
+  parser.add_argument('--fg', default=None, type=str)  # Required
   
   parser.add_argument('--mag',        default=5, type=int)
   parser.add_argument('--ramdisk',    default='/dev/shm', type=str)

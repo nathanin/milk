@@ -13,7 +13,6 @@ from milk.utilities import model_utils
 from milk.utilities import training_utils
 
 from tensorflow.keras.layers import Input
-
 from milk.encoder_config import get_encoder_args
 
 def main(args):

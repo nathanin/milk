@@ -12,15 +12,16 @@ import os
 from scipy.special import softmax
 import numpy as np
 import seaborn as sns
-colors = np.array([[255, 255, 57], # Bright yellow
-           [198, 27, 27],  # Red
-           [11, 147, 8], # Green
-           [252, 141, 204],# Pink
-           [255, 255, 255],
-          ])
-# colors = sns.cubehelix_palette(n_colors=100)
-colors = sns.color_palette('coolwarm', n_colors=100)
-mixture = [0.4, 0.6]
+# colors = np.array([[255, 255, 57], # Bright yellow
+#            [198, 27, 27],  # Red
+#            [11, 147, 8], # Green
+#            [252, 141, 204],# Pink
+#            [255, 255, 255],
+#           ])
+N_COLORS = 50
+# colors = sns.cubehelix_palette(n_colors=N_COLORS)
+colors = sns.color_palette('YlOrBr', n_colors=N_COLORS)
+mixture = [0.2, 0.8]
 
 # TODO fix to always return sorted lists
 def matching_basenames(l1, l2):
@@ -61,7 +62,7 @@ def overlay_img(base, pred):
   y = softmax(y)
   # y = cv2.imread(pred, 0)
   y = cv2.resize(y, fx=0, fy=0, dsize=ishape, interpolation=cv2.INTER_CUBIC)
-  ydig = np.digitize(y, np.linspace(y.min(), y.max(), 99))
+  ydig = np.digitize(y, np.linspace(y.min(), y.max(), N_COLORS-1))
 
   # Find unprocessed space
   # ymax[np.sum(y, axis=-1) < 1e-2] = 4 # white
@@ -88,9 +89,9 @@ def main(args):
 
   for bi, pr in zip(baseimgs, predictions):
     dst = pr.replace(args.r, 'overlay.jpg')
-    if os.path.exists(dst):
-      print('{} exists'.format(dst))
-      continue
+    # if os.path.exists(dst):
+    #   print('{} exists'.format(dst))
+    #   continue
 
     combo = overlay_img(bi, pr)
     print('{} --> {}'.format(combo.shape, dst))
@@ -103,9 +104,12 @@ def main(args):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('-p', default=None, type=str) # path to some predictions
-  parser.add_argument('-s', default=None, type=str) # path to some target hi-res images
-  parser.add_argument('-r', default='att.npy', type=str) # pattern to match
+  parser.add_argument('-p', default=None, type=str,
+    help='Path to some folder with files conforming to <-p>/*<-r> pattern') # path to some predictions
+  parser.add_argument('-s', default=None, type=str,
+    help='Path to some folder with hi-res images to emblazen with color') # path to some target hi-res images
+  parser.add_argument('-r', default='att.npy', type=str,
+    help='Pattern to match <-p>/*<-r>') # pattern to match
   # parser.add_argument('-d', default='hires_imgs', type=str)
 
   args = parser.parse_args()

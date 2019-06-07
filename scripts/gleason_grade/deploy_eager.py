@@ -32,11 +32,11 @@ class_mnemonics = {
   4: 'ST',
 }
 
-colors = np.array([[175, 33, 8],
-                   [20, 145, 4],
-                   [177, 11, 237],
-                   [14, 187, 235],
-                   [255, 255, 255]])
+colors = np.array([[255, 255, 57], # Bright yellow
+                   [198, 27, 27],  # Red
+                   [11, 147, 8], # Green
+                   [252, 141, 204],# Pink
+                   [255, 255, 255], ])
 
 def colorize(rgb, prob):
   prob = cv2.resize(prob, dsize=rgb.shape[:2][::-1], interpolation=cv2.INTER_NEAREST)
@@ -87,10 +87,17 @@ def vect_to_tile(x, target):
   dim = x.shape[-1]
   return np.tile(x, target*target).reshape(batch, target, target, dim)
 
+def read_list(pth):
+  l = []
+  with open(pth, 'r') as f:
+    for L in f:
+      l.append(L.strip())
+  return l
 
 def main(args):
   ## Search for slides
-  slide_list = sorted(glob.glob(os.path.join(args.slide_dir, '*.svs')))
+  # slide_list = sorted(glob.glob(os.path.join(args.slide_dir, '*.svs')))
+  slide_list = read_list(args.slide_list)
   print('Found {} slides'.format(len(slide_list)))
   if args.shuffle:
     np.random.shuffle(slide_list)
@@ -168,18 +175,18 @@ def main(args):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   # Required
-  parser.add_argument('--slide_dir', default='../dataset/svs/', type=str)
   parser.add_argument('--save_dir', default=None, type=str)
   parser.add_argument('--snapshot', default='./pretrained.h5', type=str)
-  parser.add_argument('--encoder', default='small', type=str)
+  parser.add_argument('--encoder',  default='small', type=str)
+  parser.add_argument('slide_list', type=str)
 
-  parser.add_argument('--shuffle', default=False, action='store_true')
-  parser.add_argument('--n_classes', default=5, type=int)
-  parser.add_argument('--input_dim', default=96, type=int)
-  parser.add_argument('--mag', default=10, type=int)
+  parser.add_argument('--shuffle',    default=False, action='store_true')
+  parser.add_argument('--n_classes',  default=5, type=int)
+  parser.add_argument('--input_dim',  default=96, type=int)
+  parser.add_argument('--mag',        default=10, type=int)
   parser.add_argument('--batch_size', default=64, type=int)
-  parser.add_argument('--ramdisk', default='./', type=str)
-  parser.add_argument('--fgdir', default='../usable_area/inference', type=str)
+  parser.add_argument('--ramdisk',    default='./', type=str)
+  parser.add_argument('--fgdir',      default='../usable_area/inference', type=str)
   args = parser.parse_args()
 
   assert args.save_dir is not None

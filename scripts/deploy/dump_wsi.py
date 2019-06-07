@@ -16,10 +16,7 @@ import argparse
 import numpy as np
 import tensorflow as tf
 
-# sys.path.insert(0, 'svs_reader')
 from svs_reader import Slide, reinhard
-# sys.path.insert(0, 'tfmodels')
-# import tfmodels
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 
@@ -56,7 +53,7 @@ def transfer_to_ramdisk(src, ramdisk = RAM_DISK):
   shutil.copyfile(src, dst)
   return dst
 
-def process_slide(slide_path, model, sess, out_dir, process_mag, 
+def process_slide(slide_path, sess, out_dir, process_mag, 
           process_size, oversample, batch_size, n_classes,
           fgspeed, fgimg):
   """ Process a slide
@@ -164,6 +161,11 @@ def process_slide(slide_path, model, sess, out_dir, process_mag,
       break
 
   svs.close()
+
+  # Replace pure black with white
+  bwimg = np.mean(rgb_img, axis=-1)
+  img_b = bwimg < 10
+  rgb_img[img_b, :] = 255
   return rgb_img, fps
 
 
@@ -202,7 +204,6 @@ def main(args):
 
   print('out_dir: ', out_dir)
   with tf.Session(config=config) as sess:
-    model = None
     times = {}
     fpss = {}
     for slide_num, slide_path in enumerate(slide_list):
@@ -223,7 +224,7 @@ def main(args):
       try:
         time_start = time.time()
         # LOL
-        rgb_img, fps =  process_slide(ramdisk_path, model, sess, out_dir,
+        rgb_img, fps =  process_slide(ramdisk_path, sess, out_dir,
           args.mag, args.size, args.oversample, args.batch_size, args.n_classes, 
           fgspeed, fgimg)
         if rgb_img is None:
@@ -282,16 +283,16 @@ if __name__ == '__main__':
   N_CLASSES = 4
 
   parser = argparse.ArgumentParser()
-  parser.add_argument('--model', default='')
-  parser.add_argument('--slide_list', default='./slide_list.txt')
-  parser.add_argument('--out', default='./slide_inference')
-  parser.add_argument('--fg', default='./slide_list.txt')
+  parser.add_argument('--out', default='./output_dir')
+  parser.add_argument('--fg', default='./fg_dir')
 
   parser.add_argument('--mag', default=PROCESS_MAG, type=int)
   parser.add_argument('--size', default=PROCESS_SIZE, type=int)
   parser.add_argument('--n_classes', default=N_CLASSES, type=int)
   parser.add_argument('--batch_size', default=BATCH_SIZE, type=int)
   parser.add_argument('--oversample', default=OVERSAMPLE, type=float)
+
+  parser.add_argument('slide_list') # A list of full paths to slides
 
   parser.add_argument('--clobber', default=False, action='store_true')
 

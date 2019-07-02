@@ -454,7 +454,7 @@ if __name__ == '__main__':
   parser.add_argument('--early_stop',       default = False, action='store_true')
   args = parser.parse_args()
 
-  config = tf.ConfigProto(log_device_placement=True)
+  config = tf.ConfigProto(log_device_placement=False)
   config.gpu_options.allow_growth = True
   tf.enable_eager_execution(config=config)
 

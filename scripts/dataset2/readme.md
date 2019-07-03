@@ -35,9 +35,9 @@ pnbx-10x-keys
 
 
 ### And write a python wrapper to interface:
-
+** Draft: updates in `MILDataset.py` **
 ``` python
-class Dataset:
+class MILDataset:
   """
   args:
     data_path
@@ -48,6 +48,7 @@ class Dataset:
     data_groups (see get_groups)
     key_groups (see get_groups)
 
+    (no reference to self in the call)
     preproc_fn (supplied, with default):
       - apply this function when loading each stack
       - args: image_stack (stack, h, w, c)
@@ -67,6 +68,7 @@ class Dataset:
         1. data_groups = { 'keys': hooks to data }
         2. key_groups = { 'keys: hooks to key values }
 
+    ( Reads happen in serial to not require thread-safe libhdf5 )
     read_group:
       args: group
       - read the stack data into memory according to rules

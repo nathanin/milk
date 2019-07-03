@@ -3,6 +3,7 @@ MI-Net with convolutions
 """
 from __future__ import print_function
 import tensorflow as tf
+import numpy as np
 
 from tensorflow.keras.layers import (Dense, Dropout, BatchNormalization)
 # from tensorflow.layers import BatchNormalization
@@ -14,7 +15,7 @@ from milk.utilities.model_utils import lr_mult
 
 class MilkEager(tf.keras.Model):
   def __init__(self, z_dim=256, encoder_args=None, cls_normalize=True, mil_type='attention', 
-               batch_size=32, deep_classifier=True, temperature=1):
+               heads=1, batch_size=32, deep_classifier=True, temperature=1):
 
     super(MilkEager, self).__init__()
 
@@ -24,6 +25,7 @@ class MilkEager(tf.keras.Model):
     self.batch_size = batch_size
     self.temperature = temperature
     self.cls_normalize = cls_normalize
+    self.heads = heads
 
     self.densenet = make_encoder_eager( encoder_args = encoder_args )
     self.drop2  = Dropout(rate=0.3)
@@ -39,22 +41,19 @@ class MilkEager(tf.keras.Model):
 
     self.classifier_layers = []
     if self.deep_classifier:
-      depth=5
+      depth=3
     else:
       depth=1
 
-    if self.cls_normalize:
-      print('Setting up classifier normalizing layers')
-      self.classifier_dropout_0 = Dropout(rate = 0.3)
-      # self.classifier_dropout_1 = Dropout(rate = 0.3)
-      # self.classifier_bn = BatchNormalization(momentum=0.99, axis=-1) # Is this how we make it invariant to bag size?
-
-    for i in range(depth):
-      self.classifier_layers.append(
-        Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
-        name = 'mil_deep_{}'.format(i)))
-
-    self.classifier = Dense(units=2, activation=tf.nn.softmax, use_bias=False, name='mil_classifier')
+    for h in range(self.heads):
+      head_layers = []
+      for i in range(depth):
+        head_layers.append(
+          Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
+          name = 'head_{}_{}'.format(h, i)))
+      head_layers.append(Dense(units=2, activation=tf.nn.softmax, use_bias=False, 
+        name='classifier_{}'.format(h)))
+      self.classifier_layers.append(head_layers)
 
   # @tf.contrib.eager.defun
   def mil_attention(self, features, verbose=False, return_att=False, return_raw_att=False, training=True):
@@ -121,12 +120,12 @@ class MilkEager(tf.keras.Model):
       if verbose:
         print('\t z: ', z.shape)
       z = self.drop2(z, training=training)
-      if self.mil_type == 'instance':
+      # if self.mil_type == 'instance':
         # z_enc.append(z)
-        z_enc[i] = z
-        z = self.apply_classifier(z, verbose=verbose, training=training)
-        if verbose:
-          print('Instance yhat:', z.shape)
+        # z_enc[i] = z
+        # z = self.apply_classifier(z, verbose=verbose, training=training)
+        # if verbose:
+        #   print('Instance yhat:', z.shape)
       # z_bag.append(z)
       z_bag[i] = z
 
@@ -150,21 +149,34 @@ class MilkEager(tf.keras.Model):
       return z
 
   # @tf.contrib.eager.defun
-  def apply_classifier(self, features, verbose=False, training=True):
-    if self.cls_normalize:
-      # features = self.classifier_bn(features, training=training)
-      features = self.classifier_dropout_0(features, training=training)
-    for k, layer in enumerate(self.classifier_layers):
+  def apply_classifier(self, features, head=None, verbose=False, training=True):
+    """ Apply classifier layers
+
+    In multihead mode, pick one of the heads at random.
+    NOTE change to tf.random to handle graph mode
+    """
+    if head is None:
+      h = np.random.choice(np.arange(self.heads))
+    elif head == 'all':
+      # Special case, return all predictions. Also for initialization
+      yout = [self.apply_classifier(features, head=h, verbose=verbose, training=training) for h in range(self.heads)]
+      return yout
+    else: # an integer
+      h = head
+
+    if verbose:
+      print('Classifier head {}'.format(h))
+    layers = self.classifier_layers[h]
+    for k, layer in enumerate(layers):
       if verbose:
         print('Classifier layer {}'.format(k))
       features = layer(features)
+    return features
 
-    # features = self.classifier_dropout_1(features, training=training)
-    yhat = self.classifier(features)
-    return yhat
+
 
   # @tf.contrib.eager.defun
-  def call(self, x_in, training=True, verbose=False):
+  def call(self, x_in, head=None, training=True, verbose=False):
     """
     `training` controls the use of dropout and batch norm, if defined
     `return_embedding`
@@ -183,8 +195,6 @@ class MilkEager(tf.keras.Model):
       print('n_x: ', n_x)
     # This loop is over the batch dimension
     x_in_split = tf.split(x_in, n_x, axis=0)
-    # zs = [self.encode_bag(tf.squeeze(x_bag), training=training, verbose=verbose) \
-    #       for x_bag in x_in_split]
     zs = []
     for x_bag in x_in_split:
       if verbose:
@@ -195,11 +205,12 @@ class MilkEager(tf.keras.Model):
     z_batch = tf.concat(zs, axis=0) #(batch, features)
     if verbose:
       print('z_batch: ', z_batch.shape)
-    if self.mil_type != 'instance':
-      yhat = self.apply_classifier(z_batch, training=training, verbose=verbose)
+
+    if self.mil_type == 'instance':
+      # yhat = z_batch
+      yhat = self.apply_classifier(z_batch, head=head, training=training, verbose=verbose)
+      yhat = tf.reduce_mean(yhat, axis=0, keepdims=True)
     else:
-      yhat = z_batch
+      yhat = self.apply_classifier(z_batch, head=head, training=training, verbose=verbose)
     
-    if verbose:
-      print('returning', yhat.shape)
     return yhat

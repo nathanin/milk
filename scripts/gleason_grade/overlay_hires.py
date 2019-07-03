@@ -12,16 +12,13 @@ import os
 from scipy.special import softmax
 import numpy as np
 import seaborn as sns
-# colors = np.array([[255, 255, 57], # Bright yellow
-#            [198, 27, 27],  # Red
-#            [11, 147, 8], # Green
-#            [252, 141, 204],# Pink
-#            [255, 255, 255],
-#           ])
-N_COLORS = 50
-# colors = sns.color_palette('YlOrBr', n_colors=N_COLORS)
-colors = sns.color_palette('RdBu_r', n_colors=N_COLORS)
-mixture = [0.3, 0.7]
+colors = np.array([[255, 255, 57], # Bright yellow
+           [198, 27, 27],  # Red
+           [11, 147, 8], # Green
+           [252, 141, 204],# Pink
+           [255, 255, 255],
+          ])
+mixture = [0.5, 0.5]
 
 # TODO fix to always return sorted lists
 def matching_basenames(l1, l2):
@@ -45,12 +42,10 @@ def color_mask(mask):
   b = np.copy(r)
   for u in uq:
     u_m = mask == u
-    c = colors[u]
-    # n_u = u_m.sum()
-    # print('u: {} = {} {}'.format(u , n_u, c))
-    r[mask==u] = c[0] * 255
-    g[mask==u] = c[1] * 255
-    b[mask==u] = c[2] * 255
+    c = colors[u, :]
+    r[mask==u] = c[0]
+    g[mask==u] = c[1]
+    b[mask==u] = c[2]
   newmask = np.dstack((b,g,r))
   return newmask
 
@@ -59,20 +54,19 @@ def overlay_img(base, pred):
   img = cv2.imread(base)
   ishape = img.shape[:2][::-1]
   y = np.load(pred)
-  y = softmax(y)
   # y = cv2.imread(pred, 0)
-  y = cv2.resize(y, fx=0, fy=0, dsize=ishape, interpolation=cv2.INTER_CUBIC)
-  ydig = np.digitize(y, np.linspace(y.min(), y.max(), N_COLORS-1))
+  y = cv2.resize(y, fx=0, fy=0, dsize=ishape, interpolation=cv2.INTER_LINEAR)
+  ymax = np.argmax(y, axis=-1)
 
-  # Find unprocessed space
-  # ymax[np.sum(y, axis=-1) < 1e-2] = 4 # white
+  ## Find unprocessed space
+  ymax[np.sum(y, axis=-1) < 1e-2] = 4 # white
 
   # Find pure black and white in the img
   gray = np.mean(img, axis=-1)
   img_w = gray > 220
   img_b = gray < 10
 
-  ycolor = color_mask(ydig)
+  ycolor = color_mask(ymax)
   img = np.add(img*mixture[0], ycolor*mixture[1])
   channels = np.split(img, 3, axis=-1)
   for c in channels:
@@ -97,10 +91,6 @@ def main(args):
     print('{} --> {}'.format(combo.shape, dst))
     cv2.imwrite(dst, combo)
 
-    # dst = pr.replace(args.r, 'dig.png')
-    # print('{} --> {}'.format(ydig.shape, dst))
-    # cv2.imwrite(dst, ydig)
-
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -108,7 +98,7 @@ if __name__ == '__main__':
     help='Path to some folder with files conforming to <-p>/*<-r> pattern') # path to some predictions
   parser.add_argument('-s', default=None, type=str,
     help='Path to some folder with hi-res images to emblazen with color') # path to some target hi-res images
-  parser.add_argument('-r', default='att.npy', type=str,
+  parser.add_argument('-r', default='.npy', type=str,
     help='Pattern to match <-p>/*<-r>') # pattern to match
   # parser.add_argument('-d', default='hires_imgs', type=str)
 

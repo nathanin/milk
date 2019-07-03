@@ -1,6 +1,7 @@
 from __future__ import print_function
 import numpy as np
 import tensorflow as tf
+import traceback
 import argparse
 import shutil
 import sys
@@ -25,6 +26,7 @@ def main(args):
     record_path = args.dataset,
     crop_size = crop_size,
     downsample = args.downsample,
+    n_classes = args.n_classes,
     n_threads = args.n_threads,
     batch = args.batch_size,
     prefetch_buffer = args.prefetch_buffer,
@@ -83,12 +85,15 @@ def main(args):
         print('{:05d} loss={:3.3f}'.format(k, np.mean(running_avg)))
         running_avg = []
 
-  except:
+  except Exception as e:
+    print(e)
     print('Caught exception')
+    traceback.print_tb(e.__traceback__)
 
   finally:  
     print('Saving')
     model.save_weights(args.saveto)
+    # model.save(args.saveto)
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -100,10 +105,11 @@ if __name__ == '__main__':
   parser.add_argument('--encoder', default='big', type=str)
 
   # Usually don't change these
-  parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.75pct.tfrecord')
+  parser.add_argument('--dataset', 
+    default='../dataset/gleason_grade_4class_train.tfrecord')
   parser.add_argument('--n_threads', default=8, type=int)
   parser.add_argument('--input_dim', default=96, type=int)
-  parser.add_argument('--n_classes', default=5, type=int)
+  parser.add_argument('--n_classes', default=4, type=int)
   parser.add_argument('--downsample', default=0.25, type=float)
   parser.add_argument('--image_channels', default=3, type=int)
   parser.add_argument('--shuffle_buffer', default=512, type=int)

@@ -23,14 +23,6 @@ config.gpu_options.allow_growth = True
 PRINT_ITER = 500
 RAM_DISK = '/dev/shm'
 
-def make_preprocess_fn(means, stds):
-  def preprocess_fn(img):
-    img = img * (1/255.)
-    # for i in range(3):
-    #   img[:,:,i] = (img[:,:,i] - means[i]) / stds[i]
-    return img.astype(np.float32)
-  return preprocess_fn
-
 def prob_output(svs):
   probs = svs.output_imgs['prob']
   ## quantize to [0, 255] uint8
@@ -42,7 +34,7 @@ def prob_output(svs):
 def rgb_output(svs):
   rgb = svs.output_imgs['rgb']
   # rgb += 1.0
-  rgb *= 255
+  # rgb *= 255
   # print 'fixed: ', rgb.shape, rgb.dtype, rgb.min(), rgb.max()
   return rgb[:,:,::-1]
 
@@ -85,12 +77,11 @@ def process_slide(slide_path, sess, out_dir, process_mag,
     i.e. shape(model.yhat) = (batch, h, w, n_classes)
   """
   
-  means = [0.6462,  0.5070,  0.8055]      # mean, std of training data. Do NOT change
-  stds = [0.1381,  0.1674,  0.1358]
   try:
     print('Working {}'.format(slide_path))
     svs = Slide(slide_path    = slide_path,
-                preprocess_fn = make_preprocess_fn(means, stds),
+                preprocess_fn = lambda x: x.astype(np.float32),
+                normalize_fn  = lambda x: x,
                 process_mag   = process_mag,
                 process_size  = process_size,
                 oversample    = oversample,
@@ -175,6 +166,15 @@ def read_list(pth):
     for L in f:
       l.append(L.strip())
   return l
+  
+  
+kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7,7))
+kernel2 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15,15))
+def fill_fg(fgimg):
+  fgimg = cv2.morphologyEx(fgimg, cv2.MORPH_CLOSE, kernel)
+  fgimg = cv2.dilate(fgimg, kernel2, iterations = 2)
+  return fgimg
+
 
 def main(args):
   assert args.out is not None
@@ -193,9 +193,9 @@ def main(args):
     print('Not looking for already processed slides.')
     print('Will process all slides in list.')
   else:
-    processed_list = glob.glob(os.path.join(out_dir, '*_prob.npy'))
+    processed_list = glob.glob(os.path.join(out_dir, '*_rgb.jpg'))
     print('Found {} processed slides.'.format(len(processed_list)))
-    processed_base = [os.path.basename(x).replace('_prob.npy', '') for x in processed_list]
+    processed_base = [os.path.basename(x).replace('_rgb.jpg', '') for x in processed_list]
 
     slide_base = [os.path.basename(x).replace('.svs', '') for x in slide_list]
     slide_base_list = zip(slide_base, slide_list)
@@ -210,11 +210,18 @@ def main(args):
       print('\n\n[\tSlide {}/{}\t]\n'.format(slide_num, len(slide_list)))
       ramdisk_path = transfer_to_ramdisk(slide_path)
       basename = os.path.basename(slide_path).replace('.svs', '')
+      outname_rgb = os.path.basename(ramdisk_path).replace('.svs', '_rgb.jpg')
+      outpath =  os.path.join(out_dir, outname_rgb)
+      # if os.path.exists(outpath):
+      #   print('{} exists.'.format(outpath))
+      #   continue
+
       fgpth = os.path.join(args.fg, '{}_fg.png'.format(basename))
       print('Looking for fg img {}'.format(fgpth))
       if os.path.exists(fgpth):
         fgspeed = 'image'
         fgimg = cv2.imread(fgpth, 0)
+        fgimg = fill_fg(fgimg)
         print('Using fg img {}'.format(fgimg.shape))
       else:
         fgspeed = 'fast'
@@ -233,8 +240,6 @@ def main(args):
           print('A message should have been printed')
           continue
 
-        outname_rgb = os.path.basename(ramdisk_path).replace('.svs', '_rgb.jpg')
-        outpath =  os.path.join(out_dir, outname_rgb)
         print('Writing {}'.format(outpath))
         cv2.imwrite(outpath, rgb_img)
         times[ramdisk_path] = (time.time() - time_start) / 60.
@@ -276,9 +281,9 @@ def main(args):
 
 if __name__ == '__main__':
   # Defaults
-  PROCESS_MAG = 5
+  PROCESS_MAG = 10
   PROCESS_SIZE = 512
-  OVERSAMPLE = 1.0
+  OVERSAMPLE = 1.05
   BATCH_SIZE = 16
   N_CLASSES = 4
 

@@ -50,15 +50,14 @@ def main(args):
   optimizer = tf.keras.optimizers.Adam(lr=args.learning_rate, decay=1e-5)
 
   model.compile(optimizer=optimizer,
-          loss=tf.keras.losses.categorical_crossentropy,
-          metrics=['categorical_accuracy'])
+                loss=tf.keras.losses.categorical_crossentropy,
+                metrics=['categorical_accuracy'])
   model.summary()
 
   try:
     model.fit(dataset.dataset.make_one_shot_iterator(),
           steps_per_epoch=args.iterations,
           epochs=args.epochs)
-
   except KeyboardInterrupt:
     print('Stop signal')
   finally:
@@ -69,15 +68,16 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--tpu', default=False, action='store_true')
   parser.add_argument('--epochs', default=10, type=int)
-  parser.add_argument('--dataset', default='../dataset/gleason_grade_train_ext.tfrecord')
+  parser.add_argument('--dataset', 
+    default='../dataset/gleason_grade_4class_train.tfrecord')
   parser.add_argument('--encoder', default='small')
-  parser.add_argument('--n_classes', default=5, type=int)
+  parser.add_argument('--n_classes', default=4, type=int)
   parser.add_argument('--save_path', default='./pretrained.h5')
-  parser.add_argument('--n_threads', default=12, type=int)
+  parser.add_argument('--n_threads', default=6, type=int)
   parser.add_argument('--input_dim', default=96, type=int)
   parser.add_argument('--downsample', default=0.25, type=float)
   parser.add_argument('--iterations', default=1000, type=int)
-  parser.add_argument('--batch_size', default=64, type=int)
+  parser.add_argument('--batch_size', default=128, type=int)
   parser.add_argument('--learning_rate', default=1e-3, type=float)
   parser.add_argument('--shuffle_buffer', default=128, type=int)
   parser.add_argument('--prefetch_buffer', default=512, type=int)

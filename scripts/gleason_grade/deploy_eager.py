@@ -94,6 +94,12 @@ def read_list(pth):
       l.append(L.strip())
   return l
 
+kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7,7))
+def fill_fg(fgimg):
+  fgimg = cv2.dilate(fgimg, kernel, iterations = 2)
+  fgimg = cv2.morphologyEx(fgimg, cv2.MORPH_CLOSE, kernel)
+  return fgimg
+
 def main(args):
   ## Search for slides
   # slide_list = sorted(glob.glob(os.path.join(args.slide_dir, '*.svs')))
@@ -125,8 +131,10 @@ def main(args):
     try:
       fgpth = os.path.join(args.fgdir, '{}_fg.png'.format(basename))
       fgimg = cv2.imread(fgpth, 0)
+      fgimg = fill_fg(fgimg)
       svs = Slide(slide_path = ramdisk_path, 
             preprocess_fn = lambda x: (x/255.).astype(np.float32) ,
+            normalize_fn  = lambda x: x,
             background_speed  = 'image',
             background_image  = fgimg,
             process_mag=args.mag,

@@ -17,51 +17,16 @@ import time
 import sys 
 import os 
 
-from milk.utilities import data_utils
+from milk.utilities import data_utils, MILDataset
 from milk.eager import MilkEager
 
 import collections
-
 from milk.encoder_config import get_encoder_args
 
-def filter_list_by_label(lst):
-  lst_out = []
-  for l in lst:
-    l_base = os.path.basename(l)
-    l_base = os.path.splitext(l_base)[0]
-    try:
-      if case_dict[l_base] != 2:
-        lst_out.append(l)
-    except:
-      print('Possible key error for case {}'.format(l_base))
 
-  print("Filtering: Got list length {}; returning list length {}".format(
-    len(lst), len(lst_out)
-  ))
-  return lst_out
-
-def load_lists(data_patt, val_list_file, test_list_file):
-  data_list = glob.glob(data_patt)
-  val_list = []
-  with open(val_list_file, 'r') as f:
-    for l in f:
-      val_list.append(l.replace('\n', ''))
-  test_list = []
-  with open(test_list_file, 'r') as f:
-    for l in f:
-      test_list.append(l.replace('\n', ''))
-
-  train_list = []
-  for d in data_list:
-    if (d not in val_list) and (d not in val_list):
-      train_list.append(d)
-
-  return train_list, val_list, test_list
-
-def val_step(model, val_generator, batch_size=8, steps=50):
+def val_step(model, val_generator):
   losses = np.zeros(steps)
-  for k in range(steps):
-    x, y = next(val_generator)
+  for k , (x, y) in enumerate(val_generator):
     yhat = model(x)
     loss = tf.keras.losses.categorical_crossentropy(
       y_true=tf.constant(y, tf.float32), y_pred=yhat)
@@ -110,17 +75,6 @@ class ShouldStop():
 
     return ret
 
-class LearningButler():
-  """
-  Track the loss and anneal the learning rate when it stops improving
-  """
-  def __init__(self, learning_rate=1e-4, delta=0.01, divisor=0.01):
-    self.delta = delta
-    self.prev_loss = np.inf
-    self.learning_rate = learning_rate
-
-  def lr(self):
-    pass
 
 class GradientAccumulator():
   def __init__(self, variable_list, n = 10, batch_size = 1):
@@ -168,34 +122,6 @@ def eval_acc(ytrue, yhat):
   return acc
 
 
-# Wrap transform fn in an apply()
-def get_transform_fn(fn):
-  def apply_fn(x_bag):
-    x_bag = [fn(x) for x in x_bag]
-    return tf.stack(x_bag, 0)
-  return apply_fn
-
-def get_data_generator(sources, pct, transform_fn, case_label_fn, args):
-  assert pct <= 1 and pct > 0 
-  n_sources = len(sources)
-  use_sources = np.random.choice(sources, int(n_sources * pct), replace=False)
-  print('Using {} source files'.format(len(use_sources)))
-
-  x, y = data_utils.load_list_to_memory(sources, case_label_fn)
-
-  # Define the python generator function in context with x and y
-  def data_generator():
-    return data_utils.generate_from_memory(x, y, batch_size=1,
-      bag_size=args.bag_size, 
-      pad_first_dim=False)
-
-  dataset = data_utils.tf_dataset(data_generator, batch_size=args.batch_size, 
-    preprocess_fn=transform_fn, buffer_size=16, threads=8, iterator=True)
-  # Add device prefetching
-  # dataset = dataset.apply(tf.data.experimental.prefetch_to_device('/gpu:0', buffer_size=8))
-
-  print('Done. Returning dataset object')
-  return dataset
 
 def main(args):
   """ 
@@ -205,82 +131,10 @@ def main(args):
   v0 - create datasets within this script
   v1 - factor monolithic training_utils.mil_train_loop !!
   tpu - replace data feeder and mil_train_loop with tf.keras.Model.fit()
+  July 4 2019 - added MILDataset that takes away all the dataset nonsense
   """
-  # Take care of passed in test and val lists for the ensemble experiment
-  # we need both test list and val list to be given.
-  if (args.test_list is not None) and (args.val_list is not None):
-    train_list, val_list, test_list = load_lists(
-      os.path.join(args.data_patt, '*.npy'), 
-      args.val_list, args.test_list)
-  else:
-    train_list, val_list, test_list = data_utils.list_data(
-      os.path.join(args.data_patt, '*.npy'), 
-      val_pct=args.val_pct, 
-      test_pct=args.test_pct, 
-      seed=args.seed)
-  
-  if args.verbose:
-    print("train_list:")
-    print(train_list)
-    print("val_list:")
-    print(val_list)
-    print("test_list:")
-    print(test_list)
 
-  ## Filter out unwanted samples:
-  train_list = data_utils.enforce_minimum_size(train_list, args.bag_size, verbose=True)
-  train_list = filter_list_by_label(train_list)
-  val_list = data_utils.enforce_minimum_size(val_list, args.bag_size, verbose=True)
-  val_list = filter_list_by_label(val_list)
-  test_list = data_utils.enforce_minimum_size(test_list, args.bag_size, verbose=True)
-  test_list = filter_list_by_label(test_list)
-
-  transform_fn_internal_train = data_utils.make_transform_fn(args.x_size, args.y_size, 
-                                                      args.crop_size, args.scale,
-                                                      brightness=True,
-                                                      normalize=False,
-                                                      eager=True)
-  transform_fn_internal_val = data_utils.make_transform_fn(args.x_size, args.y_size, 
-                                                      args.crop_size, args.scale,
-                                                      brightness=False,
-                                                      rotate=False,
-                                                      flip=False,
-                                                      middle_crop=True,
-                                                      normalize=False,
-                                                      eager=True)
-  transform_fn = get_transform_fn(transform_fn_internal_train)
-  transform_fn_val = get_transform_fn(transform_fn_internal_val)
-
-  print('Making a sample data generator')
-  train_gen = get_data_generator(train_list, 1, transform_fn, case_label_fn, args)
-  val_gen = get_data_generator(val_list, 1, transform_fn_val, case_label_fn, args)
-
-  print('Testing batch generator')
-  x, y = next(train_gen)
-  print('x: ', x.shape)
-  print('y: ', y.shape)
-
-  print('Warm up the queue')
-  for _ in range(10):
-    x, y = next(train_gen)
-
-  times = []
-  ts = time.time()
-  for _ in range(10):
-    tstart = time.time()
-    x, y = next(train_gen)
-    times.append(time.time() - tstart)
-  print('10 batches in {} (average {})'.format(time.time() - ts, np.mean(times)))
-
-  times = []
-  ts = time.time()
-  for _ in range(10):
-    tstart = time.time()
-    x, y = next(train_gen)
-    x = x.gpu()
-    times.append(time.time() - tstart)
-  print('10 batches in {} (average {}) with GPU transfer'.format(
-    time.time() - ts, np.mean(times)))
+  data_factory = MILDataset(args.dataset, crop=args.crop_size, n_classes=2)
 
   #with tf.device('/gpu:0'): 
   print('Model initializing')
@@ -292,6 +146,7 @@ def main(args):
                     temperature=args.temperature,
                     heads = args.heads)
   print('Running once to load CUDA')
+  x = tf.zeros((1, 1, args.crop_size, args.crop_size, args.channels))
   yhat = model(x.gpu(), head='all', training=True, verbose=True)
   print('Running again for time')
   tstart = time.time()
@@ -305,17 +160,6 @@ def main(args):
   out_path = os.path.join(args.save_prefix, '{}.h5'.format(exptime_str))
   if not os.path.exists(os.path.dirname(out_path)):
     os.makedirs(os.path.dirname(out_path)) 
-
-  # Todo : clean up
-  val_list_file = os.path.join('./val_lists', '{}.txt'.format(exptime_str))
-  with open(val_list_file, 'w+') as f:
-    for v in val_list:
-      f.write('{}\n'.format(v))
-
-  test_list_file = os.path.join('./test_lists', '{}.txt'.format(exptime_str))
-  with open(test_list_file, 'w+') as f:
-    for v in test_list:
-      f.write('{}\n'.format(v))
 
   ## Write out arguments passed for this session
   arg_file = os.path.join('./args', '{}.txt'.format(exptime_str))
@@ -331,31 +175,28 @@ def main(args):
     except Exception as e:
       print(e)
 
+  ## Controlling overfitting by monitoring a metric, with some patience since the last improvement
   if args.early_stop:
-    stopper = ShouldStop(patience = 10)
+    stopper = ShouldStop(patience = 5)
   else:
     stopper = lambda x: False
 
-  # trainable_variables = [v for v in model.variables if 'batch_normalization' not in v.name]
   trainable_variables = model.trainable_variables
   accumulator = GradientAccumulator(n = args.accumulate, variable_list=trainable_variables)
 
-  # train_gen = get_data_generator(train_list, 1., transform_fn, case_label_fn, args)
   losstracker, acctracker, steptracker, avglosses, steptimes = [], [], [], [], []
   totalsteps = 0
   try:
     for epc in range(args.epochs):
       optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate/(epc+1))
+      training_iterator = data_factory.tensorflow_iterator(mode='train', seed=args.seed, 
+        subset=args.bag_size, attr='stage_code', eager=True)
 
-      # Refresh the training set each epoch
-      # print('De-referencing old train_gen')
-      # train_gen = None
-      # train_gen = get_data_generator(train_list, 0.5, transform_fn, case_label_fn, args)
-      for k in range(args.steps_per_epoch):
+      for k, (x, y) in enumerate(training_iterator):
         totalsteps += 1
         tstart = time.time()
         with tf.GradientTape() as tape:
-          x, y = next(train_gen)
+          # x, y = next(train_gen)
           yhat = model(x.gpu(), training=True)
           loss = tf.keras.losses.categorical_crossentropy(
             y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
@@ -385,9 +226,14 @@ def main(args):
           for y_, yh_ in zip(y, yhat):
             print('\t{} {}'.format(y_, yh_))
 
-      # val_dataset = get_data_generator(val_list, 1., transform_fn_val, case_label_fn, args)
-      val_loss = val_step(model, val_gen, steps=50)
+      val_iterator = data_factory.tensorflow_iterator(mode='val', seed=args.seed, 
+        subset=args.bag_size, attr='stage_code', eager=True)
+      val_loss = val_step(model, val_gen)
       print('epc: {} val_loss = {}'.format(epc, val_loss))
+
+      ## Clean up hanging resources from the iterators
+      del training_iterator
+      del val_iterator
 
       if args.early_stop and stopper.should_stop(val_loss):
         break
@@ -404,8 +250,6 @@ def main(args):
     model.save_weights(out_path)
     print('Saved model: {}'.format(out_path))
     print('Training done. Find val and test datasets at')
-    print(val_list_file)
-    print(test_list_file)
 
     # Save the loss profile
     training_stats = os.path.join('save', '{}_training_curves.txt'.format(exptime_str))
@@ -417,13 +261,16 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
 
   # Model and data
+  parser.add_argument('--dataset',          default = None, type=str)
+
   parser.add_argument('--mil',              default = 'attention', type=str)
   parser.add_argument('--scale',            default = 1.0, type=float)
   parser.add_argument('--heads',            default = 5, type=int)
   parser.add_argument('--x_size',           default = 128, type=int)
   parser.add_argument('--y_size',           default = 128, type=int)
   parser.add_argument('--bag_size',         default = 500, type=int)
-  parser.add_argument('--crop_size',        default = 96, type=int)
+  parser.add_argument('--crop_size',        default = 128, type=int)
+  parser.add_argument('--channels',         default = 3, type=int)
   parser.add_argument('--batch_size',       default = 1, type=int)
   parser.add_argument('--cases_subset',     default = 64, type=int)
   parser.add_argument('--freeze_encoder',   default = False, action='store_true')
@@ -434,16 +281,13 @@ if __name__ == '__main__':
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
-  parser.add_argument('--accumulate',       default = 5, type=float)
-  parser.add_argument('--steps_per_epoch',  default = 500, type=int)
+  parser.add_argument('--accumulate',       default = 1, type=float)
   parser.add_argument('--epochs',           default = 50, type=int)
 
   # Experiment / data settings
-  parser.add_argument('--seed',             default = None, type=int)
+  parser.add_argument('--seed',             default = 999, type=int)
   parser.add_argument('--val_pct',          default = 0.2, type=float)
   parser.add_argument('--test_pct',         default = 0.2, type=float)
-  parser.add_argument('--data_patt',        default = None, type=str)
-  parser.add_argument('--data_labels',      default = None, type=str)
   parser.add_argument('--save_prefix',      default = 'save', type=str)
   parser.add_argument('--pretrained_model', default = None, type=str)
 
@@ -460,8 +304,6 @@ if __name__ == '__main__':
   config.gpu_options.allow_growth = True
   tf.enable_eager_execution(config=config)
 
-  with open(args.data_labels, 'rb') as f:  
-    case_dict = pickle.load(f)
 
   def case_label_fn(data_path):
     case = os.path.splitext(os.path.basename(data_path))[0]

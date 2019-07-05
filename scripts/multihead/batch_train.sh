@@ -12,7 +12,7 @@ encoder=shallow
 data=../../dataset/tiles_10x_epithelium
 datal=../../dataset/tiles_10x_epithelium/CASE_LABEL_DICT.pkl
 
-python train_eager.py \
+python ../train_eager.py \
   --steps_per_epoch $steps \
   --batch_size $batch \
   --epochs $epochs \

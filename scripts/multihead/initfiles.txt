@@ -1,2 +1,1 @@
 batch_train.sh
-train_eager.py

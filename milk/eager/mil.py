@@ -39,21 +39,23 @@ class MilkEager(tf.keras.Model):
       self.attention_layer = Dense(units=1, 
         activation=None, use_bias=False, name='attention_layer')
 
-    self.classifier_layers = []
+    self.classifier_heads = []
     if self.deep_classifier:
       depth=3
     else:
       depth=1
 
     for h in range(self.heads):
-      head_layers = []
-      for i in range(depth):
-        head_layers.append(
-          Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
-          name = 'head_{}_{}'.format(h, i)))
-      head_layers.append(Dense(units=2, activation=tf.nn.softmax, use_bias=False, 
+      # head_layers = []
+      # for i in range(depth):
+      #   head_layers.append(
+      #     Dense(units=self.hidden_dim, activation=tf.nn.relu, use_bias=False,
+      #     name = 'head_{}_{}'.format(h, i)))
+      # head_layers.append(Dense(units=2, activation=tf.nn.softmax, use_bias=False, 
+      #   name='classifier_{}'.format(h)))
+      # self.classifier_heads.append(head_layers)
+      self.classifier_heads.append(Dense(units=2, activation=tf.nn.softmax, use_bias=False, 
         name='classifier_{}'.format(h)))
-      self.classifier_layers.append(head_layers)
 
   # @tf.contrib.eager.defun
   def mil_attention(self, features, verbose=False, return_att=False, return_raw_att=False, training=True):
@@ -103,8 +105,8 @@ class MilkEager(tf.keras.Model):
       print('z:', z.shape)
     return z
 
-  # @tf.contrib.eager.defun
   # TODO unify encode_bag to work in return_z mode for all MIL types
+  # @tf.contrib.eager.defun
   def encode_bag(self, x_bag, training=True, verbose=False, return_z=False):
     bag_size = x_bag.shape[0]
     n_bags = bag_size // self.batch_size
@@ -137,46 +139,32 @@ class MilkEager(tf.keras.Model):
     if return_z and self.mil_type == 'instance':
       # z_enc = tf.concat(z_enc, axis=0)
       # print('Returning zenc and z', z_enc.shape, z.shape)
-      return z
+      z = z
       # return z_enc, z
     elif return_z:
-      return z
+      z = z
     else:
       if self.mil_type == 'instance':
         z = tf.reduce_mean(z, axis=0, keepdims=True)
       else:
         z = self.apply_mil(z, verbose=verbose)
-      return z
+    return z
 
   # @tf.contrib.eager.defun
-  def apply_classifier(self, features, head=None, verbose=False, training=True):
+  def apply_classifier(self, features, heads=[0], verbose=False, training=True):
     """ Apply classifier layers
 
     In multihead mode, pick one of the heads at random.
     NOTE change to tf.random to handle graph mode
     """
-    if head is None:
-      h = np.random.choice(np.arange(self.heads))
-    elif head == 'all':
-      # Special case, return all predictions. Also for initialization
-      yout = [self.apply_classifier(features, head=h, verbose=verbose, training=training) for h in range(self.heads)]
-      return yout
-    else: # an integer
-      h = head
+    yout = []
+    for h in heads:
+      layer = self.classifier_heads[h]
+      yout.append(layer(features))
+    return yout
 
-    if verbose:
-      print('Classifier head {}'.format(h))
-    layers = self.classifier_layers[h]
-    for k, layer in enumerate(layers):
-      if verbose:
-        print('Classifier layer {}'.format(k))
-      features = layer(features)
-    return features
-
-
-
-  # @tf.contrib.eager.defun
-  def call(self, x_in, head=None, training=True, verbose=False):
+  @tf.contrib.eager.defun
+  def call(self, x_in, heads=[0], training=True, verbose=False):
     """
     `training` controls the use of dropout and batch norm, if defined
     `return_embedding`
@@ -190,6 +178,10 @@ class MilkEager(tf.keras.Model):
       print(x_in.shape)
     assert len(x_in.shape) == 5
     n_x = list(x_in.shape)[0]
+
+    # Make sure the gradeint stops here
+    x_in = tf.stop_gradient(x_in)
+
     if verbose:
       print('Encoder Call:')
       print('n_x: ', n_x)
@@ -206,11 +198,22 @@ class MilkEager(tf.keras.Model):
     if verbose:
       print('z_batch: ', z_batch.shape)
 
+    # if self.mil_type == 'instance':
+    #   # yhat = z_batch
+    #   yhat = self.apply_classifier(z_batch, heads=heads, training=training, verbose=verbose)
+    #   yhat = tf.reduce_mean(yhat, axis=0, keepdims=True)
+    # else:
+    #   yhat = self.apply_classifier(z_batch, heads=heads, training=training, verbose=verbose)
+
+    yhat = []
+    for h in heads:
+      layer = self.classifier_heads[h]
+      yhat.append(layer(z_batch))
+
     if self.mil_type == 'instance':
-      # yhat = z_batch
-      yhat = self.apply_classifier(z_batch, head=head, training=training, verbose=verbose)
       yhat = tf.reduce_mean(yhat, axis=0, keepdims=True)
-    else:
-      yhat = self.apply_classifier(z_batch, head=head, training=training, verbose=verbose)
     
+    if verbose:
+      print('yhat: ', yhat)
+
     return yhat

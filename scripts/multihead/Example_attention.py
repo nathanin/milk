@@ -41,11 +41,13 @@ import argparse
 import os
 
 def main(args):
+
+
   # Define a compute_fn that should do three things:
   # 1. define an iterator over the slide's tiles
   # 2. compute an output with a given model / arguments
   # 3. return a reconstructed slide
-  def compute_fn(slide, args, head=0, model=None):
+  def compute_fn(slide, args, model=None, n_dropout=10 ):
     assert tf.executing_eagerly()
     print('Slide with {}'.format(len(slide.tile_list)))
 
@@ -65,25 +67,40 @@ def main(args):
         print('Batch #{:04d}\t{}'.format(k, img.shape))
 
     features = tf.concat(features, axis=0)
+
+    ## Sample-dropout
+    # features = features.numpy()
+    # print(features.shape)
+    # n_instances = features.shape[0]
+    # att = np.zeros(n_instances)
+    # n_choice = int(n_instances * 0.7)
+    # all_heads = list(range(args.heads))
+    # for j in range(n_dropout):
+    #   idx = np.random.choice(range(n_instances), n_choice, replace=False)
+    #   print(idx)
+    #   fdrop = features[idx, :]
+
     z_att, att = model.mil_attention(features,
-                                      training=False, 
-                                      return_raw_att=True)
-    att = np.squeeze(att)
+                                     training=False, 
+                                     return_raw_att=True)
+
+    # att[idx] += np.squeeze(attdrop)
+    yhat_multihead = model.apply_classifier(z_att, heads=all_heads, 
+      training=False)
+    print('yhat mean {}'.format(np.mean(yhat_multihead, axis=0)))
+
     indices = np.concatenate(indices)
+    att = np.squeeze(att)
     slide.place_batch(att, indices, 'att', mode='tile')
     ret = slide.output_imgs['att']
     print('Got attention image: {}'.format(ret.shape))
 
-    # Apply the classifier heads and print the results
-    for h in range(5):
-      yhat = model.apply_classifier(z_att, head=h, training=False)
-      print('yhat head {}: {}'.format(h, yhat))
-    
-    yhat_multihead = model.apply_classifier(z_att, head='all', 
-      training=False)
-    print('yhat mean {}'.format(np.mean(yhat_multihead, axis=0)))
-    return ret
+    return ret, features.numpy()
 
+
+
+
+  ## Begin main script:
   # Set up the model first
   encoder_args = get_encoder_args(args.encoder)
   model = MilkEager(encoder_args=encoder_args,
@@ -95,7 +112,8 @@ def main(args):
   
   x = tf.zeros((1, 1, args.process_size,
                 args.process_size, 3))
-  _ = model(x, verbose=True, head='all', training=True)
+  all_heads = [0,1,2,3,4,5,6,7,8,9]
+  _ = model(x, verbose=True, heads=all_heads, training=True)
   model.load_weights(args.snapshot, by_name=True)
 
   # keras Model subclass
@@ -112,10 +130,11 @@ def main(args):
     # if this destination already exists.
     # Set the --suffix option to reflect the model / type of processed output
     dst = repext(src, args.suffix)
+    featdst = repext(src, args.suffix+'.feat.npy')
 
     # Loading data from ramdisk incurs a one-time copy cost
     rdsrc = cpramdisk(src, args.ramdisk)
-    print('File:', rdsrc)
+    print('\n\nFile:', rdsrc)
 
     # Wrapped inside of a try-except-finally.
     # We want to make sure the slide gets cleaned from 
@@ -138,9 +157,11 @@ def main(args):
       # Again, this may change to something like...
       #     slide.compute_all
       # which would loop over all the defined output types.
-      ret = slide.compute('att', args, model=model)
+      ret, features = slide.compute('att', args, model=model)
       print('{} --> {}'.format(ret.shape, dst))
-      np.save(dst, ret[:,:,::-1])
+      print('{} --> {}'.format(features.shape, featdst))
+      np.save(dst, ret)
+      np.save(featdst, features)
     except Exception as e:
       print(e)
       traceback.print_tb(e.__traceback__)
@@ -168,16 +189,16 @@ if __name__ == '__main__':
 
   # Slide options
   p.add_argument('--mag',   dest='process_mag', default=10, type=int)
-  p.add_argument('--chunk', dest='process_size', default=96, type=int)
+  p.add_argument('--chunk', dest='process_size', default=128, type=int)
   p.add_argument('--bg',    dest='background_speed', default='all', type=str)
-  p.add_argument('--ovr',   dest='oversample_factor', default=1.25, type=float)
+  p.add_argument('--ovr',   dest='oversample_factor', default=1.0, type=float)
   p.add_argument('--verbose', dest='verbose', default=False, action='store_true')
 
   # Keywords for the model
   p.add_argument('--mil',   dest='mil', default='attention', type=str)
-  p.add_argument('--heads',   dest='heads', default=5, type=int)
+  p.add_argument('--heads',   dest='heads', default=10, type=int)
   p.add_argument('--temperature',   dest='temperature', default=0.5, type=float)
-  p.add_argument('--deep_classifier', dest='deep_classifier', default=True, type=bool)
+  p.add_argument('--deep_classifier', dest='deep_classifier', default=False, type=bool)
 
   args = p.parse_args()
 

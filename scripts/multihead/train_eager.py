@@ -9,6 +9,7 @@ import tensorflow as tf
 import tensorflow.contrib.eager as tfe
 
 import numpy as np
+import traceback
 import argparse
 import datetime
 import pickle
@@ -16,6 +17,7 @@ import glob
 import time
 import sys 
 import os 
+import gc
 
 from milk.utilities import data_utils, MILDataset
 from milk.eager import MilkEager
@@ -23,15 +25,22 @@ from milk.eager import MilkEager
 import collections
 from milk.encoder_config import get_encoder_args
 
+from memory_profiler import profile
 
-def val_step(model, val_generator):
-  losses = np.zeros(steps)
-  for k , (x, y) in enumerate(val_generator):
-    yhat = model(x)
+def val_step(model, val_iterator):
+  ## Start with a random baseline
+  print()
+
+  # losses = np.zeros(steps)
+  losses = []
+  for k , (x, y) in enumerate(val_iterator):
+    yhat = model(x, heads = [0])
     loss = tf.keras.losses.categorical_crossentropy(
-      y_true=tf.constant(y, tf.float32), y_pred=yhat)
-    losses[k] = np.mean(loss)
+      y_true=tf.constant(y, tf.float32), y_pred=yhat[0])
+    losses.append(np.mean(loss))
+    print('\r{}: {}  '.format(k, np.mean(losses)), end='', flush=True)
 
+  print('')
   val_loss = np.mean(losses)
   return val_loss
 
@@ -122,7 +131,7 @@ def eval_acc(ytrue, yhat):
   return acc
 
 
-
+@profile
 def main(args):
   """ 
   1. Create generator datasets from the provided lists
@@ -133,8 +142,14 @@ def main(args):
   tpu - replace data feeder and mil_train_loop with tf.keras.Model.fit()
   July 4 2019 - added MILDataset that takes away all the dataset nonsense
   """
+  exptime = datetime.datetime.now()
+  exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
+  out_path = os.path.join(args.save_prefix, '{}.h5'.format(exptime_str))
+  if not os.path.exists(os.path.dirname(out_path)):
+    os.makedirs(os.path.dirname(out_path)) 
 
   data_factory = MILDataset(args.dataset, crop=args.crop_size, n_classes=2)
+  data_factory.split_train_val('case_id', seed=args.seed)
 
   #with tf.device('/gpu:0'): 
   print('Model initializing')
@@ -142,24 +157,18 @@ def main(args):
   model = MilkEager(encoder_args=encoder_args, 
                     mil_type=args.mil,
                     deep_classifier=args.deep_classifier,
-                    batch_size=64,
+                    batch_size=16,
                     temperature=args.temperature,
                     heads = args.heads)
   print('Running once to load CUDA')
   x = tf.zeros((1, 1, args.crop_size, args.crop_size, args.channels))
-  yhat = model(x.gpu(), head='all', training=True, verbose=True)
-  print('Running again for time')
-  tstart = time.time()
-  yhat = model(x.gpu(), head=0, training=True, verbose=True)
-  tend = time.time()
-  print('yhat:', yhat.shape, 'tdelta = {:3.4f}'.format(tend-tstart))
+
+  ## The way we give the list is very particular.
+  all_heads = [0,1,2,3,4,5,6,7,8,9]
+  yhat = model(x, heads=all_heads, training=True, verbose=True)
   model.summary()
 
-  exptime = datetime.datetime.now()
-  exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
-  out_path = os.path.join(args.save_prefix, '{}.h5'.format(exptime_str))
-  if not os.path.exists(os.path.dirname(out_path)):
-    os.makedirs(os.path.dirname(out_path)) 
+  del x, yhat
 
   ## Write out arguments passed for this session
   arg_file = os.path.join('./args', '{}.txt'.format(exptime_str))
@@ -177,29 +186,72 @@ def main(args):
 
   ## Controlling overfitting by monitoring a metric, with some patience since the last improvement
   if args.early_stop:
-    stopper = ShouldStop(patience = 5)
+    stopper = ShouldStop(patience = args.heads)
   else:
     stopper = lambda x: False
 
   trainable_variables = model.trainable_variables
-  accumulator = GradientAccumulator(n = args.accumulate, variable_list=trainable_variables)
+  # accumulator = GradientAccumulator(n = args.accumulate, variable_list=trainable_variables)
 
-  losstracker, acctracker, steptracker, avglosses, steptimes = [], [], [], [], []
+  # @tf.contrib.eager.defun
+  def data_fn(x4d):
+    def _internal(x3d):
+      x = tf.image.random_crop(x3d, (args.crop_size, args.crop_size, 3))
+      x = tf.image.random_flip_up_down(x)
+      x = tf.image.random_flip_left_right(x)
+      return x
+
+    x4d = tf.cast(x4d, tf.float32) / 255.
+    xproc = tf.map_fn(_internal, x4d, parallel_iterations=8, back_prop=False)
+    return tf.expand_dims(xproc, 0)
+
+  def label_fn(label):
+    label = tf.one_hot(label, 2)
+    return label
+
+  optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
+  losstracker, acctracker, steptracker  = [], [], []
   totalsteps = 0
   try:
     for epc in range(args.epochs):
-      optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate/(epc+1))
-      training_iterator = data_factory.tensorflow_iterator(mode='train', seed=args.seed, 
-        subset=args.bag_size, attr='stage_code', eager=True)
+      gc.collect()
+      # data_factory.clear_mem()
+      # val_iterator = data_factory.python_iterator(mode='val', 
+      #   subset=args.bag_size, seed=epc, attr='stage_code',
+      #   data_fn=data_fn, label_fn=label_fn)
+      data_factory.close_refs()
+      data_factory = MILDataset(args.dataset, crop=args.crop_size, n_classes=2)
+      data_factory.split_train_val('case_id', seed=args.seed)
 
-      for k, (x, y) in enumerate(training_iterator):
+      data_factory.tensorflow_iterator(mode='val', 
+        subset=args.bag_size, seed=epc, attr='stage_code', threads=args.threads)
+      val_iterator = data_factory.tf_dataset
+      val_loss = val_step(model, val_iterator)
+      print('\nepc: {} val_loss = {}'.format(epc, val_loss))
+      if args.early_stop and stopper.should_stop(val_loss):
+        break
+
+      data_factory.tensorflow_iterator(mode='train', 
+        seed=epc, batch_size=args.batch_size, threads=args.threads,
+        subset=args.bag_size, attr='stage_code', eager=True)
+      train_iterator = data_factory.tf_dataset
+      # train_iterator = data_factory.python_iterator(mode='train', 
+      #   subset=args.bag_size, seed=epc, attr='stage_code',
+      #   data_fn=data_fn, label_fn=label_fn)
+
+      # train_head = [np.random.choice(args.heads)]
+      # Go in order:
+      train_head = [epc % args.heads]
+      avglosses, steptimes = [], []
+      print('Training head {}'.format(train_head))
+      for k, (x, y) in enumerate(train_iterator):
         totalsteps += 1
         tstart = time.time()
         with tf.GradientTape() as tape:
           # x, y = next(train_gen)
-          yhat = model(x.gpu(), training=True)
+          yhat = model(x, training=True, heads=train_head)
           loss = tf.keras.losses.categorical_crossentropy(
-            y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat)
+            y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat[0])
 
         loss_mn = np.mean(loss)
         acc = eval_acc(y, yhat)
@@ -208,43 +260,31 @@ def main(args):
         acctracker.append(acc)
         steptracker.append(totalsteps)
 
+        # with tf.device('/cpu:0'):
         grads = tape.gradient(loss, trainable_variables)
-        should_update = accumulator.track(grads, trainable_variables)
+
+        # should_update = accumulator.track(grads, trainable_variables)
 
         tend = time.time()
         steptimes.append(tend - tstart)
-        if should_update:
-          grads = accumulator.accumulate()
-          #for g, v in zip(grads, trainable_variables):
-          #  print(v.name, v.shape, g.shape)
-          optimizer.apply_gradients(zip(grads, trainable_variables))
+        # if should_update:
+        #   grads = accumulator.accumulate()
+        # with tf.device('/cpu:0'):
+        optimizer.apply_gradients(zip(grads, trainable_variables))
 
-        if k % 20 == 0:
-          print('{:06d}: loss={:3.5f} dt={:3.3f}s'.format(k, 
-            np.mean(avglosses), np.mean(steptimes)))
-          avglosses, steptimes = [], []
-          for y_, yh_ in zip(y, yhat):
-            print('\t{} {}'.format(y_, yh_))
+        # if k % 20 == 0:
+        print('\r{:06d}: loss={:3.5f} dt={:3.3f}s   '.format(k, 
+          np.mean(avglosses), np.mean(steptimes)), end='', flush=1)
 
-      val_iterator = data_factory.tensorflow_iterator(mode='val', seed=args.seed, 
-        subset=args.bag_size, attr='stage_code', eager=True)
-      val_loss = val_step(model, val_gen)
-      print('epc: {} val_loss = {}'.format(epc, val_loss))
-
-      ## Clean up hanging resources from the iterators
-      del training_iterator
-      del val_iterator
-
-      if args.early_stop and stopper.should_stop(val_loss):
-        break
+      del train_iterator, val_iterator
 
   except KeyboardInterrupt:
     print('Keyboard interrupt caught')
 
   except Exception as e:
     print('Other error caught')
-    print(type(e))
     print(e)
+    traceback.print_tb(e.__traceback__)
 
   finally:
     model.save_weights(out_path)
@@ -256,6 +296,11 @@ def main(args):
     with open(training_stats, 'w+') as f:
       for l, a, s in zip(losstracker, acctracker, steptracker):
         f.write('{:06d}\t{:3.5f}\t{:3.5f}\n'.format(s, l, a))
+
+
+
+
+
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -272,12 +317,12 @@ if __name__ == '__main__':
   parser.add_argument('--crop_size',        default = 128, type=int)
   parser.add_argument('--channels',         default = 3, type=int)
   parser.add_argument('--batch_size',       default = 1, type=int)
-  parser.add_argument('--cases_subset',     default = 64, type=int)
   parser.add_argument('--freeze_encoder',   default = False, action='store_true')
   parser.add_argument('--gated_attention',  default = True, action='store_false')
   parser.add_argument('--deep_classifier',  default = False, action='store_true')
   parser.add_argument('--temperature',      default = 1, type=float)
   parser.add_argument('--encoder',          default = 'tiny', type=str)
+  parser.add_argument('--threads',          default = 8, type=int)
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
@@ -301,13 +346,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   config = tf.ConfigProto(log_device_placement=False)
-  config.gpu_options.allow_growth = True
+  config.gpu_options.allow_growth = False
   tf.enable_eager_execution(config=config)
-
-
-  def case_label_fn(data_path):
-    case = os.path.splitext(os.path.basename(data_path))[0]
-    y_ = case_dict[case]
-    return y_
 
   main(args)

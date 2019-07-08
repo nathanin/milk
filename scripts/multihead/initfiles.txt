@@ -1,1 +1,2 @@
 batch_train.sh
+run_test.sh

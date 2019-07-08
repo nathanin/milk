@@ -1,3 +1,16 @@
+"""
+Implements an HDF5 based dataset
+
+The HDF5 file will be organized with the root group
+and datasets corresponding to sets
+
+Provide reference iterators in vanilla python
+and tf.data.Dataset based loading / preprocessing.
+
+assume libhdf5 is not thread-safe, and we can only have one 
+thread read from the h5 file at a time.
+
+"""
 from tqdm import tqdm
 import numpy as np
 import h5py
@@ -6,6 +19,8 @@ import os
 import sys
 import glob
 import contextlib
+import itertools
+import gc
 
 import tensorflow as tf
 
@@ -68,7 +83,7 @@ class MILDataset:
     self.crop = crop
     self.n_classes = n_classes
 
-    self.pct_tr, self.pct_v, self.pct_te = 0.6, 0.2, 0.2
+    self.pct_tr, self.pct_v, self.pct_te = 0.7, 0.1, 0.2
 
     if not os.path.exists(data_path):
       print('Creating dataset at {}'.format(data_path))
@@ -79,6 +94,31 @@ class MILDataset:
     self.get_groups()
     self.check_integrity()
 
+    ## Define a few functions for downstream use
+    # @tf.contrib.eager.defun
+    def tf_preproc_fn(x4d):
+      # multiprocessing for individual images - we can apply any tf / python code here.
+      def _internal(x3d):
+        x = tf.image.random_crop(x3d, (self.crop, self.crop, 3))
+        x = tf.image.random_flip_up_down(x)
+        x = tf.image.random_flip_left_right(x)
+        return x
+      xproc = tf.map_fn(_internal, x4d, parallel_iterations=8)
+      return xproc
+
+    @tf.contrib.eager.defun
+    def map_fn(x,y):
+      with tf.device('/cpu:0'):
+        x = tf.cast(x, tf.float32) / 255.
+        x = tf_preproc_fn(x)
+        y = tf.one_hot(tf.squeeze(y), self.n_classes)
+      return x, y
+
+    self.map_fn = map_fn
+
+
+
+
   def get_groups(self):
     """
       - pulls out list of matching groups from sources
@@ -86,18 +126,21 @@ class MILDataset:
         1. data_group_names 
         2. key_group_names
       - populate two dictionaries:
-        1. data_groups = { 'keys': hooks to data }
+        1. data_hooks = { 'keys': hooks to data }
         2. key_groups = { 'keys: hooks to key values }
     """
-    self.data_group_names = [name for name in self.data_h5 \
+    self.matching_datasets = [name for name in self.data_h5 \
         if name not in self.default_fields]
-    self.data_groups = {name: self.data_h5[name] for name in self.data_h5}
+    self.data_hooks = {name: self.data_h5[name] for name in self.data_h5 \
+       if name not in self.default_fields}
+    self.special_hooks = {name: self.data_h5[name] for name in self.default_fields}
 
     print('group names: {} groups: {}'.format(
-      len(self.data_group_names),
-      len(self.data_groups)))
+      len(self.matching_datasets),
+      len(self.data_hooks)))
 
-  def split_train_val(self, seed1=999, seed2=111):
+
+  def split_train_val(self, groupby, seed=999):
     """
     split_train_val:
       - partition the dictionary keys into 3 groups
@@ -108,36 +151,50 @@ class MILDataset:
     Favor adding extras to training.
     
     Only have to work with names, everything gets looked up
-    in self.data_groups anyway.
+    in self.data_hooks anyway.
     """
-    print('\nSplitting train / val / test')
-    n = len(self.data_group_names)
+    print('\nSplitting train / val / test by field {}'.format(groupby))
+    ds_attr_vals = { name: ds.attrs[groupby] for name, ds in self.data_hooks.items() }
+    unique_vals = np.unique([v for _, v in ds_attr_vals.items()])
+    # print(unique_vals)
+
+    grouped_sets = {u: [] for u in unique_vals}
+
+    for name, v in ds_attr_vals.items():
+      grouped_sets[v].append(name)
+
+    # for name, s in grouped_sets.items():
+    #   print(name)
+    #   print(s)
+
+    n = len(unique_vals)
     n_tr = np.int(n * self.pct_tr)
     n_v = np.int(n * self.pct_v)
-    print(n, n_tr, n_v)
+    # print(n, n_tr, n_v)
 
     # Shuffle for splitting
     # np.random.seed(seed1)
-    names = sorted(self.data_group_names)
-    with temp_seed(seed1):
+    names = sorted(unique_vals)
+    with temp_seed(seed):
       np.random.shuffle(names)
 
-    self.tr_datasets = sorted(names[:n_tr])
-    self.v_datasets  = sorted(names[n_tr:n_tr+n_v])
-    self.te_datasets = sorted(names[n_tr+n_v:])
-    print('Train: {} Val: {} Test: {}'.format(
-          len(self.tr_datasets),
-          len(self.v_datasets),
-          len(self.te_datasets)))
+    self.tr_datasets = [grouped_sets[n] for n in names[:n_tr]] 
+    self.v_datasets  = [grouped_sets[n] for n in names[n_tr:n_tr+n_v]] 
+    self.te_datasets = [grouped_sets[n] for n in names[n_tr+n_v:]] 
+    self.tr_datasets = list(itertools.chain.from_iterable(self.tr_datasets))
+    self.v_datasets = list(itertools.chain.from_iterable(self.v_datasets))
+    self.te_datasets = list(itertools.chain.from_iterable(self.te_datasets))
+
+    self.dataset_lengths = {
+      'train': len(self.tr_datasets),
+      'val': len(self.v_datasets),
+      'test': len(self.te_datasets),
+    }
+    # print('Train: {} Val: {} Test: {}'.format(
+    #       len(self.tr_datasets),
+    #       len(self.v_datasets),
+    #       len(self.te_datasets)))
     
-    # Shuffle order
-    # np.random.seed(seed2)
-    with temp_seed(seed2):
-      print('Train first 3:', self.tr_datasets[:3])
-      np.random.shuffle(self.tr_datasets)
-      np.random.shuffle(self.v_datasets)
-      np.random.shuffle(self.te_datasets)
-      print('After shuffle', self.tr_datasets[:3])
 
   def read_data(self, dataset, attr, subset=None):
     """
@@ -149,18 +206,21 @@ class MILDataset:
       - return the 4D stack as np.float32
       - raise an alarm if anything goes wrong        
     """
-    data_ = self.data_h5[dataset]
-    n = data_.shape[0]
+    # data_ = self.data_h5[dataset]
+    n = self.data_hooks[dataset].shape[0]
     idx = np.arange(n)
     if subset is not None:
       s = subset if subset < n else n
       idx = sorted(np.random.choice(idx, size=s, replace=False))
 
-    x_ = data_[idx, ...]
-    label_ = data_.attrs[attr]
+    x_ = self.data_hooks[dataset][...]
+    x_ = x_[idx, ...]
+    label_ = self.data_hooks[dataset].attrs[attr]
     return x_, label_
 
-  def python_iterator(self, mode='train', subset=100, attr='stage_code', seed=999):
+
+  def python_iterator(self, mode='train', subset=100, attr='stage_code', seed=999,
+                      data_fn = lambda x: x , label_fn = lambda x: x):
     """
     python_iterator:
       - return an iterator over the contents of the open dataset 
@@ -168,7 +228,14 @@ class MILDataset:
 
     ! these are in random order
     """
-    self.split_train_val(seed1=seed, seed2=np.random.randint(low=100, high=99999))
+    # Shuffle order
+    # np.random.seed(seed2)
+    with temp_seed(seed):
+      # print('Train first 3:', self.tr_datasets[:3])
+      np.random.shuffle(self.tr_datasets)
+      np.random.shuffle(self.v_datasets)
+      np.random.shuffle(self.te_datasets)
+      # print('After shuffle', self.tr_datasets[:3])
     
     if mode == 'train':
       lst = self.tr_datasets
@@ -177,10 +244,33 @@ class MILDataset:
     else:
       lst = self.te_datasets
 
-    for i, name in enumerate(lst):
+    for name in lst:
       data, label = self.read_data(name, attr, subset=subset)
+      try:
+        label = label.astype(np.uint8)
+      except:
+        label = label
+
+      data = data_fn(data)
+      label = label_fn(label)
       yield data, label
 
+
+  def python_name_iterator(self, mode='train', subset=100, attr='stage_code', seed=999):
+    with temp_seed(seed):
+      np.random.shuffle(self.tr_datasets)
+      np.random.shuffle(self.v_datasets)
+      np.random.shuffle(self.te_datasets)
+    
+    if mode == 'train':
+      lst = self.tr_datasets
+    elif mode == 'val':
+      lst = self.v_datasets
+    else:
+      lst = self.te_datasets
+
+    for name in lst:
+      yield name
 
   def tensorflow_iterator(self, preproc_fn=None, batch_size=1, 
                           buffer_size=32, threads=8, eager=True,    # iterator arg .. for what? 
@@ -191,46 +281,27 @@ class MILDataset:
       - build a tensorflow dataset iterator using some options
         --> copy from svsutils.iterators
         --> also copy from old data_utils...
-
     """
 
-    @tf.contrib.eager.defun
-    def tf_preproc_fn(x4d):
-      # multiprocessing for individual images - we can apply any tf / python code here.
-      def _internal(x3d):
-        x = tf.image.random_crop(x3d, (self.crop, self.crop, 3))
-        x = tf.image.random_flip_up_down(x)
-        x = tf.image.random_flip_left_right(x)
-        return x
-      xproc = tf.map_fn(_internal, x4d, parallel_iterations=threads, back_prop=False)
-      return xproc
+    def py_it():
+      return self.python_iterator(mode=mode, subset=subset, attr=attr, seed=seed)
 
-    if preproc_fn is None:
-      preproc_fn = tf_preproc_fn
+    # self.tf_dataset = self.tf_dataset.prefetch(buffer_size)
+    self.tf_dataset = (tf.data.Dataset.from_generator(py_it, output_types=(tf.uint8, tf.uint8))
+                       .map(self.map_fn, num_parallel_calls=threads)
+                      #  .prefetch(threads*2)
+                       .batch(batch_size))
+    self.len_tf_ds = self.dataset_lengths[mode]
+    # self.tf_dataset = self.tf_dataset.take(self.len_tf_ds)
 
-    py_it = lambda : self.python_iterator(mode=mode, subset=subset, attr=attr, seed=seed)
-    def map_fn(x,y):
-      x = tf.cast(x, tf.float32) / 255.
-      # x = tf.py_function(preproc_fn, inp=[x], Tout=(tf.float32))
-      x = preproc_fn(x)
-      y = tf.one_hot(tf.squeeze(y), self.n_classes)
-      return x, y
+  def clear_mem(self):
+    self.tf_dataset = []
+    self.len_tf_ds = []
+    tf.reset_default_graph()
+    gc.collect()
 
-    dataset = tf.data.Dataset.from_generator(py_it, output_types=(tf.uint8, tf.int64))
-    dataset = dataset.prefetch(buffer_size)
-    dataset = dataset.map(map_fn, num_parallel_calls=threads)
-    dataset = dataset.prefetch(buffer_size)
-    dataset = dataset.batch(batch_size)
-
-    # if eager:
-    tf_it = dataset.make_one_shot_iterator()
-    return tf_it
-    # else:
-    #   return dataset
-
-    
   def new_dataset(self, dataset_name, data, attr_type, attr_value, 
-                  chunks=True, compression='gzip'):
+                  chunks=True, compression='lzf'):
     """
     new_dataset:
       - write a dataset from memory 
@@ -269,6 +340,15 @@ class MILDataset:
     print('Checking sample data')
     np.random.seed(seed)
     chk = np.random.normal(size=(5,5))
-    data_integ = self.data_groups['integrity'][:]
+    data_integ = self.special_hooks['integrity'][:]
     assert np.isclose(chk, data_integ).all()
     print('Check passed.')
+
+  def close_refs(self):
+
+    self.data_h5.close()
+
+    for k, v in self.__dict__.items():
+      self.__dict__[k] = None
+
+    self.clear_mem()

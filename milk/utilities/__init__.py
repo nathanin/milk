@@ -1,5 +1,5 @@
 from .classification_dataset import ClassificationDataset
-from .MILDataset import MILDataset
+from .MILDataset import MILDataset, create_dataset
 
 __all__ = [
     'ClassificationDataset',
@@ -8,5 +8,6 @@ __all__ = [
     'model_utils',
     'training_utils',
 
-    'MILDataset'
+    'MILDataset',
+    'create_dataset'
 ]

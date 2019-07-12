@@ -1,17 +1,17 @@
 #!/bin/bash
 
 set -e
+out_base=debug_graph
 epochs=100
-bag=50
+bag=100
 lr=0.0001
-pretrained=../../gleason_grade/shallow_model/gleason_classifier_eager.5x.shallow.h5
-heads=5
+heads=10
 batch=1
-encoder=big
+encoder=shallow
 crop_size=128
-dataset=../../dataset2/pnbx-10x-chunk.h5
+dataset=../dataset2/pnbx-10x-nochunk.h5
 
-python ../train_eager.py \
+python ./train_eager.py \
   --dataset $dataset \
   --batch_size $batch \
   --epochs $epochs \
@@ -24,4 +24,5 @@ python ../train_eager.py \
   --early_stop \
   --seed 999 \
   --temperature 0.5 \
-  --encoder $encoder 
+  --encoder $encoder \
+  --out_base $out_base

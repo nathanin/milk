@@ -25,24 +25,7 @@ from milk.eager import MilkEager
 import collections
 from milk.encoder_config import get_encoder_args
 
-from memory_profiler import profile
 
-def val_step(model, val_iterator):
-  ## Start with a random baseline
-  print()
-
-  # losses = np.zeros(steps)
-  losses = []
-  for k , (x, y) in enumerate(val_iterator):
-    yhat = model(x, heads = [0])
-    loss = tf.keras.losses.categorical_crossentropy(
-      y_true=tf.constant(y, tf.float32), y_pred=yhat[0])
-    losses.append(np.mean(loss))
-    print('\r{}: {}  '.format(k, np.mean(losses)), end='', flush=True)
-
-  print('')
-  val_loss = np.mean(losses)
-  return val_loss
 
 class ShouldStop():
   """ Track the validation loss
@@ -131,7 +114,86 @@ def eval_acc(ytrue, yhat):
   return acc
 
 
-@profile
+def create_outputs(args):
+  exptime = datetime.datetime.now()
+  exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
+  out_path = os.path.join(args.out_base, args.save_prefix, '{}.h5'.format(exptime_str))
+  if not os.path.exists(os.path.dirname(out_path)):
+    os.makedirs(os.path.dirname(out_path)) 
+
+  ## Write out arguments passed for this session
+  arg_file = os.path.join(args.out_base, './args', '{}.txt'.format(exptime_str))
+  if not os.path.exists(os.path.dirname(arg_file)):
+    os.makedirs(os.path.dirname(arg_file))
+  with open(arg_file, 'w+') as f:
+    for a in vars(args):
+      f.write('{}\t{}\n'.format(a, getattr(args, a)) )
+
+  return out_path, exptime_str
+
+
+
+def val_step(model, val_iterator, val_len):
+  head = np.random.randint(model.heads)
+  print('Validating head {} for {} steps'.format(head, val_len))
+  losses = []
+  for k, (x, y) in enumerate(val_iterator):
+    yhat = model(x, heads = [head])
+    loss = tf.keras.losses.categorical_crossentropy(
+      y_true=tf.constant(y, tf.float32), y_pred=yhat[0])
+    losses.append(np.mean(loss))
+    print('\r{}: {}  ({})  '.format(k, np.mean(losses), ((k+1) % val_len)), 
+      end='', flush=True)
+    if (k+1) % val_len == 0: break
+
+  print('')
+  val_loss = np.mean(losses)
+  return val_loss
+
+
+# @tf.contrib.eager.defun
+def train_epoch(model, optimizer, train_iterator, train_len, epc, trackers, args):
+  trainable_variables = model.trainable_variables
+  train_head = [epc % args.heads]
+  avglosses, steptimes = [], []
+  # print('\nTraining head {}'.format(train_head))
+  for k, (x,y) in enumerate(train_iterator):
+    # train_head = [k % args.heads]
+    tstart = time.time()
+    with tf.GradientTape() as tape:
+      # print('Processing {} {}\t'.format(x.shape, y), end='')
+      # x, y = next(train_iterator)
+      yhat = model(tf.constant(x).gpu(), training=True, heads=train_head)
+      loss = tf.keras.losses.categorical_crossentropy(
+        y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat[0])
+
+    grads = tape.gradient(loss, trainable_variables)
+    loss_mn = np.mean(loss)
+    acc = eval_acc(y, yhat)
+    avglosses.append(loss_mn)
+    
+    trackers['loss'].append(loss_mn)
+    trackers['acc'].append(acc)
+    trackers['step'] += 1
+
+    # with tf.device('/cpu:0'):
+        # should_update = accumulator.track(grads, trainable_variables)
+
+    tend = time.time()
+    steptimes.append(tend - tstart)
+    # if should_update:
+    #   grads = accumulator.accumulate()
+    # with tf.device('/cpu:0'):
+    # print('Applying gradients')
+    optimizer.apply_gradients(zip(grads, trainable_variables))
+    print('\r{:07d}: loss={:3.5f} dt={:3.3f}s   '.format(k, 
+      np.mean(avglosses), np.mean(steptimes)), end='', flush=1)
+    if (k+1) % train_len == 0: break
+
+  return trackers
+
+
+# @profile
 def main(args):
   """ 
   1. Create generator datasets from the provided lists
@@ -142,11 +204,7 @@ def main(args):
   tpu - replace data feeder and mil_train_loop with tf.keras.Model.fit()
   July 4 2019 - added MILDataset that takes away all the dataset nonsense
   """
-  exptime = datetime.datetime.now()
-  exptime_str = exptime.strftime('%Y_%m_%d_%H_%M_%S')
-  out_path = os.path.join(args.save_prefix, '{}.h5'.format(exptime_str))
-  if not os.path.exists(os.path.dirname(out_path)):
-    os.makedirs(os.path.dirname(out_path)) 
+  out_path, exptime_str = create_outputs(args)
 
   data_factory = MILDataset(args.dataset, crop=args.crop_size, n_classes=2)
   data_factory.split_train_val('case_id', seed=args.seed)
@@ -166,15 +224,8 @@ def main(args):
   ## The way we give the list is very particular.
   all_heads = [0,1,2,3,4,5,6,7,8,9]
   yhat = model(x, heads=all_heads, training=True, verbose=True)
+  print('yhat: {} ({} {})'.format(yhat[0], yhat[0].shape, yhat[0].dtype))
   model.summary()
-
-  del x, yhat
-
-  ## Write out arguments passed for this session
-  arg_file = os.path.join('./args', '{}.txt'.format(exptime_str))
-  with open(arg_file, 'w+') as f:
-    for a in vars(args):
-      f.write('{}\t{}\n'.format(a, getattr(args, a)))
 
   ## Replace randomly initialized weights after model is compiled and on the correct device.
   if args.pretrained_model is not None and os.path.exists(args.pretrained_model):
@@ -190,93 +241,48 @@ def main(args):
   else:
     stopper = lambda x: False
 
-  trainable_variables = model.trainable_variables
   # accumulator = GradientAccumulator(n = args.accumulate, variable_list=trainable_variables)
 
-  # @tf.contrib.eager.defun
-  def data_fn(x4d):
-    def _internal(x3d):
-      x = tf.image.random_crop(x3d, (args.crop_size, args.crop_size, 3))
-      x = tf.image.random_flip_up_down(x)
-      x = tf.image.random_flip_left_right(x)
-      return x
-
-    x4d = tf.cast(x4d, tf.float32) / 255.
-    xproc = tf.map_fn(_internal, x4d, parallel_iterations=8, back_prop=False)
-    return tf.expand_dims(xproc, 0)
-
-  def label_fn(label):
-    label = tf.one_hot(label, 2)
-    return label
-
   optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-  losstracker, acctracker, steptracker  = [], [], []
-  totalsteps = 0
+  trackers = {stat: [] for stat in ['loss', 'acc']}
+  trackers['step'] = 0
+
+  data_factory.tensorflow_iterator(mode='train', ref='train', repeats=args.epochs,
+    subset=args.bag_size, seed=None, attr='stage_code', threads=args.threads)
+  # data_factory.tensorflow_iterator(mode='val', ref='val', repeats=args.epochs,
+  #   subset=args.bag_size, seed=None, attr='stage_code', threads=args.threads)
+
+  # val_iterator, val_len = data_factory.iterator_refs['val']
+  train_iterator, train_len = data_factory.iterator_refs['train']
+
   try:
     for epc in range(args.epochs):
-      gc.collect()
+
+      # gc.collect()
       # data_factory.clear_mem()
       # val_iterator = data_factory.python_iterator(mode='val', 
       #   subset=args.bag_size, seed=epc, attr='stage_code',
       #   data_fn=data_fn, label_fn=label_fn)
-      data_factory.close_refs()
-      data_factory = MILDataset(args.dataset, crop=args.crop_size, n_classes=2)
-      data_factory.split_train_val('case_id', seed=args.seed)
+      # data_factory.close_refs()
+      # data_factory = MILDataset(args.dataset, crop=args.crop_size, n_classes=2)
+      # data_factory.split_train_val('case_id', seed=args.seed)
+      # val_iterator = data_factory.iterator_refs['val']
 
-      data_factory.tensorflow_iterator(mode='val', 
-        subset=args.bag_size, seed=epc, attr='stage_code', threads=args.threads)
-      val_iterator = data_factory.tf_dataset
-      val_loss = val_step(model, val_iterator)
-      print('\nepc: {} val_loss = {}'.format(epc, val_loss))
-      if args.early_stop and stopper.should_stop(val_loss):
-        break
+      # val_loss = val_step(model, val_iterator, val_len)
+      # print('\nepc: {} val_loss = {}'.format(epc, val_loss))
+      # if args.early_stop and stopper.should_stop(val_loss):
+      #   break
 
-      data_factory.tensorflow_iterator(mode='train', 
-        seed=epc, batch_size=args.batch_size, threads=args.threads,
-        subset=args.bag_size, attr='stage_code', eager=True)
-      train_iterator = data_factory.tf_dataset
-      # train_iterator = data_factory.python_iterator(mode='train', 
-      #   subset=args.bag_size, seed=epc, attr='stage_code',
-      #   data_fn=data_fn, label_fn=label_fn)
+      # data_factory.tensorflow_iterator(mode='train', ref='train',
+      #   seed=epc, batch_size=args.batch_size, threads=args.threads,
+      #   subset=args.bag_size, attr='stage_code', eager=True)
+      # train_iterator = data_factory.iterator_refs['train']
+      trackers = train_epoch(model, optimizer, train_iterator, train_len, epc, trackers, args)
 
-      # train_head = [np.random.choice(args.heads)]
-      # Go in order:
-      train_head = [epc % args.heads]
-      avglosses, steptimes = [], []
-      print('Training head {}'.format(train_head))
-      for k, (x, y) in enumerate(train_iterator):
-        totalsteps += 1
-        tstart = time.time()
-        with tf.GradientTape() as tape:
-          # x, y = next(train_gen)
-          yhat = model(x, training=True, heads=train_head)
-          loss = tf.keras.losses.categorical_crossentropy(
-            y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat[0])
-
-        loss_mn = np.mean(loss)
-        acc = eval_acc(y, yhat)
-        avglosses.append(loss_mn)
-        losstracker.append(loss_mn)
-        acctracker.append(acc)
-        steptracker.append(totalsteps)
-
-        # with tf.device('/cpu:0'):
-        grads = tape.gradient(loss, trainable_variables)
-
-        # should_update = accumulator.track(grads, trainable_variables)
-
-        tend = time.time()
-        steptimes.append(tend - tstart)
-        # if should_update:
-        #   grads = accumulator.accumulate()
-        # with tf.device('/cpu:0'):
-        optimizer.apply_gradients(zip(grads, trainable_variables))
-
-        # if k % 20 == 0:
-        print('\r{:06d}: loss={:3.5f} dt={:3.3f}s   '.format(k, 
-          np.mean(avglosses), np.mean(steptimes)), end='', flush=1)
-
-      del train_iterator, val_iterator
+    # if epc % args.snapshot_epochs == 0:
+    #   snapshot_path = out_path.replace('.h5', '-{:03d}.h5'.format(epc))
+    #   print('Snapshotting to {}'.format(snapshot_path))
+    #   model.save_weights(snapshot_path)
 
   except KeyboardInterrupt:
     print('Keyboard interrupt caught')
@@ -289,17 +295,13 @@ def main(args):
   finally:
     model.save_weights(out_path)
     print('Saved model: {}'.format(out_path))
-    print('Training done. Find val and test datasets at')
 
     # Save the loss profile
-    training_stats = os.path.join('save', '{}_training_curves.txt'.format(exptime_str))
+    training_stats = os.path.join(args.out_base ,'save', '{}_training_curves.txt'.format(exptime_str))
+    print('Dumping training stats --> {}'.format(training_stats))
     with open(training_stats, 'w+') as f:
-      for l, a, s in zip(losstracker, acctracker, steptracker):
+      for l, a, s in zip(trackers['loss'], trackers['acc'], np.arange(trackers['step'])):
         f.write('{:06d}\t{:3.5f}\t{:3.5f}\n'.format(s, l, a))
-
-
-
-
 
 
 if __name__ == '__main__':
@@ -322,7 +324,7 @@ if __name__ == '__main__':
   parser.add_argument('--deep_classifier',  default = False, action='store_true')
   parser.add_argument('--temperature',      default = 1, type=float)
   parser.add_argument('--encoder',          default = 'tiny', type=str)
-  parser.add_argument('--threads',          default = 8, type=int)
+  parser.add_argument('--threads',          default = 4, type=int)
 
   # Optimizer settings
   parser.add_argument('--learning_rate',    default = 1e-4, type=float)
@@ -335,6 +337,8 @@ if __name__ == '__main__':
   parser.add_argument('--test_pct',         default = 0.2, type=float)
   parser.add_argument('--save_prefix',      default = 'save', type=str)
   parser.add_argument('--pretrained_model', default = None, type=str)
+  parser.add_argument('--out_base',         default = 'trained_model', type=str)
+  parser.add_argument('--snapshot_epochs',  default = 5, type=int)
 
   # old - displaced by letting pretrained_model be None
   parser.add_argument('--dont_use_pretrained', default = False, action='store_true')

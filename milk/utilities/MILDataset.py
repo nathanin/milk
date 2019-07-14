@@ -53,7 +53,6 @@ def create_dataset(data_path, meta_string, mode=None, seed=999, clobber=False):
     data_f.create_dataset("metadata", data=meta_string_enc)
     intg = data_f.create_dataset("integrity", data=rand_data)
     intg.attrs['seed'] = seed
-
   print('Done.')
 
 
@@ -78,6 +77,7 @@ class MILDataset:
     self.preproc_fn = preproc_fn 
     self.meta_string = meta_string
     self.default_fields = ['integrity', 'metadata']
+    self.iterator_refs = {}
 
     # Settings for preprocessing
     self.crop = crop
@@ -99,14 +99,14 @@ class MILDataset:
     def tf_preproc_fn(x4d):
       # multiprocessing for individual images - we can apply any tf / python code here.
       def _internal(x3d):
-        x = tf.image.random_crop(x3d, (self.crop, self.crop, 3))
-        x = tf.image.random_flip_up_down(x)
+        # x = tf.image.random_crop(x3d, (self.crop, self.crop, 3))
+        x = tf.image.random_flip_up_down(x3d)
         x = tf.image.random_flip_left_right(x)
         return x
-      xproc = tf.map_fn(_internal, x4d, parallel_iterations=8)
+      xproc = tf.map_fn(_internal, x4d, parallel_iterations=4)
       return xproc
 
-    @tf.contrib.eager.defun
+    # @tf.contrib.eager.defun
     def map_fn(x,y):
       with tf.device('/cpu:0'):
         x = tf.cast(x, tf.float32) / 255.
@@ -115,8 +115,6 @@ class MILDataset:
       return x, y
 
     self.map_fn = map_fn
-
-
 
 
   def get_groups(self):
@@ -230,13 +228,6 @@ class MILDataset:
     """
     # Shuffle order
     # np.random.seed(seed2)
-    with temp_seed(seed):
-      # print('Train first 3:', self.tr_datasets[:3])
-      np.random.shuffle(self.tr_datasets)
-      np.random.shuffle(self.v_datasets)
-      np.random.shuffle(self.te_datasets)
-      # print('After shuffle', self.tr_datasets[:3])
-    
     if mode == 'train':
       lst = self.tr_datasets
     elif mode == 'val':
@@ -244,7 +235,15 @@ class MILDataset:
     else:
       lst = self.te_datasets
 
+    if seed is None:
+      seed = np.random.randint(low=1, high=10000)
+
+    print('Mode [{}] python iterator shuffle with seed {}'.format(mode, seed))
+    with temp_seed(seed):
+      np.random.shuffle(lst)
+
     for name in lst:
+      # print('Yielding {}\t'.format(name), end='')
       data, label = self.read_data(name, attr, subset=subset)
       try:
         label = label.astype(np.uint8)
@@ -253,10 +252,12 @@ class MILDataset:
 
       data = data_fn(data)
       label = label_fn(label)
+      print('{}\t{}'.format(data.shape, label))
       yield data, label
 
 
   def python_name_iterator(self, mode='train', subset=100, attr='stage_code', seed=999):
+    """ Like python_iterator except return only the names of datasets """
     with temp_seed(seed):
       np.random.shuffle(self.tr_datasets)
       np.random.shuffle(self.v_datasets)
@@ -272,9 +273,9 @@ class MILDataset:
     for name in lst:
       yield name
 
-  def tensorflow_iterator(self, preproc_fn=None, batch_size=1, 
+  def tensorflow_iterator(self, preproc_fn=None, batch_size=1, repeats=1,
                           buffer_size=32, threads=8, eager=True,    # iterator arg .. for what? 
-                          mode='train', subset=100, seed=999, 
+                          mode='train', ref='train', subset=100, seed=None, 
                           attr='stage_code'):
     """
     tensorflow_iterator:
@@ -284,20 +285,27 @@ class MILDataset:
     """
 
     def py_it():
-      return self.python_iterator(mode=mode, subset=subset, attr=attr, seed=seed)
+      return self.python_iterator(mode=mode, subset=subset, attr=attr, seed=seed) 
 
-    # self.tf_dataset = self.tf_dataset.prefetch(buffer_size)
-    self.tf_dataset = (tf.data.Dataset.from_generator(py_it, output_types=(tf.uint8, tf.uint8))
-                      #  .prefetch(threads)
-                       .map(self.map_fn, num_parallel_calls=threads)
-                      #  .prefetch(threads*2)
-                       .batch(batch_size))
-    self.len_tf_ds = self.dataset_lengths[mode]
-    # self.tf_dataset = self.tf_dataset.take(self.len_tf_ds)
+    tf_dataset = (tf.data.Dataset.from_generator(py_it, output_types=(tf.uint8, tf.uint8))
+                  .repeat(repeats)
+                  .map(self.map_fn, num_parallel_calls=threads)
+                  # .prefetch(buffer_size)
+                  .batch(batch_size))
 
+    # Register the iterator next to the appropriate epoch length
+    self.iterator_refs[ref] = (tf_dataset, self.dataset_lengths[mode])
+
+  def clear_mem(self):
+    # self.tf_dataset = []
+    for k in self.iterator_refs.keys():
+      self.iterator_refs[k] = []
+
+    tf.reset_default_graph()
+    gc.collect()
 
   def new_dataset(self, dataset_name, data, attr_type, attr_value, 
-                  chunks=True, compression='lzf'):
+                  chunks=None, compression=None):
     """
     new_dataset:
       - write a dataset from memory 

@@ -3,8 +3,9 @@
 slidedir=$1
 svsutildir=$2
 milkdir=$3
+container=$4
 docker run --rm -it --runtime=nvidia --shm-size 5g \
     -v ${slidedir}:/slides \
     -v ${svsutildir}:/svsutils \
     -v ${milkdir}:/milk \
-    ingn/tensorflow-gpu-openslide
+    ${container}

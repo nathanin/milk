@@ -25,7 +25,7 @@ from milk.eager import MilkEager
 import collections
 from milk.encoder_config import get_encoder_args
 
-from memory_profiler import profile
+# from memory_profiler import profile
 
 def val_step(model, val_iterator):
   ## Start with a random baseline
@@ -131,7 +131,7 @@ def eval_acc(ytrue, yhat):
   return acc
 
 
-@profile
+# @profile
 def main(args):
   """ 
   1. Create generator datasets from the provided lists
@@ -214,12 +214,16 @@ def main(args):
   totalsteps = 0
   try:
     for epc in range(args.epochs):
+      tf.set_random_seed(1)  # clear eager execution memory leak
       gc.collect()
       # data_factory.clear_mem()
       # val_iterator = data_factory.python_iterator(mode='val', 
       #   subset=args.bag_size, seed=epc, attr='stage_code',
       #   data_fn=data_fn, label_fn=label_fn)
       data_factory.close_refs()
+      data_factory = []
+      gc.collect()
+
       data_factory = MILDataset(args.dataset, crop=args.crop_size, n_classes=2)
       data_factory.split_train_val('case_id', seed=args.seed)
 

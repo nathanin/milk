@@ -288,17 +288,13 @@ class MILDataset:
 
     # self.tf_dataset = self.tf_dataset.prefetch(buffer_size)
     self.tf_dataset = (tf.data.Dataset.from_generator(py_it, output_types=(tf.uint8, tf.uint8))
+                      #  .prefetch(threads)
                        .map(self.map_fn, num_parallel_calls=threads)
                       #  .prefetch(threads*2)
                        .batch(batch_size))
     self.len_tf_ds = self.dataset_lengths[mode]
     # self.tf_dataset = self.tf_dataset.take(self.len_tf_ds)
 
-  def clear_mem(self):
-    self.tf_dataset = []
-    self.len_tf_ds = []
-    tf.reset_default_graph()
-    gc.collect()
 
   def new_dataset(self, dataset_name, data, attr_type, attr_value, 
                   chunks=True, compression='lzf'):
@@ -343,6 +339,14 @@ class MILDataset:
     data_integ = self.special_hooks['integrity'][:]
     assert np.isclose(chk, data_integ).all()
     print('Check passed.')
+
+
+  def clear_mem(self):
+    self.tf_dataset = []
+    self.len_tf_ds = []
+    tf.reset_default_graph()
+    gc.collect()
+
 
   def close_refs(self):
 

@@ -158,7 +158,8 @@ def train_epoch(model, optimizer, train_iterator, train_len, epc, trackers, args
   avglosses, steptimes = [], []
   # print('\nTraining head {}'.format(train_head))
   for k, (x,y) in enumerate(train_iterator):
-    # train_head = [k % args.heads]
+  # for k in range(train_len):
+    # x, y = next(train_iterator)
     tstart = time.time()
     with tf.GradientTape() as tape:
       # print('Processing {} {}\t'.format(x.shape, y), end='')
@@ -166,7 +167,6 @@ def train_epoch(model, optimizer, train_iterator, train_len, epc, trackers, args
       yhat = model(tf.constant(x).gpu(), training=True, heads=train_head)
       loss = tf.keras.losses.categorical_crossentropy(
         y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat[0])
-
     grads = tape.gradient(loss, trainable_variables)
     loss_mn = np.mean(loss)
     acc = eval_acc(y, yhat)
@@ -247,43 +247,73 @@ def main(args):
   trackers = {stat: [] for stat in ['loss', 'acc']}
   trackers['step'] = 0
 
-  data_factory.tensorflow_iterator(mode='train', ref='train', repeats=args.epochs,
-    subset=args.bag_size, seed=None, attr='stage_code', threads=args.threads)
+  def py_it():
+    return data_factory.python_iterator(mode='train', subset=args.bag_size, 
+      attr='stage_code', seed=None, epochs=args.epochs) 
+
+  train_len = data_factory.dataset_lengths['train']
+  tf_dataset = (tf.data.Dataset.from_generator(py_it, output_types=(tf.uint8, tf.uint8))
+                # .repeat(repeats)
+                .map(data_factory.map_fn, num_parallel_calls=args.threads)
+                # .prefetch(buffer_size)
+                .batch(args.batch_size))
+
+  # data_factory.tensorflow_iterator(mode='train', ref='train', repeats=args.epochs,
+  #   subset=args.bag_size, seed=None, attr='stage_code', threads=args.threads)
   # data_factory.tensorflow_iterator(mode='val', ref='val', repeats=args.epochs,
   #   subset=args.bag_size, seed=None, attr='stage_code', threads=args.threads)
 
   # val_iterator, val_len = data_factory.iterator_refs['val']
-  train_iterator, train_len = data_factory.iterator_refs['train']
+  # train_iterator, train_len = data_factory.iterator_refs['train']
 
+  trainable_variables = model.trainable_variables
   try:
-    for epc in range(args.epochs):
+    # for epc in range(args.epochs):
+    #   tf.set_random_seed(1)
+      # trackers = train_epoch(model, optimizer, train_iterator, train_len, epc, trackers, args)
+      # train_head = [epc % args.heads]
 
-      tf.set_random_seed(1)
-      # gc.collect()
-      # data_factory.clear_mem()
-      # val_iterator = data_factory.python_iterator(mode='val', 
-      #   subset=args.bag_size, seed=epc, attr='stage_code',
-      #   data_fn=data_fn, label_fn=label_fn)
-      # data_factory.close_refs()
-      # data_factory = MILDataset(args.dataset, crop=args.crop_size, n_classes=2)
-      # data_factory.split_train_val('case_id', seed=args.seed)
-      # val_iterator = data_factory.iterator_refs['val']
+    avglosses, steptimes = [], []
+    # print('\nTraining head {}'.format(train_head))
+    for k, (x,y) in enumerate(tf_dataset):
+      if k % train_len == 0:
+        gc.collect()
+        tf.set_random_seed(1)
+        # tf.reset_default_graph()
+        train_head = [np.random.choice(args.heads)]
+        print('\nTraining head [{}]'.format(train_head))
 
-      # val_loss = val_step(model, val_iterator, val_len)
-      # print('\nepc: {} val_loss = {}'.format(epc, val_loss))
-      # if args.early_stop and stopper.should_stop(val_loss):
-      #   break
+      tstart = time.time()
+      with tf.GradientTape() as tape:
+        yhat = model(x, training=True, heads=train_head)
+        loss = tf.keras.losses.categorical_crossentropy(
+          y_true=tf.constant(y, dtype=tf.float32), y_pred=yhat[0])
 
-      # data_factory.tensorflow_iterator(mode='train', ref='train',
-      #   seed=epc, batch_size=args.batch_size, threads=args.threads,
-      #   subset=args.bag_size, attr='stage_code', eager=True)
-      # train_iterator = data_factory.iterator_refs['train']
-      trackers = train_epoch(model, optimizer, train_iterator, train_len, epc, trackers, args)
+      grads = tape.gradient(loss, trainable_variables)
+      del tape
+      loss_mn = np.mean(loss)
+      acc = eval_acc(y, yhat)
+      avglosses.append(loss_mn)
+      
+      trackers['loss'].append(loss_mn)
+      trackers['acc'].append(acc)
+      trackers['step'] += 1
 
-    # if epc % args.snapshot_epochs == 0:
-    #   snapshot_path = out_path.replace('.h5', '-{:03d}.h5'.format(epc))
-    #   print('Snapshotting to {}'.format(snapshot_path))
-    #   model.save_weights(snapshot_path)
+      tend = time.time()
+      steptimes.append(tend - tstart)
+      # if should_update:
+      #   grads = accumulator.accumulate()
+      # with tf.device('/cpu:0'):
+      # print('Applying gradients')
+      optimizer.apply_gradients(zip(grads, trainable_variables))
+      print('\r{:07d}: loss={:3.5f} dt={:3.3f}s   '.format(k, 
+        np.mean(avglosses), np.mean(steptimes)), end='', flush=1)
+      # if (k+1) % train_len == 0: break
+
+      # if epc % args.snapshot_epochs == 0:
+      #   snapshot_path = out_path.replace('.h5', '-{:03d}.h5'.format(epc))
+      #   print('Snapshotting to {}'.format(snapshot_path))
+      #   model.save_weights(snapshot_path)
 
   except KeyboardInterrupt:
     print('Keyboard interrupt caught')
@@ -301,7 +331,7 @@ def main(args):
     training_stats = os.path.join(args.out_base ,'save', '{}_training_curves.txt'.format(exptime_str))
     print('Dumping training stats --> {}'.format(training_stats))
     with open(training_stats, 'w+') as f:
-      for l, a, s in zip(trackers['loss'], trackers['acc'], np.arange(trackers['step'])):
+      for s, l, a in zip(np.arange(trackers['step']), trackers['loss'], trackers['acc']):
         f.write('{:06d}\t{:3.5f}\t{:3.5f}\n'.format(s, l, a))
 
 
@@ -313,9 +343,7 @@ if __name__ == '__main__':
 
   parser.add_argument('--mil',              default = 'attention', type=str)
   parser.add_argument('--scale',            default = 1.0, type=float)
-  parser.add_argument('--heads',            default = 5, type=int)
-  parser.add_argument('--x_size',           default = 128, type=int)
-  parser.add_argument('--y_size',           default = 128, type=int)
+  parser.add_argument('--heads',            default = 10, type=int)
   parser.add_argument('--bag_size',         default = 500, type=int)
   parser.add_argument('--crop_size',        default = 128, type=int)
   parser.add_argument('--channels',         default = 3, type=int)

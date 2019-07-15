@@ -99,8 +99,8 @@ class MILDataset:
     def tf_preproc_fn(x4d):
       # multiprocessing for individual images - we can apply any tf / python code here.
       def _internal(x3d):
-        # x = tf.image.random_crop(x3d, (self.crop, self.crop, 3))
-        x = tf.image.random_flip_up_down(x3d)
+        x = tf.image.random_crop(x3d, (self.crop, self.crop, 3))
+        x = tf.image.random_flip_up_down(x)
         x = tf.image.random_flip_left_right(x)
         return x
       xproc = tf.map_fn(_internal, x4d, parallel_iterations=4)
@@ -217,8 +217,9 @@ class MILDataset:
     return x_, label_
 
 
-  def python_iterator(self, mode='train', subset=100, attr='stage_code', seed=999,
-                      data_fn = lambda x: x , label_fn = lambda x: x):
+  def python_iterator(self, mode='train', subset=100, attr='stage_code', 
+                      epochs = 1, seed=999, data_fn = lambda x: x , 
+                      label_fn = lambda x: x):
     """
     python_iterator:
       - return an iterator over the contents of the open dataset 
@@ -238,11 +239,16 @@ class MILDataset:
     if seed is None:
       seed = np.random.randint(low=1, high=10000)
 
-    print('Mode [{}] python iterator shuffle with seed {}'.format(mode, seed))
+    shuffled_lst = []
     with temp_seed(seed):
-      np.random.shuffle(lst)
+      for e in range(epochs):
+        np.random.shuffle(lst)
+        shuffled_lst += lst
+      # np.random.shuffle(lst)
+      # for name in lst:
 
-    for name in lst:
+    print('Dataset [{}] Shuffled list with {} elements'.format(mode, len(shuffled_lst)))
+    for name in shuffled_lst:
       # print('Yielding {}\t'.format(name), end='')
       data, label = self.read_data(name, attr, subset=subset)
       try:
@@ -252,7 +258,7 @@ class MILDataset:
 
       data = data_fn(data)
       label = label_fn(label)
-      print('{}\t{}'.format(data.shape, label))
+      # print('{}\t{}'.format(data.shape, label))
       yield data, label
 
 
@@ -285,10 +291,10 @@ class MILDataset:
     """
 
     def py_it():
-      return self.python_iterator(mode=mode, subset=subset, attr=attr, seed=seed) 
+      return self.python_iterator(mode=mode, subset=subset, attr=attr, seed=seed, epochs=repeats) 
 
     tf_dataset = (tf.data.Dataset.from_generator(py_it, output_types=(tf.uint8, tf.uint8))
-                  .repeat(repeats)
+                  # .repeat(repeats)
                   .map(self.map_fn, num_parallel_calls=threads)
                   # .prefetch(buffer_size)
                   .batch(batch_size))
@@ -347,13 +353,6 @@ class MILDataset:
     data_integ = self.special_hooks['integrity'][:]
     assert np.isclose(chk, data_integ).all()
     print('Check passed.')
-
-
-  def clear_mem(self):
-    self.tf_dataset = []
-    self.len_tf_ds = []
-    tf.reset_default_graph()
-    gc.collect()
 
 
   def close_refs(self):

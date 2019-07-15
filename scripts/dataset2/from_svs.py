@@ -58,7 +58,11 @@ def load_foreground_npy(npypath):
   return mask
 
 def read_labels(label_path, attrs):
-  labels = pd.read_csv(label_path, index_col=None, header=0)  
+  if os.path.splitext(label_path)[-1] == '.tsv':
+    sep = '\t'
+  elif os.path.splitext(label_path)[-1] == '.csv':
+    sep = ','
+  labels = pd.read_csv(label_path, index_col=None, header=0, sep=sep)  
   d = {}
   for c in range(labels.shape[0]):
     uid = labels.loc[c, 'unique_id']
@@ -117,7 +121,6 @@ def main(args):
       slide = Slide(rdsrc, args)
       tile_stack = stack_tiles(slide, args)
       mildataset.new_dataset(basename, tile_stack, attrs, lab)
-        # chunks=(1,256,256,3))
 
     except Exception as e:
       print('Breaking')
@@ -146,7 +149,7 @@ if __name__ == "__main__":
   p.add_argument('-r', dest='ramdisk', default='/dev/shm', type=str)
   p.add_argument('-b', dest='batchsize', default=1, type=int)
   p.add_argument('--mag',   dest='process_mag', default=10, type=int)
-  p.add_argument('--chunk', dest='process_size', default=128, type=int)
+  p.add_argument('--chunk', dest='process_size', default=196, type=int)
   p.add_argument('--bg',    dest='background_speed', default='fast', type=str)
   p.add_argument('--ovr',   dest='oversample_factor', default=1.0, type=float)
 

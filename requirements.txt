@@ -13,7 +13,7 @@ matplotlib==3.0.2
 -e git+https://github.com/nathanin/milk.git@c8b924e27f8476c2db9109081dd77d349e3971d1#egg=milk
 mkl-fft==1.0.6
 mkl-random==1.0.1
-numpy==1.15.3
+numpy==1.22.0
 openslide-python==1.1.1
 pandas==0.23.4
 pillow>=6.2.0

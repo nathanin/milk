@@ -27,7 +27,7 @@ seaborn==0.9.0
 six==1.11.0
 -e git+/home/nathan/Dropbox/Git/svs-reader.git/@c7abb377abb0a22ee5a740d88beb0869cfe92e90#egg=svs_reader
 tensorboard==1.11.0
-tensorflow-gpu==1.11.0
+tensorflow-gpu==2.9.3
 tensorflow-hub==0.1.1
 termcolor==1.1.0
 Werkzeug==0.15.3
